@@ -20,9 +20,10 @@ def handle_request():
     # Generate a simple response
     response = f"""HTTP/1.1 200 OK
 Content-Type: text/plain
-Content-Length: 59
+Content-Length: 64
 
 Request received and saved to {filename} ({len(input_data)} bytes)
+
 """
     
     # Write response to stdout
