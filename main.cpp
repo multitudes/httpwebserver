@@ -13,8 +13,21 @@
 #define MAX_CONNECTIONS 10
 #define BUFFER_SIZE 4096
 
+
+/**
+ * testing: use the following command to test the server
+ * 
+ * nc localhost 4244
+ * curl -X POST --data-raw "This is a test" localhost:4244
+ * wget -v --post-data="hello world"  http://localhost:4244 
+ * telnet localhost 4244
+ * curl "http://localhost:4244/?sss='this%20is'" 
+ * curl -H "Content-Type: application/json" "http://localhost:4244/?data=This%20is%20a%20test"
+ * curl -X POST -H "Content-Type: application/json" --data-raw '{"message": "This is a test"}' localhost:4244
+ * curl -I -H "Content-Type: application/json" http://localhost:4244
+ */
 // Connection structure to store client information and pipe file descriptors
-typedef struct {
+typedef struct connection_s{
     int client_fd;
     int child_stdin_pipe[2];  // [0] for read, [1] for write
     int child_stdout_pipe[2]; // [0] for read, [1] for write
