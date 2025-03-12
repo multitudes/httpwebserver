@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <signal.h>
+#include "debug.h"
 
 #define SERVER_PORT 4244
 #define MAX_CONNECTIONS 10
@@ -167,7 +168,7 @@ int start_cgi_process(int conn_idx) {
         close(conn->child_stdout_pipe[1]);
         
         // Execute the Python script
-        execve("cgi_handler.py", NULL, NULL);
+        execve("cgi-bin/cgi_handler.py", NULL, NULL);
         
         // If execve fails
         perror("Failed to execute CGI script");
@@ -230,8 +231,8 @@ int main() {
         exit(EXIT_FAILURE);
     }
     
-    printf("Server listening on port %d\n", SERVER_PORT);
-    
+    // printf("Server listening on port %d\n", SERVER_PORT);
+    debug("Server listening on port %d", SERVER_PORT);
     // Add server socket to poll
     add_to_poll(server_fd, POLLIN);
     
@@ -268,13 +269,13 @@ int main() {
                     continue;
                 }
                 
-                printf("New connection from %s:%d\n", 
-                       inet_ntoa(client_addr.sin_addr), 
-                       ntohs(client_addr.sin_port));
+                // printf("New connection from %s:%d\n", 
+                    //    inet_ntoa(client_addr.sin_addr), 
+                    //    ntohs(client_addr.sin_port));
                 
                 int conn_idx = find_free_connection();
                 if (conn_idx < 0) {
-                    printf("No free connection slots\n");
+                    // printf("No free connection slots\n");
                     close(client_fd);
                     continue;
                 }
@@ -305,7 +306,7 @@ int main() {
                     
                     if (bytes_read <= 0) {
                         if (bytes_read == 0) {
-                            printf("Client disconnected\n");
+                            // printf("Client disconnected\n");
                         } else {
                             perror("recv failed");
                         }
@@ -350,7 +351,7 @@ int main() {
                         }
                         continue;
                     }
-					printf("Received %d bytes from cgi\n", bytes_read);
+					// printf("Received %d bytes from cgi\n", bytes_read);
 					
 						// Send CGI output back to client
 					int bytes_sent = send(conn->client_fd, buffer, bytes_read, 0);
@@ -360,12 +361,12 @@ int main() {
 						continue;
 					}
     
-    				printf("Sent %d bytes to client\n", bytes_sent);
+    				// printf("Sent %d bytes to client\n", bytes_sent);
 
 									
 					// Close the connection after sending the response
 					if (bytes_read < BUFFER_SIZE) {
-						printf("Closing client connection\n");
+						// printf("Closing client connection\n");
 						close_connection(conn_idx);
 					}
 				}
