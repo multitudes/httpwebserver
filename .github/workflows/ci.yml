@@ -13,14 +13,5 @@ jobs:
       with:
         submodules: true  
 
-    - name: Configure CMake
-      run: cmake .
-      working-directory: test
-
     - name: Build
-      run: make
-      working-directory: test
-
-    - name: Run tests
-      run: ./WebServTests
-      working-directory: test
+      run: make test
