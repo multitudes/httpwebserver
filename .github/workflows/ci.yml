@@ -1,0 +1,26 @@
+# .github/workflows/ci.yml
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        submodules: true  
+
+    - name: Configure CMake
+      run: cmake .
+      working-directory: test
+
+    - name: Build
+      run: make
+      working-directory: test
+
+    - name: Run tests
+      run: ./WebServTests
+      working-directory: test
