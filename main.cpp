@@ -4,15 +4,16 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <signal.h>
 
+
 #define SERVER_PORT 4244
 #define MAX_CONNECTIONS 10
 #define BUFFER_SIZE 4096
-
 
 /**
  * testing: use the following command to test the server
@@ -29,6 +30,10 @@
 // Connection structure to store client information and pipe file descriptors
 typedef struct connection_s{
     int client_fd;
+	int file_fd;
+	long file_size; // off_t? is
+	long file_offset;
+	bool response_header_sent;
     int child_stdin_pipe[2];  // [0] for read, [1] for write
     int child_stdout_pipe[2]; // [0] for read, [1] for write
     pid_t child_pid;
@@ -41,9 +46,125 @@ connection_t connections[MAX_CONNECTIONS];
 struct pollfd poll_fds[MAX_CONNECTIONS * 3]; // Server socket + potentially 3 fds per client (client_fd, pipe_in, pipe_out)
 int poll_fd_count = 0;
 
+// Add a file descriptor to the poll array
+void add_to_poll(int fd, short events) {
+    poll_fds[poll_fd_count].fd = fd;
+    poll_fds[poll_fd_count].events = events;
+    poll_fd_count++;
+}
+
+/**
+ * for client to server communication
+ */
+
+// Prepare to serve the index.html file
+int prepare_file_response(int conn_idx) {
+    connection_t *conn = &connections[conn_idx];
+    struct stat file_stat;
+    
+    // Open the index.html file
+    conn->file_fd = open("index.html", O_RDONLY);
+    if (conn->file_fd < 0) {
+        perror("Failed to open index.html");
+        return -1;
+    }
+    
+    // Get file size
+    if (fstat(conn->file_fd, &file_stat) < 0) {
+        perror("Failed to get file stats");
+        close(conn->file_fd);
+        conn->file_fd = -1;
+        return -1;
+    }
+    
+    // Store file size for later use
+    conn->file_size = file_stat.st_size;
+    conn->file_offset = 0;
+    conn->response_header_sent = 0;
+    add_to_poll(conn->file_fd, POLLIN);
+    return 0;
+}
+
+
+// Send HTTP response headers
+int send_response_headers(int conn_idx) {
+    connection_t *conn = &connections[conn_idx];
+    char headers[512];
+    
+    // Create HTTP response headers
+    snprintf(headers, sizeof(headers),
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: text/html\r\n"
+             "Content-Length: %ld\r\n"
+             "Connection: close\r\n"
+             "\r\n", conn->file_size);
+    
+    // Send headers
+    int bytes_sent = send(conn->client_fd, headers, strlen(headers), 0);
+    if (bytes_sent < 0) {
+        perror("Failed to send headers");
+        return -1;
+    }
+    
+    conn->response_header_sent = 1;
+    return bytes_sent;
+}
+
+// Send a chunk of the file to the client
+int send_file_chunk(int conn_idx) {
+    connection_t *conn = &connections[conn_idx];
+    char buffer[BUFFER_SIZE];
+    
+    // Calculate bytes to read (up to buffer size)
+    size_t bytes_to_read = BUFFER_SIZE;
+    if (conn->file_offset + bytes_to_read > conn->file_size) {
+        bytes_to_read = conn->file_size - conn->file_offset;
+    }
+    
+    // Read from file
+    ssize_t bytes_read = pread(conn->file_fd, buffer, bytes_to_read, conn->file_offset);
+    if (bytes_read <= 0) {
+        if (bytes_read < 0) {
+            perror("Failed to read file");
+        }
+        return -1;
+    }
+    
+    // Send to client
+    ssize_t bytes_sent = send(conn->client_fd, buffer, bytes_read, 0);
+    if (bytes_sent < 0) {
+        perror("Failed to send file chunk");
+        return -1;
+    }
+    
+    // Update file offset
+    conn->file_offset += bytes_sent;
+    
+    printf("Sent %ld bytes of file data (%ld/%ld)\n", 
+           bytes_sent, conn->file_offset, conn->file_size);
+    
+    // Check if we've sent the entire file
+    if (conn->file_offset >= conn->file_size) {
+        printf("File transfer complete\n");
+        return 0;  // Done sending
+    }
+    
+    return 1;  // More data to send
+}
+
+
+
 // Initialize a new connection
 void init_connection(connection_t *conn) {
     conn->client_fd = -1;
+	
+	// for file transfer
+	conn->file_fd = -1;
+    conn->file_offset = 0;
+    conn->file_size = 0;
+    conn->response_header_sent = 0;
+
+	//for cgi
     conn->child_stdin_pipe[0] = -1;
     conn->child_stdin_pipe[1] = -1;
     conn->child_stdout_pipe[0] = -1;
@@ -51,13 +172,6 @@ void init_connection(connection_t *conn) {
     conn->child_pid = -1;
     conn->is_sending = 0;
     conn->is_receiving = 0;
-}
-
-// Add a file descriptor to the poll array
-void add_to_poll(int fd, short events) {
-    poll_fds[poll_fd_count].fd = fd;
-    poll_fds[poll_fd_count].events = events;
-    poll_fd_count++;
 }
 
 // Find an available connection slot
@@ -74,6 +188,7 @@ int find_free_connection() {
 int find_connection_by_fd(int fd) {
     for (int i = 0; i < MAX_CONNECTIONS; i++) {
         if (connections[i].client_fd == fd || 
+			connections[i].file_fd == fd ||
             connections[i].child_stdin_pipe[1] == fd || 
             connections[i].child_stdout_pipe[0] == fd) {
             return i;
@@ -120,72 +235,72 @@ void update_poll_fds(int server_fd) {
             add_to_poll(conn->client_fd, POLLIN | POLLOUT);
             
             // Add pipe fds if CGI process is active
-            if (conn->child_pid > 0) {
-                // Only check for write-readiness on stdin pipe if we're sending
-                if (conn->is_sending) {
-                    add_to_poll(conn->child_stdin_pipe[1], POLLOUT);
-                }
+            // if (conn->child_pid > 0) {
+            //     // Only check for write-readiness on stdin pipe if we're sending
+            //     if (conn->is_sending) {
+            //         add_to_poll(conn->child_stdin_pipe[1], POLLOUT);
+            //     }
                 
-                // Always check for read-readiness on stdout pipe
-                if (conn->is_receiving) {
-                    add_to_poll(conn->child_stdout_pipe[0], POLLIN);
-                }
-            }
+            //     // Always check for read-readiness on stdout pipe
+            //     if (conn->is_receiving) {
+            //         add_to_poll(conn->child_stdout_pipe[0], POLLIN);
+            //     }
+            // }
         }
     }
 }
 
-// Start a CGI process for a connection
-int start_cgi_process(int conn_idx) {
-    connection_t *conn = &connections[conn_idx];
+// // Start a CGI process for a connection
+// int start_cgi_process(int conn_idx) {
+//     connection_t *conn = &connections[conn_idx];
     
-    // Create pipes
-    if (pipe(conn->child_stdin_pipe) < 0 || pipe(conn->child_stdout_pipe) < 0) {
-        perror("Failed to create pipes");
-        return -1;
-    }
+//     // Create pipes
+//     if (pipe(conn->child_stdin_pipe) < 0 || pipe(conn->child_stdout_pipe) < 0) {
+//         perror("Failed to create pipes");
+//         return -1;
+//     }
     
-    // Create child process
-    pid_t pid = fork();
+//     // Create child process
+//     pid_t pid = fork();
     
-    if (pid < 0) {
-        perror("Failed to fork");
-        return -1;
-    } else if (pid == 0) {
-        // Child process
+//     if (pid < 0) {
+//         perror("Failed to fork");
+//         return -1;
+//     } else if (pid == 0) {
+//         // Child process
         
-        // Close unused pipe ends
-        close(conn->child_stdin_pipe[1]);  // Close write end of stdin pipe
-        close(conn->child_stdout_pipe[0]); // Close read end of stdout pipe
+//         // Close unused pipe ends
+//         close(conn->child_stdin_pipe[1]);  // Close write end of stdin pipe
+//         close(conn->child_stdout_pipe[0]); // Close read end of stdout pipe
         
-        // Redirect stdin and stdout
-        dup2(conn->child_stdin_pipe[0], STDIN_FILENO);
-        dup2(conn->child_stdout_pipe[1], STDOUT_FILENO);
+//         // Redirect stdin and stdout
+//         dup2(conn->child_stdin_pipe[0], STDIN_FILENO);
+//         dup2(conn->child_stdout_pipe[1], STDOUT_FILENO);
         
-        // Close original file descriptors
-        close(conn->child_stdin_pipe[0]);
-        close(conn->child_stdout_pipe[1]);
+//         // Close original file descriptors
+//         close(conn->child_stdin_pipe[0]);
+//         close(conn->child_stdout_pipe[1]);
         
-        // Execute the Python script
-        execve("cgi_handler.py", NULL, NULL);
+//         // Execute the Python script
+//         execve("cgi_handler.py", NULL, NULL);
         
-        // If execve fails
-        perror("Failed to execute CGI script");
-        exit(1);
-    } else {
-        // Parent process
+//         // If execve fails
+//         perror("Failed to execute CGI script");
+//         exit(1);
+//     } else {
+//         // Parent process
         
-        // Close unused pipe ends
-        close(conn->child_stdin_pipe[0]);  // Close read end of stdin pipe
-        close(conn->child_stdout_pipe[1]); // Close write end of stdout pipe
+//         // Close unused pipe ends
+//         close(conn->child_stdin_pipe[0]);  // Close read end of stdin pipe
+//         close(conn->child_stdout_pipe[1]); // Close write end of stdout pipe
         
-        conn->child_pid = pid;
-        conn->is_sending = 1;   // Ready to send data to CGI
-        conn->is_receiving = 0; // Ready to receive data from CGI
+//         conn->child_pid = pid;
+//         conn->is_sending = 1;   // Ready to send data to CGI
+//         conn->is_receiving = 0; // Ready to receive data from CGI
         
-        return 0;
-    }
-}
+//         return 0;
+//     }
+// }
 
 int main() {
     int server_fd;
@@ -283,11 +398,12 @@ int main() {
                 connections[conn_idx].client_fd = client_fd;
                 
                 // Start CGI process for this connection
-                if (start_cgi_process(conn_idx) < 0) {
-                    close_connection(conn_idx);
-                    continue;
-                }
+                // if (start_cgi_process(conn_idx) < 0) {
+                //     close_connection(conn_idx);
+                //     continue;
+                // }
                 
+
                 // Update poll fds for next iteration
                 continue;
             }
@@ -297,78 +413,127 @@ int main() {
             if (conn_idx >= 0) {
                 connection_t *conn = &connections[conn_idx];
                 
-                // Handle data from client and send to cgi
-                if (current_fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
-                    
+				/** this is the case of a client req a file */
+				// Handle data from client
+				if (current_fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
 					char buffer[BUFFER_SIZE];
-                    int bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE, 0);
-                    
-                    if (bytes_read <= 0) {
-                        if (bytes_read == 0) {
-                            printf("Client disconnected\n");
-                        } else {
-                            perror("recv failed");
-                        }
-                        close_connection(conn_idx);
-                        continue;
-                    }
-                    
-                    printf("Received %d bytes from client\n", bytes_read);
-                    
-                    // Forward data to CGI process
-                    
-					int bytes_written = write(conn->child_stdin_pipe[1], buffer, bytes_read);
-					if (bytes_written < 0) {
-						perror("Write to CGI failed");
+					int bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE - 1, 0);
+					
+					if (bytes_read <= 0) {
+						if (bytes_read == 0) {
+							printf("Client disconnected\n");
+						} else {
+							perror("recv failed");
+						}
 						close_connection(conn_idx);
 						continue;
 					}
-                    
 					
-					if (bytes_read < BUFFER_SIZE) {
-						// Close the write end of the pipe to signal EOF to the CGI process
-						printf("Closing write end of pipe\n");
-						close(conn->child_stdin_pipe[1]);
-						conn->is_sending = 0;
-						conn->is_receiving = 1;
-					}
-                }
-                
-                // Handle data from CGI process (ready to write to client from cgi)
-                if (conn->child_stdout_pipe[0] == current_fd && (poll_fds[i].revents & POLLIN)) {
-                    char buffer[BUFFER_SIZE];
-                    int bytes_read = read(conn->child_stdout_pipe[0], buffer, BUFFER_SIZE);
-                    
-                    if (bytes_read <= 0) {
-                        // CGI process closed pipe or error
-                        if (bytes_read == 0) {
-                            printf("CGI process finished\n");
-                            conn->is_receiving = 0;
-                        } else {
-                            perror("Read from CGI failed");
-                            close_connection(conn_idx);
-                        }
-                        continue;
-                    }
-					printf("Received %d bytes from cgi\n", bytes_read);
-					
-						// Send CGI output back to client
-					int bytes_sent = send(conn->client_fd, buffer, bytes_read, 0);
-					if (bytes_sent < 0) {
-						perror("Send to client failed");
+					// Null-terminate the request for printing
+					buffer[bytes_read] = '\0';
+					printf("Received request from client:\n%s\n", buffer);
+					// Prepare to serve index.html
+					// this is just checking the file exists
+					// check the size of the file
+					// open the file
+					if (prepare_file_response(conn_idx) < 0) {
 						close_connection(conn_idx);
 						continue;
 					}
-    
-    				printf("Sent %d bytes to client\n", bytes_sent);
+				}
+				if (current_fd == conn->file_fd && (poll_fds[i].revents & POLLIN)) {
+						
+					// First, check if we need to send headers
+					if (!conn->response_header_sent) {
+		
+						if (send_response_headers(conn_idx) < 0) {
+							close_connection(conn_idx);
+							continue;
+						} else {
+							printf("Sent response headers\n");
+							continue;
+						}
+					}
 
-									
-					// Close the connection after sending the response
-					if (bytes_read < BUFFER_SIZE) {
-						printf("Closing client connection\n");
+					// Try to send the first chunk
+					if (send_file_chunk(conn_idx) < 0) {
 						close_connection(conn_idx);
 					}
 				}
+
+
+                // // Handle data from client and send to cgi
+                // if (current_fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
+                    
+				// 	char buffer[BUFFER_SIZE];
+                //     int bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE, 0);
+                    
+                //     if (bytes_read <= 0) {
+                //         if (bytes_read == 0) {
+                //             printf("Client disconnected\n");
+                //         } else {
+                //             perror("recv failed");
+                //         }
+                //         close_connection(conn_idx);
+                //         continue;
+                //     }
+                    
+                //     printf("Received %d bytes from client\n", bytes_read);
+                    
+                //     // Forward data to CGI process
+                    
+				// 	int bytes_written = write(conn->child_stdin_pipe[1], buffer, bytes_read);
+				// 	if (bytes_written < 0) {
+				// 		perror("Write to CGI failed");
+				// 		close_connection(conn_idx);
+				// 		continue;
+				// 	}
+                    
+					
+				// 	if (bytes_read < BUFFER_SIZE) {
+				// 		// Close the write end of the pipe to signal EOF to the CGI process
+				// 		printf("Closing write end of pipe\n");
+				// 		close(conn->child_stdin_pipe[1]);
+				// 		conn->is_sending = 0;
+				// 		conn->is_receiving = 1;
+				// 	}
+                // }
+                
+                // // Handle data from CGI process (ready to write to client from cgi)
+                // if (conn->child_stdout_pipe[0] == current_fd && (poll_fds[i].revents & POLLIN)) {
+                //     char buffer[BUFFER_SIZE];
+                //     int bytes_read = read(conn->child_stdout_pipe[0], buffer, BUFFER_SIZE);
+                    
+                //     if (bytes_read <= 0) {
+                //         // CGI process closed pipe or error
+                //         if (bytes_read == 0) {
+                //             printf("CGI process finished\n");
+                //             conn->is_receiving = 0;
+                //         } else {
+                //             perror("Read from CGI failed");
+                //             close_connection(conn_idx);
+                //         }
+                //         continue;
+                //     }
+				// 	printf("Received %d bytes from cgi\n", bytes_read);
+					
+				// 		// Send CGI output back to client
+				// 	int bytes_sent = send(conn->client_fd, buffer, bytes_read, 0);
+				// 	if (bytes_sent < 0) {
+				// 		perror("Send to client failed");
+				// 		close_connection(conn_idx);
+				// 		continue;
+				// 	}
+    
+    			// 	printf("Sent %d bytes to client\n", bytes_sent);
+
+									
+				// 	// Close the connection after sending the response
+				// 	if (bytes_read < BUFFER_SIZE) {
+				// 		printf("Closing client connection\n");
+				// 		close_connection(conn_idx);
+				// 	}
+				// }
 
 
             }
