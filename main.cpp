@@ -33,7 +33,7 @@ typedef struct connection_s{
 	int file_fd;
 	long file_size; // off_t? is
 	long file_offset;
-	bool response_header_sent;
+	bool headers_sent;
     int child_stdin_pipe[2];  // [0] for read, [1] for write
     int child_stdout_pipe[2]; // [0] for read, [1] for write
     pid_t child_pid;
@@ -58,33 +58,30 @@ void add_to_poll(int fd, short events) {
  */
 
 // Prepare to serve the index.html file
-int prepare_file_response(int conn_idx) {
-    connection_t *conn = &connections[conn_idx];
+int prepare_file_response(int idx) {
+    connection_t *conn = &connections[idx];
     struct stat file_stat;
-    
-    // Open the index.html file
+
     conn->file_fd = open("index.html", O_RDONLY);
     if (conn->file_fd < 0) {
         perror("Failed to open index.html");
         return -1;
     }
-    
-    // Get file size
+
     if (fstat(conn->file_fd, &file_stat) < 0) {
         perror("Failed to get file stats");
         close(conn->file_fd);
         conn->file_fd = -1;
         return -1;
     }
-    
-    // Store file size for later use
+
     conn->file_size = file_stat.st_size;
     conn->file_offset = 0;
-    conn->response_header_sent = 0;
-    add_to_poll(conn->file_fd, POLLIN);
+    conn->headers_sent = 0;
+    add_to_poll(conn->client_fd, POLLOUT); // Poll client FD for writing
+	add_to_poll(conn->file_fd, POLLIN); // Poll file FD for reading
     return 0;
 }
-
 
 // Send HTTP response headers
 int send_response_headers(int conn_idx) {
@@ -106,7 +103,7 @@ int send_response_headers(int conn_idx) {
         return -1;
     }
     
-    conn->response_header_sent = 1;
+    conn->headers_sent = 1;
     return bytes_sent;
 }
 
@@ -162,7 +159,7 @@ void init_connection(connection_t *conn) {
 	conn->file_fd = -1;
     conn->file_offset = 0;
     conn->file_size = 0;
-    conn->response_header_sent = 0;
+    conn->headers_sent = 0;
 
 	//for cgi
     conn->child_stdin_pipe[0] = -1;
@@ -233,320 +230,114 @@ void update_poll_fds(int server_fd) {
         if (conn->client_fd != -1) {
             // Add client socket fd - monitor for both read and write
             add_to_poll(conn->client_fd, POLLIN | POLLOUT);
-            
-            // Add pipe fds if CGI process is active
-            // if (conn->child_pid > 0) {
-            //     // Only check for write-readiness on stdin pipe if we're sending
-            //     if (conn->is_sending) {
-            //         add_to_poll(conn->child_stdin_pipe[1], POLLOUT);
-            //     }
-                
-            //     // Always check for read-readiness on stdout pipe
-            //     if (conn->is_receiving) {
-            //         add_to_poll(conn->child_stdout_pipe[0], POLLIN);
-            //     }
-            // }
         }
     }
 }
 
-// // Start a CGI process for a connection
-// int start_cgi_process(int conn_idx) {
-//     connection_t *conn = &connections[conn_idx];
-    
-//     // Create pipes
-//     if (pipe(conn->child_stdin_pipe) < 0 || pipe(conn->child_stdout_pipe) < 0) {
-//         perror("Failed to create pipes");
-//         return -1;
-//     }
-    
-//     // Create child process
-//     pid_t pid = fork();
-    
-//     if (pid < 0) {
-//         perror("Failed to fork");
-//         return -1;
-//     } else if (pid == 0) {
-//         // Child process
-        
-//         // Close unused pipe ends
-//         close(conn->child_stdin_pipe[1]);  // Close write end of stdin pipe
-//         close(conn->child_stdout_pipe[0]); // Close read end of stdout pipe
-        
-//         // Redirect stdin and stdout
-//         dup2(conn->child_stdin_pipe[0], STDIN_FILENO);
-//         dup2(conn->child_stdout_pipe[1], STDOUT_FILENO);
-        
-//         // Close original file descriptors
-//         close(conn->child_stdin_pipe[0]);
-//         close(conn->child_stdout_pipe[1]);
-        
-//         // Execute the Python script
-//         execve("cgi_handler.py", NULL, NULL);
-        
-//         // If execve fails
-//         perror("Failed to execute CGI script");
-//         exit(1);
-//     } else {
-//         // Parent process
-        
-//         // Close unused pipe ends
-//         close(conn->child_stdin_pipe[0]);  // Close read end of stdin pipe
-//         close(conn->child_stdout_pipe[1]); // Close write end of stdout pipe
-        
-//         conn->child_pid = pid;
-//         conn->is_sending = 1;   // Ready to send data to CGI
-//         conn->is_receiving = 0; // Ready to receive data from CGI
-        
-//         return 0;
-//     }
-// }
-
 int main() {
     int server_fd;
     struct sockaddr_in server_addr;
-    
-    // Initialize all connections
+
     for (int i = 0; i < MAX_CONNECTIONS; i++) {
         init_connection(&connections[i]);
     }
-    
-    // Create server socket
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
-    
-    // Set socket options
+
     int opt = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        perror("setsockopt failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-    
-    // Prepare the sockaddr_in structure
-    memset(&server_addr, 0, sizeof(server_addr));
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY; // Listen on any interface
+    server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(SERVER_PORT);
-    
-    // Bind the socket
+
     if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("Bind failed");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
-    
-    // Listen for connections
+
+	// 5 in listen means that the server can queue up to 5 client connections before it starts rejecting them.
     if (listen(server_fd, 5) < 0) {
         perror("Listen failed");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
-    
+
     printf("Server listening on port %d\n", SERVER_PORT);
-    
-    // Add server socket to poll
     add_to_poll(server_fd, POLLIN);
-    
-    // Main polling loop
+
     while (1) {
-		update_poll_fds(server_fd);
-        
-        int poll_result = poll(poll_fds, poll_fd_count, 10000); // Wait indefinitely
-        // printf("Poll returned %d\n", poll_result);
-        if (poll_result < 0) {
+        int ret = poll(poll_fds, poll_fd_count, -1);
+        if (ret < 0) {
             perror("Poll failed");
             break;
-        } else if (poll_result == 0) {
-			continue; // Timeout
-		}
+        }
 
-        
-        // Process events on file descriptors
         for (int i = 0; i < poll_fd_count; i++) {
-            if (!(poll_fds[i].revents & (POLLIN | POLLOUT))) {
-                continue; // No events on this fd
-            }
-            
-            int current_fd = poll_fds[i].fd;
-            
-            // Handle new connections on server socket
-            if (current_fd == server_fd && (poll_fds[i].revents & POLLIN)) {
+            if (!poll_fds[i].revents) continue;
+
+            int fd = poll_fds[i].fd;
+            if (fd == server_fd && (poll_fds[i].revents & POLLIN)) {
                 struct sockaddr_in client_addr;
                 socklen_t client_len = sizeof(client_addr);
                 int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-                
+
                 if (client_fd < 0) {
                     perror("Accept failed");
                     continue;
                 }
-                
-                printf("New connection from %s:%d\n", 
-                       inet_ntoa(client_addr.sin_addr), 
-                       ntohs(client_addr.sin_port));
-                
-                int conn_idx = find_free_connection();
-                if (conn_idx < 0) {
-                    printf("No free connection slots\n");
+
+                int idx = find_free_connection();
+                if (idx < 0) {
+                    printf("No free slots\n");
                     close(client_fd);
                     continue;
                 }
-                
-                // Initialize new connection
-                connections[conn_idx].client_fd = client_fd;
-                
-                // Start CGI process for this connection
-                // if (start_cgi_process(conn_idx) < 0) {
-                //     close_connection(conn_idx);
-                //     continue;
-                // }
-                
 
-                // Update poll fds for next iteration
+                connections[idx].client_fd = client_fd;
+                add_to_poll(client_fd, POLLIN);
+                printf("New connection from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
                 continue;
             }
-            
-            // Handle client data
-            int conn_idx = find_connection_by_fd(current_fd);
-            if (conn_idx >= 0) {
-                connection_t *conn = &connections[conn_idx];
-                
-				/** this is the case of a client req a file */
-				// Handle data from client
-				if (current_fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
-					char buffer[BUFFER_SIZE];
-					int bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE - 1, 0);
-					
-					if (bytes_read <= 0) {
-						if (bytes_read == 0) {
-							printf("Client disconnected\n");
-						} else {
-							perror("recv failed");
-						}
-						close_connection(conn_idx);
-						continue;
-					}
-					
-					// Null-terminate the request for printing
-					buffer[bytes_read] = '\0';
-					printf("Received request from client:\n%s\n", buffer);
-					// Prepare to serve index.html
-					// this is just checking the file exists
-					// check the size of the file
-					// open the file
-					if (prepare_file_response(conn_idx) < 0) {
-						close_connection(conn_idx);
-						continue;
-					}
-				}
-				if (current_fd == conn->file_fd && (poll_fds[i].revents & POLLIN)) {
-						
-					// First, check if we need to send headers
-					if (!conn->response_header_sent) {
-		
-						if (send_response_headers(conn_idx) < 0) {
-							close_connection(conn_idx);
-							continue;
-						} else {
-							printf("Sent response headers\n");
-							continue;
-						}
-					}
 
-					// Try to send the first chunk
-					if (send_file_chunk(conn_idx) < 0) {
-						close_connection(conn_idx);
-					}
-				}
+            int idx = find_connection_by_fd(fd);
+            if (idx < 0) continue;
 
+            connection_t *conn = &connections[idx];
 
-                // // Handle data from client and send to cgi
-                // if (current_fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
-                    
-				// 	char buffer[BUFFER_SIZE];
-                //     int bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE, 0);
-                    
-                //     if (bytes_read <= 0) {
-                //         if (bytes_read == 0) {
-                //             printf("Client disconnected\n");
-                //         } else {
-                //             perror("recv failed");
-                //         }
-                //         close_connection(conn_idx);
-                //         continue;
-                //     }
-                    
-                //     printf("Received %d bytes from client\n", bytes_read);
-                    
-                //     // Forward data to CGI process
-                    
-				// 	int bytes_written = write(conn->child_stdin_pipe[1], buffer, bytes_read);
-				// 	if (bytes_written < 0) {
-				// 		perror("Write to CGI failed");
-				// 		close_connection(conn_idx);
-				// 		continue;
-				// 	}
-                    
-					
-				// 	if (bytes_read < BUFFER_SIZE) {
-				// 		// Close the write end of the pipe to signal EOF to the CGI process
-				// 		printf("Closing write end of pipe\n");
-				// 		close(conn->child_stdin_pipe[1]);
-				// 		conn->is_sending = 0;
-				// 		conn->is_receiving = 1;
-				// 	}
-                // }
-                
-                // // Handle data from CGI process (ready to write to client from cgi)
-                // if (conn->child_stdout_pipe[0] == current_fd && (poll_fds[i].revents & POLLIN)) {
-                //     char buffer[BUFFER_SIZE];
-                //     int bytes_read = read(conn->child_stdout_pipe[0], buffer, BUFFER_SIZE);
-                    
-                //     if (bytes_read <= 0) {
-                //         // CGI process closed pipe or error
-                //         if (bytes_read == 0) {
-                //             printf("CGI process finished\n");
-                //             conn->is_receiving = 0;
-                //         } else {
-                //             perror("Read from CGI failed");
-                //             close_connection(conn_idx);
-                //         }
-                //         continue;
-                //     }
-				// 	printf("Received %d bytes from cgi\n", bytes_read);
-					
-				// 		// Send CGI output back to client
-				// 	int bytes_sent = send(conn->client_fd, buffer, bytes_read, 0);
-				// 	if (bytes_sent < 0) {
-				// 		perror("Send to client failed");
-				// 		close_connection(conn_idx);
-				// 		continue;
-				// 	}
-    
-    			// 	printf("Sent %d bytes to client\n", bytes_sent);
+            if (fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
+                char buffer[BUFFER_SIZE];
+                ssize_t bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE - 1, 0);
+                if (bytes_read <= 0) {
+                    printf("Client disconnected\n");
+                    close_connection(idx);
+                    continue;
+                }
+                buffer[bytes_read] = '\0';
+                printf("Received %ld bytes: %s\n", bytes_read, buffer);
 
-									
-				// 	// Close the connection after sending the response
-				// 	if (bytes_read < BUFFER_SIZE) {
-				// 		printf("Closing client connection\n");
-				// 		close_connection(conn_idx);
-				// 	}
-				// }
-
-
+                if (prepare_file_response(idx) < 0) {
+                    close_connection(idx);
+                }
+            }
+            else if (fd == conn->client_fd && (poll_fds[i].revents & POLLOUT)) {
+                if (!conn->headers_sent) {
+                    if (send_response_headers(idx) < 0) {
+                        close_connection(idx);
+                    }
+                }
+                else if (send_file_chunk(idx) < 0) {
+                    close_connection(idx);
+                }
             }
         }
     }
-    
-    // Cleanup
-    for (int i = 0; i < MAX_CONNECTIONS; i++) {
-        if (connections[i].client_fd != -1) {
-            close_connection(i);
-        }
-    }
-    
+
     close(server_fd);
     return 0;
 }
