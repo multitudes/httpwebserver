@@ -11,18 +11,20 @@ WORK IN PROGRESS. Code can be shown upon request.
 
 This is a team project for the 42 school. The goal is to create a simple HTTP 1.1 web server that can handle multiple connections using multiplexing. The server will be able to serve static files, handle different HTTP methods, and support CGI scripts. The project is written in C++ and uses the UNIX socket API for network communication.
 
-We are a team of 3 students and we split the work in what we think are the 3 main parts.
+We are a team of 3 students and we split the work in what we think are the main parts.
 - The parsing of the configuration file and the server setup.
 - The handling of the incoming requests and the response generation.
 - The is handling of the sockets and the CGI support.
+- documentation testing and ci/cd pipelines on GitHub actions.
 
 Usage:  
 ```bash
 ./webserv [configuration file]
 ```
 
-I found the project very interesting and I learned a lot about networking, sockets, and the HTTP protocol. I also learned a lot about the C++ standard library and how to use it to write efficient and clean code.  
-The CGI part was a bit challenging at first, since I did not have much experience with it, and considering that the cgi module is deprecated in the last Python version, it felt a bit esoteric to say the least.  But through reading the RFC and researching a bit on the internet I was able to understand it and implement it. Still the Nginx server doesnt implement CGI (it does implement fastcgi) so it is not a very common feature in modern web servers at all. And for completeness the Nginx server was not easy to configure for a upload file feature from the configuration file. Same for caddy. Caddy would need some plugins to do that. The only server I could take example from, and test the upload feature was Apache. We still used the nginx syntax for our configuration file.
+I personally found the project very interesting; I learned a lot about networking, sockets, and the HTTP protocol.  
+The CGI part was a bit challenging at first, since I did not have much experience with it, and considering that the cgi module is deprecated in the last Python version, it felt a bit esoteric to say the least.  But through reading the RFC and researching a bit on the internet I was able to understand it and implement it. Even the open source ad widely used [nginx](https://github.com/nginx/nginx) server doesnt implement CGI (it does implement fastcgi) so it is not a very common feature in modern web servers at all. And for completeness the nginx server was not easy to configure for a upload file feature from the configuration file. Same for caddy. Caddy would need some plugins to do that. The only server I could take example from, and test the upload feature was Apache. We still used the nginx syntax for our configuration file.  
+We offer CGI and file uploads in our server.
 
 # Where it all started - The HTTP protocol and UNIX sockets
 HTTP (Hypertext Transfer Protocol) was invented by Tim Berners-Lee at CERN (the European Organization for Nuclear Research) in 1989. The first version of HTTP, HTTP/0.9, was a simple protocol for transferring raw data across the internet. The more widely recognized version, HTTP/1.0, was specified in 1996, followed by HTTP/1.1 in 1997, which introduced persistent connections and other improvements. Today we have HTTP/2 and HTTP/3, but our server will need to handle HTTP/1.1 only.
@@ -41,10 +43,10 @@ Because not everything is still relevant for us in the rfc2616, we summarized th
 And a summary of the rfc791 is here [rfc793-summary.md](rfc793-summary.md).
 The rfc3875 is not very long and we used it as reference for the CGI part of the project.
 
-# Allowed functions for this project
+# The Project
 See the allowed_functions.md file here: [allowed_functions.md](allowed_functions.md)
 
-# Configuration files
+## Configuration files
 A server configuration file is a file used to define the settings and parameters for a server's operation. These files are essential for customizing the behavior of the server, specifying how it handles requests, manages resources, and interacts with other systems. Configuration files are typically written in a plain text format and can be edited using any text editor.
 
 As per subject requirements in the configuration file, our server should be able to:

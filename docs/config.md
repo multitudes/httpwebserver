@@ -1,4 +1,4 @@
-# Configutation file for the webserver
+# Configuration file for the webserver
 
 This file is used to configure the webserver. It is used to define the server's behavior and settings. 
 
