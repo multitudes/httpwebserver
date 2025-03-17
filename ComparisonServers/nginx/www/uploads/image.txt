@@ -1,0 +1,21 @@
+Ange prisavtal (R, Fl, F3): R
+
+Lägsta-, högsta- och medelvärden av elpriserna
+under tidsperioden 2018-2023 för rörligt avtal.
+
+Prisomr. lägsta — år mån — högsta år — mån medel
+
+Kategori lägenhetskund:
+
+ser 35.28 2020 apr = 303.96 2022 dec 85.36
+se2 24.66 2028 apr = 305.86 2022 dec 86.17
+se3 27.81 2020 jul = 394.88 2022 dec 111.66
+sed 45.42 2020 maj — 426.37 — 2022 aug 125.15
+Kategori villakund:
+
+ser 17.82 2020 apr = 284.432 — 2022 dec 68.e1
+se2 17.58 2028 apr = 286.79 2022 dec 68.87
+se3 21.72 2020 jul 375.068 2022 dec 94.37
+
+sE4 28.68 = 2020 maj = 409.09 2022 aug = 107.67
+

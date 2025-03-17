@@ -1,0 +1,60 @@
+{
+    admin off
+}
+
+:4244 {
+    root * /var/www/html
+    file_server
+
+	# Redirect /go to /here
+    redir /go /here 301
+
+	    # Handle CGI scripts
+    @upload path /cgi-bin/upload.pl
+    cgi @upload /usr/bin/perl /cgi-bin/upload.pl
+
+    @hello path /cgi-bin/hello.pl
+    cgi @hello /usr/bin/perl /cgi-bin/hello.pl
+    # cgi @hello /usr/bin/perl {
+    #     match_path /cgi-bin/hello.pl
+    #     root /var/www/html
+    # }
+    # File upload size limit
+    handle_path /upload {
+        request_body {
+            max_size 10MB
+        }
+    }
+
+    # Handle uploads directory
+    @uploads {
+        path /uploads/*
+    }
+    handle @uploads {
+        file_server {
+            browse off
+        }
+    }
+
+    # Handle CGI scripts - with explicit script_name
+#    cgi /cgi-bin/upload.pl* /usr/bin/perl {
+#        script_name /cgi-bin/upload.pl
+#        env PERL5LIB=/usr/lib/perl5
+#    }
+# cgi /cgi-bin/hello.pl* /usr/bin/perl {
+#     script_name /cgi-bin/hello.pl
+# }
+
+# # File upload size limit
+# handle_path /upload {
+#     request_body {
+#         max_size 10MB
+#     }
+# }
+
+    # Error pages
+    handle_errors {
+        rewrite * /error_pages/{err.status_code}.html
+        file_server
+    }
+} 

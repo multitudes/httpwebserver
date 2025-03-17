@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv File Upload Form</title>
+    <link rel="icon" href="favicon/favicon.ico" type="image/x-icon">
+	<link rel="stylesheet" type="text/css" href="css/style.css">
+
+</head>
+
+<body>
+    <h1>File Upload</h1>
+    <div class="box">
+        <form action="/cgi-bin/hello.pl" method="POST" enctype="multipart/form-data">
+            <label for="file">Select file:</label>
+            <input type="file" id="file" name="file">
+            <button type="submit">Upload</button>
+        </form>
+        <p>Supported file types: .jpg, .png, .pdf, .txt</p>
+    </div>
+
+    <div class="file-list">
+        <h2>Uploaded Files</h2>
+        <ul>
+            <!-- Placeholder for file list -->
+            <!-- This should be populated by server-side code -->
+        </ul>
+    </div>
+</body>
+
+</html>
