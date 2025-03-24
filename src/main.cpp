@@ -32,6 +32,9 @@ typedef struct connection_s{
     int client_fd;
     int child_stdin_pipe[2];  // [0] for read, [1] for write
     int child_stdout_pipe[2]; // [0] for read, [1] for write
+	int poll_stdin_idx;  // Index in poll_fds for stdin pipe
+    int poll_stdout_idx; // Index in poll_fds for stdout pipe
+	int poll_client_idx; // Index in poll_fds for client fd
     pid_t child_pid;
     int is_sending;
     int is_receiving;
@@ -39,8 +42,16 @@ typedef struct connection_s{
 
 // Global variables to track connections and poll fds
 connection_t connections[MAX_CONNECTIONS];
-struct pollfd poll_fds[MAX_CONNECTIONS * 3]; // Server socket + potentially 3 fds per client (client_fd, pipe_in, pipe_out)
-int poll_fd_count = 0;
+struct pollfd poll_fds[MAX_CONNECTIONS * 3 + 1]; // Server socket + potentially 3 fds per client (client_fd, pipe_in, pipe_out)
+int poll_fd_count = 1;
+
+// Initialize poll_fds at startup
+void init_poll_fds(int server_fd) {
+    poll_fds[0].fd = server_fd;
+    poll_fds[0].events = POLLIN;
+    poll_fds[0].revents = 0;
+    poll_fd_count = 1;
+}
 
 // Initialize a new connection
 void init_connection(connection_t *conn) {
@@ -52,13 +63,18 @@ void init_connection(connection_t *conn) {
     conn->child_pid = -1;
     conn->is_sending = 0;
     conn->is_receiving = 0;
+	conn->poll_client_idx = -1;
+    conn->poll_stdin_idx = -1;
+    conn->poll_stdout_idx = -1;
 }
 
 // Add a file descriptor to the poll array
-void add_to_poll(int fd, short events) {
+int add_to_poll(int fd, short events) {
+    if (poll_fd_count >= MAX_CONNECTIONS * 3 + 1) return -1;
     poll_fds[poll_fd_count].fd = fd;
     poll_fds[poll_fd_count].events = events;
-    poll_fd_count++;
+    poll_fds[poll_fd_count].revents = 0;
+    return poll_fd_count++;
 }
 
 // Find an available connection slot
@@ -83,13 +99,13 @@ int find_connection_by_fd(int fd) {
     return -1;
 }
 
-// Remove a file descriptor from the poll array
+// Remove a fd by swapping with last element (O(1))
 void remove_from_poll(int fd) {
     for (int i = 0; i < poll_fd_count; i++) {
         if (poll_fds[i].fd == fd) {
-            // Shift remaining entries to fill the gap
-            for (int j = i; j < poll_fd_count - 1; j++) {
-                poll_fds[j] = poll_fds[j + 1];
+            // Swap with last element
+            if (i < poll_fd_count - 1) {
+                poll_fds[i] = poll_fds[poll_fd_count - 1];
             }
             poll_fd_count--;
             break;
@@ -126,38 +142,17 @@ void close_connection(int conn_idx) {
     if (conn->child_pid > 0) {
         kill(conn->child_pid, SIGTERM);
     }
-    
+
     // Reset the connection
     init_connection(conn);
 }
 
-// Update the poll_fds array (rebuild it from scratch)
-void update_poll_fds(int server_fd) {
-    poll_fd_count = 0;
-    
-    // Add server socket first (only need to check for incoming connections)
-    add_to_poll(server_fd, POLLIN);
-    
-    // Add client connections and pipes
-    for (int i = 0; i < MAX_CONNECTIONS; i++) {
-        connection_t *conn = &connections[i];
-        
-        if (conn->client_fd != -1) {
-            // Add client socket fd - monitor for both read and write
-            add_to_poll(conn->client_fd, POLLIN | POLLOUT);
-            
-            // Add pipe fds if CGI process is active
-            if (conn->child_pid > 0) {
-                // Only check for write-readiness on stdin pipe if we're sending
-                if (conn->is_sending) {
-                    add_to_poll(conn->child_stdin_pipe[1], POLLOUT);
-                }
-                
-                // Always check for read-readiness on stdout pipe
-                if (conn->is_receiving) {
-                    add_to_poll(conn->child_stdout_pipe[0], POLLIN);
-                }
-            }
+// Update events for an existing fd
+void update_poll_events(int fd, short events) {
+    for (int i = 0; i < poll_fd_count; i++) {
+        if (poll_fds[i].fd == fd) {
+            poll_fds[i].events = events;
+            break;
         }
     }
 }
@@ -201,8 +196,10 @@ int start_cgi_process(int conn_idx) {
         exit(1);
     } else {
         // Parent process
+        conn->poll_stdin_idx = add_to_poll(conn->child_stdin_pipe[1], POLLOUT);
+		conn->poll_stdout_idx = add_to_poll(conn->child_stdout_pipe[0], POLLIN);
         
-        // Close unused pipe ends
+		// Close unused pipe ends
         close(conn->child_stdin_pipe[0]);  // Close read end of stdin pipe
         close(conn->child_stdout_pipe[1]); // Close write end of stdout pipe
         
@@ -218,17 +215,20 @@ int main() {
     int server_fd;
     struct sockaddr_in server_addr;
     
-    // Initialize all connections
+    
+	// Initialize all connections
     for (int i = 0; i < MAX_CONNECTIONS; i++) {
-        init_connection(&connections[i]);
+		init_connection(&connections[i]);
     }
     
     // Create server socket
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("Socket creation failed");
+		perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
     
+	init_poll_fds(server_fd);
+
     // Set socket options
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
@@ -264,10 +264,9 @@ int main() {
     
     // Main polling loop
     while (1) {
-		update_poll_fds(server_fd);
         
         int poll_result = poll(poll_fds, poll_fd_count, 10000); // Wait indefinitely
-        // printf("Poll returned %d\n", poll_result);
+        printf("Poll returned %d\n", poll_result);
         if (poll_result < 0) {
             perror("Poll failed");
             break;
@@ -308,7 +307,7 @@ int main() {
                 
                 // Initialize new connection
                 connections[conn_idx].client_fd = client_fd;
-                
+                connections[conn_idx].poll_client_idx = add_to_poll(client_fd, POLLIN);
                 // Start CGI process for this connection
                 if (start_cgi_process(conn_idx) < 0) {
                     close_connection(conn_idx);
@@ -358,6 +357,8 @@ int main() {
 						close(conn->child_stdin_pipe[1]);
 						conn->is_sending = 0;
 						conn->is_receiving = 1;
+						update_poll_events(conn->child_stdin_pipe[1], 0); // Remove POLLOUT
+						update_poll_events(conn->child_stdout_pipe[0], POLLIN);
 					}
                 }
                 
