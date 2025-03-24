@@ -288,6 +288,7 @@ int main() {
                 connections[conn_idx].client_fd = client_fd;
                 connections[conn_idx].poll_client_idx = add_to_poll(client_fd, POLLIN);
                 
+				
 
 				// Start CGI process for this connection
                 if (start_cgi_process(conn_idx) < 0) {
