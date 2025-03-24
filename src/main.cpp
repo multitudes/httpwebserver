@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include "debug.h"
+#include "SocketUtils.hpp"
 
 #define SERVER_PORT 4244
 #define MAX_CONNECTIONS 10
@@ -212,6 +213,9 @@ int start_cgi_process(int conn_idx) {
 }
 
 int main() {
+	// Set up signal handlers
+	SocketUtils::setSignalHandlers();
+
     int server_fd;
     struct sockaddr_in server_addr;
     
@@ -221,42 +225,24 @@ int main() {
 		init_connection(&connections[i]);
     }
     
-    // Create server socket
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    // // Create server socket
+    // if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+	// 	perror("Socket creation failed");
+    //     exit(EXIT_FAILURE);
+    // }
+    if ((server_fd = SocketUtils::createBindSocket(SERVER_PORT)) < 0) {
 		perror("Socket creation failed");
-        exit(EXIT_FAILURE);
-    }
-    
-	init_poll_fds(server_fd);
+		exit(EXIT_FAILURE);
+	}
 
-    // Set socket options
-    int opt = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        perror("setsockopt failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
+	init_poll_fds(server_fd);
     
-    // Prepare the sockaddr_in structure
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY; // Listen on any interface
-    server_addr.sin_port = htons(SERVER_PORT);
-    
-    // Bind the socket
-    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Bind failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-    
-    // Listen for connections
-    if (listen(server_fd, 5) < 0) {
-        perror("Listen failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-    
+	if (!SocketUtils::listenSocket(server_fd)) {
+		perror("Error listening on socket");
+		close(server_fd);
+		exit(EXIT_FAILURE);
+	} 
+
     // printf("Server listening on port %d\n", SERVER_PORT);
     debug("Server listening on port %d", SERVER_PORT);
     // Add server socket to poll
@@ -268,8 +254,12 @@ int main() {
         int poll_result = poll(poll_fds, poll_fd_count, 10000); // Wait indefinitely
         printf("Poll returned %d\n", poll_result);
         if (poll_result < 0) {
+			if (errno != EINTR) {  // Interrupted by signal
+				perror("poll");
+				break;
+			}
             perror("Poll failed");
-            break;
+			continue; // Interrupted by signal
         } else if (poll_result == 0) {
 			continue; // Timeout
 		}
