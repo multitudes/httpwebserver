@@ -1,0 +1,4 @@
+request_*.txt
+obj/main.o
+webserv
+a.out
