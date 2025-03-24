@@ -83,19 +83,45 @@ int find_connection_by_fd(int fd) {
     return -1;
 }
 
+// Remove a file descriptor from the poll array
+void remove_from_poll(int fd) {
+    for (int i = 0; i < poll_fd_count; i++) {
+        if (poll_fds[i].fd == fd) {
+            // Shift remaining entries to fill the gap
+            for (int j = i; j < poll_fd_count - 1; j++) {
+                poll_fds[j] = poll_fds[j + 1];
+            }
+            poll_fd_count--;
+            break;
+        }
+    }
+}
+
 // Remove a connection and its associated resources
 void close_connection(int conn_idx) {
     connection_t *conn = &connections[conn_idx];
     
     if (conn->client_fd != -1) {
         close(conn->client_fd);
+        remove_from_poll(conn->client_fd);
     }
     
-    if (conn->child_stdin_pipe[0] != -1) close(conn->child_stdin_pipe[0]);
-    if (conn->child_stdin_pipe[1] != -1) close(conn->child_stdin_pipe[1]);
-    if (conn->child_stdout_pipe[0] != -1) close(conn->child_stdout_pipe[0]);
-    if (conn->child_stdout_pipe[1] != -1) close(conn->child_stdout_pipe[1]);
-    
+    if (conn->child_stdin_pipe[0] != -1) {
+        close(conn->child_stdin_pipe[0]);
+        remove_from_poll(conn->child_stdin_pipe[0]);
+    }
+    if (conn->child_stdin_pipe[1] != -1) {
+        close(conn->child_stdin_pipe[1]);
+        remove_from_poll(conn->child_stdin_pipe[1]);
+    }
+    if (conn->child_stdout_pipe[0] != -1) {
+        close(conn->child_stdout_pipe[0]);
+        remove_from_poll(conn->child_stdout_pipe[0]);
+    }
+    if (conn->child_stdout_pipe[1] != -1) {
+        close(conn->child_stdout_pipe[1]);
+        remove_from_poll(conn->child_stdout_pipe[1]);
+    }
     // Kill child process if it's still running
     if (conn->child_pid > 0) {
         kill(conn->child_pid, SIGTERM);
