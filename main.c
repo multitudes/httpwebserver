@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #define SERVER_PORT 4244
 #define MAX_CONNECTIONS 10
