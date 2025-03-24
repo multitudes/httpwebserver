@@ -1,0 +1,6 @@
+request_*.txt
+obj/main.o
+webserv
+a.out
+tests/integration/__pycache__/conftest.cpython-313-pytest-8.3.5.pyc
+tests/integration/__pycache__/test_httpconnection.cpython-313-pytest-8.3.5.pyc

@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdbool.h>
 
 
 #define SERVER_PORT 4244
