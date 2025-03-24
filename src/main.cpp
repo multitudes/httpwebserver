@@ -10,6 +10,7 @@
 #include <signal.h>
 #include "debug.h"
 #include "SocketUtils.hpp"
+#include "HTTPConnection.hpp"
 
 #define SERVER_PORT 4244
 #define MAX_CONNECTIONS 10
@@ -28,21 +29,9 @@
  * curl -X POST -H "Content-Type: application/json" --data-raw '{"message": "This is a test"}' localhost:4244
  * curl -I -H "Content-Type: application/json" http://localhost:4244
  */
-// Connection structure to store client information and pipe file descriptors
-typedef struct connection_s{
-    int client_fd;
-    int child_stdin_pipe[2];  // [0] for read, [1] for write
-    int child_stdout_pipe[2]; // [0] for read, [1] for write
-	int poll_stdin_idx;  // Index in poll_fds for stdin pipe
-    int poll_stdout_idx; // Index in poll_fds for stdout pipe
-	int poll_client_idx; // Index in poll_fds for client fd
-    pid_t child_pid;
-    int is_sending;
-    int is_receiving;
-} connection_t;
 
 // Global variables to track connections and poll fds
-connection_t connections[MAX_CONNECTIONS];
+HTTPConnection connections[MAX_CONNECTIONS];
 struct pollfd poll_fds[MAX_CONNECTIONS * 3 + 1]; // Server socket + potentially 3 fds per client (client_fd, pipe_in, pipe_out)
 int poll_fd_count = 1;
 
@@ -55,7 +44,7 @@ void init_poll_fds(int server_fd) {
 }
 
 // Initialize a new connection
-void init_connection(connection_t *conn) {
+void init_connection(HTTPConnection *conn) {
     conn->client_fd = -1;
     conn->child_stdin_pipe[0] = -1;
     conn->child_stdin_pipe[1] = -1;
@@ -116,7 +105,7 @@ void remove_from_poll(int fd) {
 
 // Remove a connection and its associated resources
 void close_connection(int conn_idx) {
-    connection_t *conn = &connections[conn_idx];
+    HTTPConnection *conn = &connections[conn_idx];
     
     if (conn->client_fd != -1) {
         close(conn->client_fd);
@@ -160,7 +149,7 @@ void update_poll_events(int fd, short events) {
 
 // Start a CGI process for a connection
 int start_cgi_process(int conn_idx) {
-    connection_t *conn = &connections[conn_idx];
+    HTTPConnection *conn = &connections[conn_idx];
     
     // Create pipes
     if (pipe(conn->child_stdin_pipe) < 0 || pipe(conn->child_stdout_pipe) < 0) {
@@ -298,7 +287,9 @@ int main() {
                 // Initialize new connection
                 connections[conn_idx].client_fd = client_fd;
                 connections[conn_idx].poll_client_idx = add_to_poll(client_fd, POLLIN);
-                // Start CGI process for this connection
+                
+
+				// Start CGI process for this connection
                 if (start_cgi_process(conn_idx) < 0) {
                     close_connection(conn_idx);
                     continue;
@@ -311,7 +302,7 @@ int main() {
             // Handle client data
             int conn_idx = find_connection_by_fd(current_fd);
             if (conn_idx >= 0) {
-                connection_t *conn = &connections[conn_idx];
+                HTTPConnection *conn = &connections[conn_idx];
                 
                 // Handle data from client and send to cgi
                 if (current_fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
