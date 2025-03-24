@@ -8,7 +8,7 @@ def start_web_server():
     server_process = subprocess.Popen(["./webserv"])
     
     # Wait for the server to start
-    time.sleep(2)
+    time.sleep(1)
     
     yield server_process
     
