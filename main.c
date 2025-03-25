@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include "debug.h"
+
 
 #define SERVER_PORT 4244
 #define MAX_CONNECTIONS 10
