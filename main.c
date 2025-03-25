@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <stdbool.h>
+#include "debug.h"
 
 
 #define SERVER_PORT 4244
@@ -273,7 +274,8 @@ int main() {
     add_to_poll(server_fd, POLLIN);
 
     while (1) {
-        int ret = poll(poll_fds, poll_fd_count, -1);
+        int ret = poll(poll_fds, poll_fd_count, 10000);
+        debuglog(YELLOW,"Poll returned %d", ret);
         if (ret < 0) {
             perror("Poll failed");
             break;
