@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include "Config.hpp"
 #include "ConfigData.hpp"
 #include "debug.h"
