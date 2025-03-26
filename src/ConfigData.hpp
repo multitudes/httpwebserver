@@ -67,11 +67,9 @@ struct ConfigData : public BaseConf {
   std::vector<std::string> server_names;
   std::string index;
   std::string root;
-  std::vector<std::string> acceptedMethods;
   std::map<std::string, Directive> location_blocks;
   CGIData cgiData;
   std::vector<std::string> limit_except;
-  std::map<int, std::string> error_pages;
   bool cgi_exists;
   bool has_directives;
 

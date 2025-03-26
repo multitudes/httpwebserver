@@ -21,7 +21,8 @@
  */
 class Config {
 public:
-  static std::vector<ConfigData> getConfigData();
+  static std::vector<ConfigData>& getConfigData();
+  
   
   private:
   // Private constructor to prevent instantiation
@@ -29,6 +30,8 @@ public:
   Config(const Config &);
   Config &operator=(const Config &);
   ~Config() {}
+  
+  static void cleanup();
 
   static Config *instance_;
   static pthread_mutex_t mutex_;
