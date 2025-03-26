@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <stdint.h> 
 
 struct CGIData {
   std::pair<std::string, std::string> cgi_path_alias;

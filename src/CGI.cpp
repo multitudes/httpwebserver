@@ -4,7 +4,7 @@
 namespace CGI {
 
 // Start a CGI process for a connection
-int CGI::prepareCGI(HTTPConnxData *conn) {
+int prepareCGI(HTTPConnxData *conn) {
   // Create pipes
   if (pipe(conn->child_stdin_pipe) < 0 || pipe(conn->child_stdout_pipe) < 0) {
     perror("Failed to create pipes");
