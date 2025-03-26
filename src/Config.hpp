@@ -23,6 +23,7 @@ class Config {
 public:
   static std::vector<ConfigData>& getConfigData();
   static const ConfigData* getConfigByPort(uint16_t port); 
+  static void cleanup();
 
   private:
   // Private constructor to prevent instantiation

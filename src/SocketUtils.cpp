@@ -105,9 +105,9 @@ void setSignalHandlers() {
  */
 void handleSignal(int signal) {
   if (signal == SIGINT || signal == SIGQUIT || signal == SIGTERM) {
-    debug("Caught signal %d\n", signal);
-    debug("shutting down\n");
+    debuglog(YELLOW, "Caught signal %d - Shutting down the server", signal);
     //   shutdownServer();
+	Config::cleanup();
     std::exit(0);
   }
 }

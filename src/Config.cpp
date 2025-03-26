@@ -6,7 +6,7 @@
 std::vector<ConfigData> Config::configs_;
 Config *Config::instance_ = NULL;
 std::string Config::_filename = "config/default.conf"; // Default filename
-std::map<uint16_t, ConfigData*> Config::port_map_;
+std::map<uint16_t, ConfigData *> Config::port_map_;
 
 /**
  * @brief Constructor for the Config class
@@ -20,12 +20,6 @@ std::map<uint16_t, ConfigData*> Config::port_map_;
 Config::Config(std::string filename) {
   (void)filename;
 
-  // map ports to server configurations
-  for (size_t i = 0; i < configs_.size(); ++i) {
-    for (size_t j = 0; j < configs_[i].ports.size(); ++j) {
-        port_map_[configs_[i].ports[j]] = &configs_[i];
-    }
-}
   // First server configuration
   ConfigData server1;
   server1.keepalive_timeout = 5;
@@ -96,13 +90,23 @@ Config::Config(std::string filename) {
   configs_.push_back(server1);
   configs_.push_back(server2);
   configs_.push_back(server3);
+  // map ports to server configurations
+  for (size_t i = 0; i < configs_.size(); ++i) {
+    for (size_t j = 0; j < configs_[i].ports.size(); ++j) {
+      port_map_[configs_[i].ports[j]] = &configs_[i];
+    }
+  }
+  debuglog(YELLOW, "Config initialized with %zu servers", configs_.size());
 }
 
 Config::Config(const Config &) {}
 Config &Config::operator=(const Config &) { return *this; }
-Config::~Config() {
+Config::~Config() {}
+
+void Config::cleanup() {
 	delete instance_;
 	instance_ = NULL;
+	debuglog(YELLOW, "Server config data destroyed");
 }
 
 std::vector<ConfigData> &Config::getConfigData() {
@@ -112,16 +116,18 @@ std::vector<ConfigData> &Config::getConfigData() {
   return Config::configs_;
 }
 
-const ConfigData* Config::getConfigByPort(uint16_t port) {
-    getConfigData();  // Ensure initialized
-    std::map<uint16_t, ConfigData*>::const_iterator it = port_map_.find(port);
-    return (it != port_map_.end()) ? it->second : NULL;
+const ConfigData *Config::getConfigByPort(uint16_t port) {
+  getConfigData(); // Ensure initialized
+  std::map<uint16_t, ConfigData *>::const_iterator it = port_map_.find(port);
+  return (it != port_map_.end()) ? it->second : NULL;
 }
 
 bool Config::validate() {
-	for (size_t i = 0; i < configs_.size(); ++i) {
-		if (configs_[i].ports.empty()) return false;
-		if (configs_[i].root.empty()) return false;
-	}
-	return true;
+  for (size_t i = 0; i < configs_.size(); ++i) {
+    if (configs_[i].ports.empty())
+      return false;
+    if (configs_[i].root.empty())
+      return false;
+  }
+  return true;
 }
