@@ -2,7 +2,7 @@
 
 #include <netdb.h>
 #include <pthread.h>
-#include <cstdint>
+#include <stdint.h> // C-style header because stdint is C++11>
 #include "ConfigData.hpp"
 #include <map>
 #include <string>

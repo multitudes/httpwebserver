@@ -13,6 +13,7 @@ CXX				= 	c++
 # CXXFLAGS 		= -Wall -Wextra -Werror 
 CXXFLAGS		+= -std=c++98
 CXXFLAGS 		+= -Wconversion -Wunreachable-code 
+# CXXFLAGS        += -pedantic-errors
 
 CFLAGS 			+= -Iinclude
 CFLAGS			+= -Isrc 
