@@ -12,3 +12,9 @@ tests/integration/__pycache__/test_httpconnection.cpython-312-pytest-8.3.5.pyc
 ComparisonServers/apache/www/cgi-bin/__pycache__/test_cgi_form.cpython-313-pytest-8.3.5.pyc
 obj/HTTPConnection.o
 obj/SocketUtils.o
+test1.txt
+obj/CGI.o
+obj/Config.o
+obj/HTTPConnxData.o
+obj/HTTPServer.o
+src/scrap.cpp
