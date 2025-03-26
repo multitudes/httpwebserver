@@ -30,7 +30,7 @@ enum ConnectionState {
  * Tracks the state of a connection including request data,
  * file transfers, and CGI processing
  */
-struct HTTPConnection {
+struct HTTPConnxData {
     /**
      * @brief Request data and metadata
      */
@@ -96,7 +96,7 @@ struct HTTPConnection {
     // Request data
     ConnectionData data;
 
-    HTTPConnection() :
+    HTTPConnxData() :
         state(CONN_INCOMING),
         client_fd(-1),
         indexServerConf(-1),
@@ -118,9 +118,9 @@ struct HTTPConnection {
     }
 
     void reset();
-	bool checkHeader(HTTPConnection& state,
+	bool checkHeader(HTTPConnxData& state,
 		const string& headerName,
 		string& targetVariable);
 	string trim(const string& str);
-	bool parsingHeaders(int client_fd, HTTPConnection& state);
+	bool parsingHeaders(int client_fd, HTTPConnxData& state);
 };

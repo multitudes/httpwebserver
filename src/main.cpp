@@ -1,4 +1,4 @@
-#include "HTTPConnection.hpp"
+#include "HTTPConnxData.hpp"
 #include "SocketUtils.hpp"
 #include "Config.hpp"
 #include "ConfigData.hpp"
@@ -35,7 +35,7 @@
  */
 
 // Global variables to track connections and poll fds
-HTTPConnection connections[MAX_CONNECTIONS];
+HTTPConnxData connections[MAX_CONNECTIONS];
 struct pollfd
     poll_fds[MAX_CONNECTIONS * 3 + 1]; // Server socket + potentially 3 fds per
                                        // client (client_fd, pipe_in, pipe_out)
@@ -96,7 +96,7 @@ void remove_from_poll(int fd) {
 }
 
 // Initialize a connection
-void init_connection(HTTPConnection *conn) {
+void init_connection(HTTPConnxData *conn) {
   conn->client_fd = -1;
   conn->indexServerConf = -1;
   conn->poll_client_idx = -1;
@@ -120,7 +120,7 @@ void init_connection(HTTPConnection *conn) {
 
 // Remove a connection and its associated resources
 void close_connection(int conn_idx) {
-  HTTPConnection *conn = &connections[conn_idx];
+  HTTPConnxData *conn = &connections[conn_idx];
 
   if (conn->client_fd != -1) {
     close(conn->client_fd);
@@ -164,7 +164,7 @@ void update_poll_events(int fd, short events) {
 
 // Start a CGI process for a connection
 int start_cgi_process(int conn_idx) {
-  HTTPConnection *conn = &connections[conn_idx];
+  HTTPConnxData *conn = &connections[conn_idx];
 
   // Create pipes
   if (pipe(conn->child_stdin_pipe) < 0 || pipe(conn->child_stdout_pipe) < 0) {
@@ -287,8 +287,8 @@ int runServer() {
           continue;
         }
 
-        // Initialize new HTTPConnection
-        HTTPConnection &conn = connections[conn_idx];
+        // Initialize new HTTPConnxData
+        HTTPConnxData &conn = connections[conn_idx];
         conn.reset(); // Clean any previous state
 
         // Set basic connection info
@@ -305,7 +305,7 @@ int runServer() {
       // Handle client data
       int conn_idx = find_connection_by_fd(current_fd);
       if (conn_idx >= 0) {
-        HTTPConnection *conn = &connections[conn_idx];
+        HTTPConnxData *conn = &connections[conn_idx];
 
         if (conn->state == CONN_INCOMING) {
           debuglog(YELLOW, "Connection %d in state INCOMING", conn_idx);

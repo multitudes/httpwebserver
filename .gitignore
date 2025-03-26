@@ -2,7 +2,7 @@ webserv
 obj/main.o
 request_*.txt
 tests/integration/__pycache__/conftest.cpython-313-pytest-8.3.5.pyc
-tests/integration/__pycache__/test_httpconnection.cpython-313-pytest-8.3.5.pyc
+tests/integration/__pycache__/test_HTTPConnxData.cpython-313-pytest-8.3.5.pyc
 ComparisonServers/apache/www/cgi-bin/__pycache__/test_cgi_form.cpython-313-pytest-8.3.5.pyc
 obj/SocketUtils.o
 .vscode/settings.json
@@ -11,7 +11,8 @@ venv/*
 tests/integration/__pycache__/conftest.cpython-312-pytest-8.3.5.pyc
 .gitignore
 .gitignore
-tests/integration/__pycache__/test_httpconnection.cpython-312-pytest-8.3.5.pyc
+tests/integration/__pycache__/test_HTTPConnxData.cpython-312-pytest-8.3.5.pyc
 test*.txt
-obj/HTTPConnection.o
+obj/HTTPConnxData.o
 obj/Config.o
+tests/integration/__pycache__/test_httpconnection.cpython-313-pytest-8.3.5.pyc

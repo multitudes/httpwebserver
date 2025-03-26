@@ -1,11 +1,11 @@
-#include "HTTPConnection.hpp"
+#include "HTTPConnxData.hpp"
 #include "debug.h"
 #include <sstream>
 #include <stdbool.h>
 #include <string>
 #include <unistd.h>
 
-bool HTTPConnection::parsingHeaders(int client_fd, HTTPConnection &state) {
+bool HTTPConnxData::parsingHeaders(int client_fd, HTTPConnxData &state) {
   if (state.data.request.empty()) {
     debuglog(YELLOW, "Empty request received in parseHeaders");
     return false;
@@ -121,7 +121,7 @@ bool HTTPConnection::parsingHeaders(int client_fd, HTTPConnection &state) {
 /**
  * @brief Reset the connection for reuse
  */
-void HTTPConnection::reset() {
+void HTTPConnxData::reset() {
   state = CONN_INCOMING;
   is_sending = 0;
   is_receiving = 0;
@@ -148,7 +148,7 @@ void HTTPConnection::reset() {
  * @param str The string to trim
  * @return The trimmed string
  */
-string HTTPConnection::trim(const string &str) {
+string HTTPConnxData::trim(const string &str) {
   string trimmed = str;
   string whitespaces = " \r\n\t";
   size_t start = trimmed.find_first_not_of(whitespaces);
@@ -159,7 +159,7 @@ string HTTPConnection::trim(const string &str) {
   return trimmed.substr(start, end - start + 1);
 }
 
-bool HTTPConnection::checkHeader(HTTPConnection &state,
+bool HTTPConnxData::checkHeader(HTTPConnxData &state,
                                  const string &headerName,
                                  string &targetVariable) {
   map<string, string>::iterator headerIt = state.data.headers.find(headerName);

@@ -116,7 +116,7 @@ class ConnectionData {
 }
 
 ' Main class
-class HTTPConnection {
+class HTTPConnxData {
     + state: ConnectionState
     + client_fd: int
     + indexServerConf: ssize_t
@@ -147,15 +147,15 @@ class HTTPConnection {
     ' Nested data
     + data: ConnectionData
     
-    + HTTPConnection()
+    + HTTPConnxData()
     + reset(): void
 }
 
 ' Relationships
-HTTPConnection "1" *-- "1" ConnectionData : contains
-HTTPConnection "1" *-- "1" ConnectionState : state
+HTTPConnxData "1" *-- "1" ConnectionData : contains
+HTTPConnxData "1" *-- "1" ConnectionState : state
 
-note top of HTTPConnection
+note top of HTTPConnxData
   Manages the complete lifecycle of an HTTP connection:
   - State tracking via ConnectionState enum
   - Handles CGI, file transfers, and uploads

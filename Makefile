@@ -30,14 +30,14 @@ INCLUDES		=  	-I$(INCLUDE_DIR)
 
 SRCS 			= $(addprefix $(SRC_DIR), main.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), SocketUtils.cpp)
-SRCS 			+= $(addprefix $(SRC_DIR), HTTPConnection.cpp)
+SRCS 			+= $(addprefix $(SRC_DIR), HTTPConnxData.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), Config.cpp)
 
 OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
 HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )
 HDRS 			+= $(addprefix $(SRC_DIR), )
 
-all: $(NAME)
+all: $(NAME) test
 
 $(NAME): $(OBJS) $(HDRS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) -o $(NAME)
