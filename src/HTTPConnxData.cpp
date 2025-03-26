@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string>
 #include <unistd.h>
+#include <stdlib.h> // for strtoul
 
 bool HTTPConnxData::parsingHeaders(int client_fd, HTTPConnxData &state) {
   if (state.data.request.empty()) {
@@ -77,8 +78,8 @@ bool HTTPConnxData::parsingHeaders(int client_fd, HTTPConnxData &state) {
     }
     string content_length_str;
     if (checkHeader(state, "Content-Length", content_length_str)) {
-      state.data.content_length =
-          std::strtoul(content_length_str.c_str(), NULL, 10);
+		state.data.content_length =
+			strtoul(content_length_str.c_str(), NULL, 10);
       debuglog(YELLOW, "Content-Length: %ld", state.data.content_length);
     } else {
       debuglog(YELLOW, "No Content-Length header found");
