@@ -112,13 +112,13 @@ std::vector<ConfigData> &Config::getConfigData() {
   return Config::configs_;
 }
 
-const ConfigData* Config::getConfigByPort(uint16_t port) const {
+const ConfigData* Config::getConfigByPort(uint16_t port) {
     getConfigData();  // Ensure initialized
     std::map<uint16_t, ConfigData*>::const_iterator it = port_map_.find(port);
     return (it != port_map_.end()) ? it->second : NULL;
 }
 
-bool Config::validate() const {
+bool Config::validate() {
 	for (size_t i = 0; i < configs_.size(); ++i) {
 		if (configs_[i].ports.empty()) return false;
 		if (configs_[i].root.empty()) return false;

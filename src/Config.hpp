@@ -22,7 +22,7 @@
 class Config {
 public:
   static std::vector<ConfigData>& getConfigData();
-  static const ConfigData* getConfigByPort(uint16_t port) const; 
+  static const ConfigData* getConfigByPort(uint16_t port); 
 
   private:
   // Private constructor to prevent instantiation
@@ -32,7 +32,7 @@ public:
   ~Config();
 
   // better and clearer to have a func to validate acc to a set of rules
-  bool validate() const;
+  static bool validate();
 
   static std::map<uint16_t, ConfigData*> port_map_;
   static Config *instance_;
