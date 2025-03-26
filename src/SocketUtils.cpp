@@ -121,8 +121,8 @@ void handleSignal(int signal) {
  * child has exited
  */
 void handleChild(int signal) {
-  debuglog(RED,
-           "Received SIGCHLD signal %d, handling child process termination...",
+  debuglog(YELLOW,
+           "Received SIGCHLD signal %d, reaping child ...",
            signal);
   int savedErrno;
 
