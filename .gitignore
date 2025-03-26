@@ -8,4 +8,7 @@ ComparisonServers/apache/www/cgi-bin/__pycache__/test_cgi_form.cpython-313-pytes
 obj/HTTPConnection.o
 obj/SocketUtils.o
 test*.txt
-
+venv/*
+.DS_Store
+tests/integration/__pycache__/conftest.cpython-312-pytest-8.3.5.pyc
+tests/integration/__pycache__/test_httpconnection.cpython-312-pytest-8.3.5.pyc
