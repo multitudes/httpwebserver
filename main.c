@@ -33,20 +33,63 @@
 typedef struct connection_s{
     int client_fd;
 	int file_fd;
-	long file_size; // off_t? is
-	long file_offset;
+	long file_size; 
+	long bytes_sent;
 	bool headers_sent;
-    int child_stdin_pipe[2];  // [0] for read, [1] for write
-    int child_stdout_pipe[2]; // [0] for read, [1] for write
-    pid_t child_pid;
-    int is_sending;
-    int is_receiving;
 } connection_t;
 
 // Global variables to track connections and poll fds
 connection_t connections[MAX_CONNECTIONS];
 struct pollfd poll_fds[MAX_CONNECTIONS * 3]; // Server socket + potentially 3 fds per client (client_fd, pipe_in, pipe_out)
 int poll_fd_count = 0;
+
+// Initialize a new connection
+void init_connection(int idx) {
+    connections[idx].client_fd = -1;
+    connections[idx].file_fd = -1;
+    connections[idx].file_size = 0;
+	connections[idx].bytes_sent = 0;
+    connections[idx].headers_sent = false;
+}
+
+// Prepare to serve the index.html file
+int prepare_response(int idx) {
+	connections[idx].file_fd = open("index.html", O_RDONLY);
+	debuglog(YELLOW, "Opening file index.html for fd %d", connections[idx].file_fd);
+    if (connections[idx].file_fd < 0) {
+        perror("Failed to open file");
+        return -1;
+    }
+
+    struct stat file_stat;
+    if (fstat(connections[idx].file_fd, &file_stat) < 0) {
+        perror("Failed to get file stats");
+        close(connections[idx].file_fd);
+        return -1;
+    }
+
+    connections[idx].file_size = file_stat.st_size;
+    return 0;
+}
+
+// Send HTTP response headers
+int send_headers(int idx) {
+	char headers[512];
+    int len = snprintf(headers, sizeof(headers),
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/html\r\n"
+        "Content-Length: %ld\r\n"
+        "Connection: keep-alive\r\n\r\n",
+        connections[idx].file_size);
+
+    if (send(connections[idx].client_fd, headers, len, 0) < 0) {
+        perror("Failed to send headers");
+        return -1;
+    }
+
+    connections[idx].headers_sent = true;
+    return 0;
+}
 
 // Add a file descriptor to the poll array
 void add_to_poll(int fd, short events) {
@@ -55,123 +98,48 @@ void add_to_poll(int fd, short events) {
     poll_fd_count++;
 }
 
-/**
- * for client to server communication
- */
-
-// Prepare to serve the index.html file
-int prepare_file_response(int idx) {
-    connection_t *conn = &connections[idx];
-    struct stat file_stat;
-
-    conn->file_fd = open("index.html", O_RDONLY);
-    if (conn->file_fd < 0) {
-        perror("Failed to open index.html");
-        return -1;
-    }
-
-    if (fstat(conn->file_fd, &file_stat) < 0) {
-        perror("Failed to get file stats");
-        close(conn->file_fd);
-        conn->file_fd = -1;
-        return -1;
-    }
-
-    conn->file_size = file_stat.st_size;
-    conn->file_offset = 0;
-    conn->headers_sent = 0;
-    add_to_poll(conn->client_fd, POLLOUT); // Poll client FD for writing
-	add_to_poll(conn->file_fd, POLLIN); // Poll file FD for reading
-    return 0;
-}
-
-// Send HTTP response headers
-int send_response_headers(int conn_idx) {
-    connection_t *conn = &connections[conn_idx];
-    char headers[512];
-    
-    // Create HTTP response headers
-    snprintf(headers, sizeof(headers),
-             "HTTP/1.1 200 OK\r\n"
-             "Content-Type: text/html\r\n"
-             "Content-Length: %ld\r\n"
-             "Connection: close\r\n"
-             "\r\n", conn->file_size);
-    
-    // Send headers
-    int bytes_sent = send(conn->client_fd, headers, strlen(headers), 0);
-    if (bytes_sent < 0) {
-        perror("Failed to send headers");
-        return -1;
-    }
-    
-    conn->headers_sent = 1;
-    return bytes_sent;
-}
-
-// Send a chunk of the file to the client
-int send_file_chunk(int conn_idx) {
-    connection_t *conn = &connections[conn_idx];
-    char buffer[BUFFER_SIZE];
-    
-    // Calculate bytes to read (up to buffer size)
-    size_t bytes_to_read = BUFFER_SIZE;
-    if (conn->file_offset + bytes_to_read > conn->file_size) {
-        bytes_to_read = conn->file_size - conn->file_offset;
-    }
-    
-    // Read from file
-    ssize_t bytes_read = pread(conn->file_fd, buffer, bytes_to_read, conn->file_offset);
-    if (bytes_read <= 0) {
-        if (bytes_read < 0) {
-            perror("Failed to read file");
+void remove_from_poll(int fd) {
+    for (int i = 0; i < poll_fd_count; i++) {
+        if (poll_fds[i].fd == fd) {
+            poll_fds[i] = poll_fds[poll_fd_count - 1];
+            poll_fd_count--;
+            break;
         }
+    }
+}
+
+
+
+int send_file(int idx) {
+    char buffer[BUFFER_SIZE];
+    ssize_t bytes_read = read(connections[idx].file_fd, buffer, sizeof(buffer));
+    
+    if (bytes_read < 0) {
+        perror("Failed to read file");
         return -1;
     }
-    
-    // Send to client
-    ssize_t bytes_sent = send(conn->client_fd, buffer, bytes_read, 0);
+    if (bytes_read == 0) {
+		close(connections[idx].file_fd);
+        connections[idx].file_fd = -1;
+        return 0; // EOF
+    }
+
+    ssize_t bytes_sent = send(connections[idx].client_fd, buffer, bytes_read, 0);
     if (bytes_sent < 0) {
-        perror("Failed to send file chunk");
+        perror("Failed to send data");
         return -1;
     }
-    
-    // Update file offset
-    conn->file_offset += bytes_sent;
-    
-    printf("Sent %ld bytes of file data (%ld/%ld)\n", 
-           bytes_sent, conn->file_offset, conn->file_size);
+
+    connections[idx].bytes_sent += bytes_sent;
     
     // Check if we've sent the entire file
-    if (conn->file_offset >= conn->file_size) {
-        printf("File transfer complete\n");
-        return 0;  // Done sending
+    if (connections[idx].bytes_sent >= connections[idx].file_size) {
+        return 0; // File sent completely
     }
     
-    return 1;  // More data to send
+    return 1; // More data to send
 }
 
-
-
-// Initialize a new connection
-void init_connection(connection_t *conn) {
-    conn->client_fd = -1;
-	
-	// for file transfer
-	conn->file_fd = -1;
-    conn->file_offset = 0;
-    conn->file_size = 0;
-    conn->headers_sent = 0;
-
-	//for cgi
-    conn->child_stdin_pipe[0] = -1;
-    conn->child_stdin_pipe[1] = -1;
-    conn->child_stdout_pipe[0] = -1;
-    conn->child_stdout_pipe[1] = -1;
-    conn->child_pid = -1;
-    conn->is_sending = 0;
-    conn->is_receiving = 0;
-}
 
 // Find an available connection slot
 int find_free_connection() {
@@ -187,9 +155,7 @@ int find_free_connection() {
 int find_connection_by_fd(int fd) {
     for (int i = 0; i < MAX_CONNECTIONS; i++) {
         if (connections[i].client_fd == fd || 
-			connections[i].file_fd == fd ||
-            connections[i].child_stdin_pipe[1] == fd || 
-            connections[i].child_stdout_pipe[0] == fd) {
+			connections[i].file_fd == fd) {
             return i;
         }
     }
@@ -197,54 +163,27 @@ int find_connection_by_fd(int fd) {
 }
 
 // Remove a connection and its associated resources
-void close_connection(int conn_idx) {
-    connection_t *conn = &connections[conn_idx];
-    
-    if (conn->client_fd != -1) {
-        close(conn->client_fd);
+void close_connection(int idx) {
+    if (connections[idx].client_fd != -1) {
+        remove_from_poll(connections[idx].client_fd);
+        close(connections[idx].client_fd);
+        connections[idx].client_fd = -1;
     }
-    
-    if (conn->child_stdin_pipe[0] != -1) close(conn->child_stdin_pipe[0]);
-    if (conn->child_stdin_pipe[1] != -1) close(conn->child_stdin_pipe[1]);
-    if (conn->child_stdout_pipe[0] != -1) close(conn->child_stdout_pipe[0]);
-    if (conn->child_stdout_pipe[1] != -1) close(conn->child_stdout_pipe[1]);
-    
-    // Kill child process if it's still running
-    if (conn->child_pid > 0) {
-        kill(conn->child_pid, SIGTERM);
+    if (connections[idx].file_fd != -1) {
+        close(connections[idx].file_fd);
+        connections[idx].file_fd = -1;
     }
-    
-    // Reset the connection
-    init_connection(conn);
+    init_connection(idx);
 }
 
-// Update the poll_fds array (rebuild it from scratch)
-void update_poll_fds(int server_fd) {
-    poll_fd_count = 0;
-    
-    // Add server socket first (only need to check for incoming connections)
-    add_to_poll(server_fd, POLLIN);
-    
-    // Add client connections and pipes
-    for (int i = 0; i < MAX_CONNECTIONS; i++) {
-        connection_t *conn = &connections[i];
-        
-        if (conn->client_fd != -1) {
-            // Add client socket fd - monitor for both read and write
-            add_to_poll(conn->client_fd, POLLIN | POLLOUT);
-        }
-    }
-}
+
 
 int main() {
-    int server_fd;
-    struct sockaddr_in server_addr;
-
     for (int i = 0; i < MAX_CONNECTIONS; i++) {
-        init_connection(&connections[i]);
+        init_connection(i);
     }
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
@@ -253,9 +192,11 @@ int main() {
     int opt = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(SERVER_PORT);
+    struct sockaddr_in server_addr = {
+        .sin_family = AF_INET,
+        .sin_addr.s_addr = INADDR_ANY,
+        .sin_port = htons(SERVER_PORT)
+    };
 
     if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("Bind failed");
@@ -274,8 +215,8 @@ int main() {
     add_to_poll(server_fd, POLLIN);
 
     while (1) {
-        int ret = poll(poll_fds, poll_fd_count, 10000);
-        debuglog(YELLOW,"Poll returned %d", ret);
+        int ret = poll(poll_fds, poll_fd_count, 100000);
+        // debuglog(YELLOW,"Poll returned %d", ret);
         if (ret < 0) {
             perror("Poll failed");
             break;
@@ -313,7 +254,9 @@ int main() {
 
             connection_t *conn = &connections[idx];
 
-            if (fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
+			// handle read events
+            if (poll_fds[i].revents & POLLIN) {
+				debuglog(YELLOW, "Handling read event for connection %d", idx);
                 char buffer[BUFFER_SIZE];
                 ssize_t bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE - 1, 0);
                 if (bytes_read <= 0) {
@@ -324,18 +267,41 @@ int main() {
                 buffer[bytes_read] = '\0';
                 printf("Received %ld bytes: %s\n", bytes_read, buffer);
 
-                if (prepare_file_response(idx) < 0) {
+                if (prepare_response(idx) < 0) {
+					debug("Failed to prepare response");
                     close_connection(idx);
                 }
+				remove_from_poll(fd);
+				add_to_poll(fd, POLLOUT);
+				debuglog(YELLOW, "Added connection %d to poll for write", idx);
             }
-            else if (fd == conn->client_fd && (poll_fds[i].revents & POLLOUT)) {
-                if (!conn->headers_sent) {
-                    if (send_response_headers(idx) < 0) {
+			// handle write events
+			 if (poll_fds[i].revents & POLLOUT) {
+				debuglog(YELLOW, "Handling write event for connection %d", idx);
+                if (!connections[idx].headers_sent) {
+                    if (send_headers(idx) < 0) {
                         close_connection(idx);
                     }
-                }
-                else if (send_file_chunk(idx) < 0) {
-                    close_connection(idx);
+                } else {
+                    int result = send_file(idx);
+                    if (result < 0) {
+                        close_connection(idx);
+					} else if (result == 0) {
+						// File sent completely - reset for next request
+						connections[idx].headers_sent = false;
+						connections[idx].bytes_sent = 0;
+			
+						// Close the file descriptor
+						if (connections[idx].file_fd != -1) {
+							close(connections[idx].file_fd);
+							connections[idx].file_fd = -1;
+						}
+			
+						// Switch back to POLLIN for the next request
+						remove_from_poll(fd);
+						add_to_poll(fd, POLLIN);
+						debuglog(YELLOW, "Switched connection %d back to POLLIN", idx);
+					}
                 }
             }
         }
