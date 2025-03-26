@@ -1,7 +1,8 @@
 #include "HTTPServer.hpp"
+#include "debug.h"
+#include <sys/stat.h>
 
 namespace HTTPServer {
-
 
 /**
  * testing: use the following command to test the server
@@ -146,6 +147,76 @@ void update_poll_events(int fd, short events) {
   }
 }
 
+// Prepare to serve the index.html file
+int prepare_response(int idx) {
+  connections[idx].file_fd = open("index.html", O_RDONLY);
+  debuglog(YELLOW, "Opening file index.html for fd %d",
+           connections[idx].file_fd);
+  if (connections[idx].file_fd < 0) {
+    perror("Failed to open file");
+    return -1;
+  }
+
+  struct stat file_stat;
+  if (fstat(connections[idx].file_fd, &file_stat) < 0) {
+    perror("Failed to get file stats");
+    close(connections[idx].file_fd);
+    return -1;
+  }
+
+  connections[idx].file_size = file_stat.st_size;
+  return 0;
+}
+
+// Send HTTP response headers
+int send_headers(int idx) {
+  char headers[512];
+  int len = snprintf(headers, sizeof(headers),
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: text/html\r\n"
+                     "Content-Length: %ld\r\n"
+                     "Connection: keep-alive\r\n\r\n",
+                     connections[idx].file_size);
+
+  if (send(connections[idx].client_fd, headers, len, 0) < 0) {
+    perror("Failed to send headers");
+    return -1;
+  }
+
+  connections[idx].headers_sent = true;
+  return 0;
+}
+
+int send_file(int idx) {
+  char buffer[BUFFER_SIZE];
+  ssize_t bytes_read = read(connections[idx].file_fd, buffer, sizeof(buffer));
+
+  if (bytes_read < 0) {
+    perror("Failed to read file");
+    return -1;
+  }
+  if (bytes_read == 0) {
+    close(connections[idx].file_fd);
+    connections[idx].file_fd = -1;
+    return 0; // EOF
+  }
+
+  ssize_t bytes_sent = send(connections[idx].client_fd, buffer, bytes_read, 0);
+  if (bytes_sent < 0) {
+    perror("Failed to send data");
+    return -1;
+  }
+
+  connections[idx].data.bytes_sent += bytes_sent;
+
+  // Check if we've sent the entire file
+  if (connections[idx].data.bytes_sent >= connections[idx].file_size) {
+    return 0; // File sent completely
+  }
+
+  return 1; // More data to send
+}
+
 int run() {
   // Set up signal handlers
   SocketUtils::setSignalHandlers();
@@ -192,18 +263,22 @@ int run() {
       if (!(poll_fds[i].revents & (POLLIN | POLLOUT))) {
         continue; // No events on this fd
       }
-	  if (poll_fds[i].revents & (POLLERR | POLLNVAL)) {
-		debuglog(RED, "Error condition on fd %d", poll_fds[i].fd);
-		// cleanup_connection(pollfds, client_to_file, i);
+      if (poll_fds[i].revents & (POLLERR | POLLNVAL)) {
+        debuglog(RED, "Error condition on fd %d", poll_fds[i].fd);
+        // cleanup_connection(pollfds, client_to_file, i);
 
-		continue;
-	}
-	
-	if (poll_fds[i].revents & POLLHUP) {
-		debuglog(RED, "Connection closed by client on fd %d ", poll_fds[i].fd);
-		// cleanup_connection(pollfds, client_to_file, i);
-		continue;
-	}
+        continue;
+      }
+
+      if (poll_fds[i].revents & POLLHUP) {
+        debuglog(RED, "Connection closed by client on fd %d ", poll_fds[i].fd);
+        // cleanup_connection(pollfds, client_to_file, i);
+		int conn_idx = find_connection_by_fd(poll_fds[i].fd);
+		if (conn_idx >= 0) {
+			close_connection(conn_idx);
+		}
+        continue;
+      }
       int current_fd = poll_fds[i].fd;
 
       // Handle new connections on server socket
@@ -295,6 +370,13 @@ int run() {
             conn->state = CONN_FILE_REQUEST;
             debug("File request detected");
             // TODO prepare fd for file transfer
+            if (prepare_response(conn_idx) < 0) {
+              debug("Failed to prepare response");
+              close_connection(conn_idx);
+            }
+            remove_from_poll(current_fd);
+            add_to_poll(current_fd, POLLOUT);
+            debuglog(YELLOW, "Added connection %d to poll for write", conn_idx);
           }
         }
 
@@ -308,6 +390,35 @@ int run() {
           // check if the file is ready to be sent
           // if not set to CONN_CLOSING
           // else send the file
+          if (poll_fds[i].revents & POLLOUT) {
+            debuglog(YELLOW, "Handling write event for connection %d", conn_idx);
+            if (!connections[conn_idx].headers_sent) {
+              if (send_headers(conn_idx) < 0) {
+                close_connection(conn_idx);
+              }
+            } else {
+              int result = send_file(conn_idx);
+              if (result < 0) {
+                close_connection(conn_idx);
+              } else if (result == 0) {
+                // File sent completely - reset for next request
+                connections[conn_idx].headers_sent = false;
+                connections[conn_idx].data.bytes_sent = 0;
+
+                // Close the file descriptor
+                if (connections[conn_idx].file_fd != -1) {
+                  close(connections[conn_idx].file_fd);
+                  connections[conn_idx].file_fd = -1;
+                }
+
+                // Switch back to POLLIN for the next request
+                remove_from_poll(current_fd);
+                add_to_poll(current_fd, POLLIN);
+                debuglog(YELLOW, "Switched connection %d back to POLLIN", conn_idx);
+              }
+            }
+          }
+
           continue;
         } else if (conn->state == CONN_UPLOAD) {
           // check if the upload is complete
@@ -315,35 +426,35 @@ int run() {
           // else close the connection
           continue;
         } else if (conn->state == CONN_CGI) {
-			debuglog(YELLOW, "Connection %d in state CGI", conn_idx);
+          debuglog(YELLOW, "Connection %d in state CGI", conn_idx);
           // check if the cgi is ready to be sent
           // if not set to CONN_CLOSING
           // else send the cgi
           // Handle data from client and send to cgi
           if (current_fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
-			char buffer[BUFFER_SIZE];
-			int bytes_read = 0;
-			if (conn->data.request.empty()) {
-				
-			
-            bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE, 0);
+            char buffer[BUFFER_SIZE];
+            int bytes_read = 0;
+            if (conn->data.request.empty()) {
 
-            if (bytes_read <= 0) {
-              if (bytes_read == 0) {
-                // printf("Client disconnected\n");
-              } else {
-                perror("recv failed");
+              bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE, 0);
+
+              if (bytes_read <= 0) {
+                if (bytes_read == 0) {
+                  // printf("Client disconnected\n");
+                } else {
+                  perror("recv failed");
+                }
+                close_connection(conn_idx);
+                continue;
               }
-              close_connection(conn_idx);
-              continue;
+
+              printf("Received %d bytes from client\n", bytes_read);
+
+            } else {
+              bytes_read = conn->data.request.size();
+              memcpy(buffer, conn->data.request.c_str(),
+                     conn->data.request.size());
             }
-
-            printf("Received %d bytes from client\n", bytes_read);
-
-		} else {
-			bytes_read = conn->data.request.size();
-			memcpy(buffer, conn->data.request.c_str(), conn->data.request.size());
-		}
             // Forward data to CGI process
 
             int bytes_written =
@@ -366,7 +477,6 @@ int run() {
               update_poll_events(conn->child_stdout_pipe[0], POLLIN);
             }
           }
-		
 
           // Handle data from CGI process (ready to write to client from cgi)
           if (conn->child_stdout_pipe[0] == current_fd &&
@@ -422,4 +532,4 @@ int run() {
   return 0;
 }
 
-}
+} // namespace HTTPServer
