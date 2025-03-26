@@ -220,11 +220,6 @@ int main() {
   int server_fd;
   struct sockaddr_in server_addr;
 
-  // // Create server socket
-  // if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-  // 	perror("Socket creation failed");
-  //     exit(EXIT_FAILURE);
-  // }
   if ((server_fd = SocketUtils::createBindSocket(SERVER_PORT)) < 0) {
     perror("Socket creation failed");
     exit(EXIT_FAILURE);
