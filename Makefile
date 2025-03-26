@@ -33,6 +33,8 @@ SRCS 			= $(addprefix $(SRC_DIR), main.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), SocketUtils.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), HTTPConnxData.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), Config.cpp)
+SRCS 			+= $(addprefix $(SRC_DIR), CGI.cpp)
+SRCS 			+= $(addprefix $(SRC_DIR), HTTPServer.cpp)
 
 OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
 HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )

@@ -16,3 +16,5 @@ test*.txt
 obj/HTTPConnxData.o
 obj/Config.o
 tests/integration/__pycache__/test_httpconnection.cpython-313-pytest-8.3.5.pyc
+obj/HTTPServer.o
+obj/CGI.o
