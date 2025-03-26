@@ -128,7 +128,6 @@ void HTTPConnxData::reset() {
   is_receiving = 0;
   headers_sent = false;
   cgi_processing = false;
-  is_uploading = false;
   bytes_received = 0;
   data = ConnectionData();
 

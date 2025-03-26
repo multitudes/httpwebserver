@@ -92,7 +92,7 @@ struct HTTPConnxData {
     // Upload handling
     int writeto_fd;
     char filename[256];
-    bool is_uploading;
+    bool upload_completed;
     size_t bytes_received;
 
     // Request data
@@ -113,7 +113,7 @@ struct HTTPConnxData {
         file_size(0),
         file_offset(0),
         writeto_fd(-1),
-        is_uploading(false),
+        upload_completed(false),
         bytes_received(0),
         data() {
         filename[0] = '\0';

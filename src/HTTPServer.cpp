@@ -93,7 +93,6 @@ void init_connection(HTTPConnxData *conn) {
   conn->file_size = 0;
   conn->file_offset = 0;
   conn->writeto_fd = -1;
-  conn->is_uploading = false;
   conn->bytes_received = 0;
 
   // Initialize pipes
@@ -177,7 +176,7 @@ int send_headers(int idx) {
                      "Content-Length: %ld\r\n"
                      "Connection: keep-alive\r\n\r\n",
                      connections[idx].file_size);
-  
+
   if (send(connections[idx].client_fd, headers, len, 0) < 0) {
     perror("Failed to send headers");
     return -1;
@@ -216,6 +215,26 @@ int send_file(int idx) {
   return 1; // More data to send
 }
 
+void extract_filename(const char *request, char *filename) {
+  // Simple extraction - look for first line with path
+  const char *start = strstr(request, " /");
+  if (!start)
+    return;
+
+  start += 2; // Skip the space and slash
+  const char *end = strchr(start, ' ');
+  if (!end)
+    return;
+
+  size_t len = end - start;
+  if (len >= sizeof(connections[0].filename)) {
+    len = sizeof(connections[0].filename) - 1;
+  }
+
+  strncpy(filename, start, len);
+  filename[len] = '\0';
+}
+
 int run() {
   // Set up signal handlers
   SocketUtils::setSignalHandlers();
@@ -245,7 +264,7 @@ int run() {
   while (1) {
 
     int poll_result = poll(poll_fds, poll_fd_count, 10000); // Wait indefinitely
-    printf("Poll returned %d\n", poll_result);
+    // printf("Poll returned %d\n", poll_result);
     if (poll_result < 0) {
       if (errno != EINTR) { // Interrupted by signal
         perror("poll");
@@ -272,10 +291,10 @@ int run() {
       if (poll_fds[i].revents & POLLHUP) {
         debuglog(RED, "Connection closed by client on fd %d ", poll_fds[i].fd);
         // cleanup_connection(pollfds, client_to_file, i);
-		int conn_idx = find_connection_by_fd(poll_fds[i].fd);
-		if (conn_idx >= 0) {
-			close_connection(conn_idx);
-		}
+        int conn_idx = find_connection_by_fd(poll_fds[i].fd);
+        if (conn_idx >= 0) {
+          close_connection(conn_idx);
+        }
         continue;
       }
       int current_fd = poll_fds[i].fd;
@@ -363,11 +382,25 @@ int run() {
             }
           } else if (conn->data.request.find("upload") != string::npos) {
             conn->state = CONN_UPLOAD;
-            debug("Upload request detected");
+            debuglog(YELLOW, "Upload request detected");
             // TODO prepare fd for upload
+
+            // First chunk - extract filename and open file
+            extract_filename(buffer, conn->filename);
+
+            conn->file_fd =
+                open(conn->filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (conn->file_fd < 0) {
+              perror("Failed to open file for upload");
+              close_connection(conn_idx);
+              continue;
+            }
+
+            debuglog(YELLOW, "Starting upload to: %s\n", conn->filename);
+
           } else {
             conn->state = CONN_FILE_REQUEST;
-            debuglog(YELLOW,"File request detected");
+            debuglog(YELLOW, "File request detected");
             // TODO prepare fd for file transfer
             if (prepare_response(conn_idx) < 0) {
               debug("Failed to prepare response");
@@ -390,7 +423,8 @@ int run() {
           // if not set to CONN_CLOSING
           // else send the file
           if (poll_fds[i].revents & POLLOUT) {
-            debuglog(YELLOW, "Handling write event for connection %d", conn_idx);
+            debuglog(YELLOW, "Handling write event for connection %d",
+                     conn_idx);
             if (!connections[conn_idx].headers_sent) {
               if (send_headers(conn_idx) < 0) {
                 close_connection(conn_idx);
@@ -413,8 +447,9 @@ int run() {
                 // Switch back to POLLIN for the next request
                 remove_from_poll(current_fd);
                 add_to_poll(current_fd, POLLIN);
-				connections[conn_idx].state = CONN_INCOMING;
-                debuglog(YELLOW, "Switched connection %d back to POLLIN", conn_idx);
+                connections[conn_idx].state = CONN_INCOMING;
+                debuglog(YELLOW, "Switched connection %d back to POLLIN",
+                         conn_idx);
               }
             }
           }
@@ -424,6 +459,101 @@ int run() {
           // check if the upload is complete
           // if not set to CONN_CLOSING
           // else close the connection
+          if (poll_fds[i].revents & POLLIN) {
+            debuglog(YELLOW, "Handling upload event for connection %d",
+                     conn_idx);
+			// because the previous header parsing consumed data and we stored it
+            if (!conn->data.request.empty()) {
+				debuglog(YELLOW, "first writing content of request");
+              ssize_t bytes_written =
+                  write(conn->file_fd, conn->data.request.c_str(),
+                        conn->data.request.size());
+              if (bytes_written < 0) {
+                perror("Failed to write to file");
+                close_connection(conn_idx);
+                continue;
+              } else if (bytes_written == 0) {
+				debug("No data written to file");
+				close_connection(conn_idx);
+				conn->state = CONN_INCOMING;
+				continue;
+			  }
+              conn->bytes_received += bytes_written;
+			  // if we have received all data, close the connection
+			  if (conn->bytes_received >= conn->data.content_length) {
+				debuglog(YELLOW,"Upload complete first write");
+				debuglog(YELLOW, "Written %ld bytes to %s (total: %zu)\n",
+						 bytes_written, conn->filename, conn->bytes_received);
+				conn->upload_completed = true;
+				close(conn->file_fd);
+				conn->file_fd = -1;
+				conn->data.request.clear();
+				update_poll_events(current_fd, POLLOUT);
+			  } else {
+				continue;
+			  }
+            } else {
+              // read again
+              char buffer[BUFFER_SIZE];
+              int bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE, 0);
+              if (bytes_read <= 0) {
+				  if (bytes_read == 0) {
+					  debug("Client disconnected");
+					} else {
+						perror("recv failed");
+					}
+				conn->state = CONN_INCOMING;
+				close_connection(conn_idx);
+                continue;
+              }
+              printf("Received %d bytes from client\n", bytes_read);
+              //   conn->data.request.append(buffer, bytes_read);
+              debuglog(YELLOW, "Received %d bytes from client\n", bytes_read);
+              // erite to file
+              ssize_t bytes_written = write(conn->file_fd, buffer, bytes_read);
+              if (bytes_written < 0) {
+                perror("Failed to write to file");
+				conn->upload_completed = true;
+				close(conn->file_fd);
+				conn->state = CONN_INCOMING;
+                close_connection(conn_idx);
+                continue;
+              }
+              conn->bytes_received += bytes_written;
+			  // if we have received all data, close the connection
+			  if (conn->bytes_received >= conn->data.content_length) {
+				debuglog(YELLOW,"Upload complete");
+				debuglog(YELLOW, "Written %ld bytes to %s (total: %zu)\n",
+				bytes_written, conn->filename, conn->bytes_received);
+				conn->upload_completed = true;
+				update_poll_events(current_fd, POLLOUT);
+			  } else {
+				continue;
+			  }
+            }
+			debuglog(YELLOW, "here here here? ");
+            // Handle client ready for write (response)
+            if (poll_fds[i].revents & POLLOUT && conn->upload_completed) {
+				debuglog(YELLOW, "Handling upload response for connection %d",
+						 conn_idx);
+              const char *response = "HTTP/1.1 200 OK\r\n"
+                                     "Content-Length: 18\r\n"
+                                     "Connection: close\r\n\r\n"
+                                     "Upload successful\n";
+
+              if (send(conn->client_fd, response, strlen(response), 0) < 0) {
+                perror("Failed to send response");
+              }
+			  update_poll_events(current_fd, POLLIN);
+			  //   close_connection(conn_idx);
+			//   conn->state = CONN_INCOMING;
+			//   conn->upload_completed = false;
+				close_connection(conn_idx);
+			  debuglog(YELLOW, "Upload response sent to client");
+			  // Reset connection state
+			//   conn->bytes_received = 0;
+            }
+          }
           continue;
         } else if (conn->state == CONN_CGI) {
           debuglog(YELLOW, "Connection %d in state CGI", conn_idx);

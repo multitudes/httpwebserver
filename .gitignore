@@ -19,3 +19,4 @@ tests/integration/__pycache__/test_httpconnection.cpython-313-pytest-8.3.5.pyc
 obj/HTTPServer.o
 obj/CGI.o
 src/scrap.cpp
+upload
