@@ -117,25 +117,10 @@ struct HTTPConnection {
         filename[0] = '\0';
     }
 
-    /**
-     * @brief Reset the connection for reuse
-     */
-    void reset() {
-        state = CONN_INCOMING;
-        is_sending = 0;
-        is_receiving = 0;
-        headers_sent = false;
-        cgi_processing = false;
-        is_uploading = false;
-        bytes_received = 0;
-        data = ConnectionData();
-        
-        // Close open file descriptors
-        if (file_fd != -1) close(file_fd);
-        if (writeto_fd != -1) close(writeto_fd);
-        
-        file_fd = -1;
-        writeto_fd = -1;
-        filename[0] = '\0';
-    }
+    void reset();
+	bool checkHeader(HTTPConnection& state,
+		const string& headerName,
+		string& targetVariable);
+	string trim(const string& str);
+	bool parsingHeaders(int client_fd, HTTPConnection& state);
 };
