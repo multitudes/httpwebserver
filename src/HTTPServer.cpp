@@ -177,12 +177,11 @@ int send_headers(int idx) {
                      "Content-Length: %ld\r\n"
                      "Connection: keep-alive\r\n\r\n",
                      connections[idx].file_size);
-
+  
   if (send(connections[idx].client_fd, headers, len, 0) < 0) {
     perror("Failed to send headers");
     return -1;
   }
-
   connections[idx].headers_sent = true;
   return 0;
 }
@@ -368,7 +367,7 @@ int run() {
             // TODO prepare fd for upload
           } else {
             conn->state = CONN_FILE_REQUEST;
-            debug("File request detected");
+            debuglog(YELLOW,"File request detected");
             // TODO prepare fd for file transfer
             if (prepare_response(conn_idx) < 0) {
               debug("Failed to prepare response");
@@ -376,7 +375,7 @@ int run() {
             }
             remove_from_poll(current_fd);
             add_to_poll(current_fd, POLLOUT);
-            debuglog(YELLOW, "Added connection %d to poll for write", conn_idx);
+            debuglog(YELLOW, "Sending response to connx %d", conn_idx);
           }
         }
 
@@ -414,6 +413,7 @@ int run() {
                 // Switch back to POLLIN for the next request
                 remove_from_poll(current_fd);
                 add_to_poll(current_fd, POLLIN);
+				connections[conn_idx].state = CONN_INCOMING;
                 debuglog(YELLOW, "Switched connection %d back to POLLIN", conn_idx);
               }
             }

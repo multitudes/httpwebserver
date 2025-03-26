@@ -53,6 +53,7 @@ struct HTTPConnxData {
         string response;
         size_t bytes_sent;
         bool response_sent;
+		bool headers_sent;
 
         ConnectionData() :
             method(""), target(""), version(""), host(""), request(""),
@@ -60,7 +61,8 @@ struct HTTPConnxData {
             headers_received(false), is_get_request(false),
             chunked(false), multipart(false), boundary(""),
             headers_end(0), sending_response(false),
-            response(""), bytes_sent(0), response_sent(false) {}
+            response(""), bytes_sent(0), response_sent(false), 
+			headers_sent(false) {}
     };
 
     // Connection state and metadata
