@@ -4,7 +4,7 @@ import requests
 WEBSERVER_URL = "http://localhost:4244"
 
 def test_backend_health():
-    response = requests.get(f"{WEBSERVER_URL}/metrics")
+    response = requests.get(f"{WEBSERVER_URL}/cgi-bin/health")
     assert response.status_code == 200
     
 # def test_server_responses(webserver, base_url):
