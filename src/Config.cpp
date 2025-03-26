@@ -5,8 +5,8 @@
 /** Initialize the static variables */
 std::vector<ConfigData> Config::configs_;
 Config *Config::instance_ = NULL;
-pthread_mutex_t Config::mutex_ = PTHREAD_MUTEX_INITIALIZER;
 std::string Config::_filename = "config/default.conf"; // Default filename
+std::map<uint16_t, ConfigData*> Config::port_map_;
 
 /**
  * @brief Constructor for the Config class
@@ -20,6 +20,12 @@ std::string Config::_filename = "config/default.conf"; // Default filename
 Config::Config(std::string filename) {
   (void)filename;
 
+  // map ports to server configurations
+  for (size_t i = 0; i < configs_.size(); ++i) {
+    for (size_t j = 0; j < configs_[i].ports.size(); ++j) {
+        port_map_[configs_[i].ports[j]] = &configs_[i];
+    }
+}
   // First server configuration
   ConfigData server1;
   server1.keepalive_timeout = 5;
@@ -70,10 +76,6 @@ Config::Config(std::string filename) {
   server1.acceptedMethods.push_back("DELETE");
   server1.acceptedMethods.push_back("PUT");
   server1.cgiData.cgi_path_alias = std::make_pair("/cgi-bin", "/cgi-bin");
-  server1.cgiData.cgi_extensions[".pl"] =
-      "/bin/perl"; // Map .pl files to the Perl interpreter
-  server1.cgiData.cgi_extensions[".py"] =
-      "/bin/python3"; // Map .py files to the Python interpreter
   server1.cgiData.upload_dir = "www/uploads";
   // server1.cgiData = data;
   // Second server configuration
@@ -97,23 +99,29 @@ Config::Config(std::string filename) {
 }
 
 Config::Config(const Config &) {}
-Config &Config::operator=(const Config &) {}
+Config &Config::operator=(const Config &) { return *this; }
 Config::~Config() {
-	cleanup();
+	delete instance_;
+	instance_ = NULL;
 }
 
 std::vector<ConfigData> &Config::getConfigData() {
-  pthread_mutex_lock(&Config::mutex_);
   if (instance_ == NULL) {
     instance_ = new Config(Config::_filename);
   }
-  pthread_mutex_unlock(&Config::mutex_);
   return Config::configs_;
 }
 
-void Config::cleanup() {
-  pthread_mutex_lock(&mutex_);
-  delete instance_;
-  instance_ = NULL;
-  pthread_mutex_unlock(&mutex_);
+const ConfigData* Config::getConfigByPort(uint16_t port) const {
+    getConfigData();  // Ensure initialized
+    std::map<uint16_t, ConfigData*>::const_iterator it = port_map_.find(port);
+    return (it != port_map_.end()) ? it->second : NULL;
+}
+
+bool Config::validate() const {
+	for (size_t i = 0; i < configs_.size(); ++i) {
+		if (configs_[i].ports.empty()) return false;
+		if (configs_[i].root.empty()) return false;
+	}
+	return true;
 }

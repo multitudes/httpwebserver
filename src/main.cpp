@@ -1,5 +1,7 @@
 #include "HTTPConnection.hpp"
 #include "SocketUtils.hpp"
+#include "Config.hpp"
+#include "ConfigData.hpp"
 #include "debug.h"
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -214,7 +216,7 @@ int start_cgi_process(int conn_idx) {
   }
 }
 
-int main() {
+int runServer() {
   // Set up signal handlers
   SocketUtils::setSignalHandlers();
 
@@ -476,5 +478,12 @@ int main() {
   }
 
   close(server_fd);
+  return 0;
+}
+
+
+int main() {
+  Config::getConfigData();
+  runServer();
   return 0;
 }

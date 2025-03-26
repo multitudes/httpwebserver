@@ -2,7 +2,7 @@
 
 #include <netdb.h>
 #include <pthread.h>
-
+#include <cstdint>
 #include "ConfigData.hpp"
 #include <map>
 #include <string>
@@ -22,19 +22,20 @@
 class Config {
 public:
   static std::vector<ConfigData>& getConfigData();
-  
-  
+  static const ConfigData* getConfigByPort(uint16_t port) const; 
+
   private:
   // Private constructor to prevent instantiation
   Config(std::string filename);
   Config(const Config &);
   Config &operator=(const Config &);
-  ~Config() {}
-  
-  static void cleanup();
+  ~Config();
 
+  // better and clearer to have a func to validate acc to a set of rules
+  bool validate() const;
+
+  static std::map<uint16_t, ConfigData*> port_map_;
   static Config *instance_;
-  static pthread_mutex_t mutex_;
   static std::vector<ConfigData> configs_;
   static std::string _filename;
 };
