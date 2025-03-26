@@ -1,8 +1,12 @@
 # pragma once
 
+#include "HTTPConnxData.hpp"
+#include "ConfigData.hpp"
+#include "debug.h"
+
 namespace CGI {
 
 // Start a CGI process for a connection
-int start_cgi_process(int conn_idx);
+int prepareCGI(HTTPConnxDate& connx);
 
 } // namespace CGI

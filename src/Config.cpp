@@ -104,12 +104,18 @@ Config &Config::operator=(const Config &) { return *this; }
 Config::~Config() {}
 
 void Config::cleanup() {
-	delete instance_;
-	instance_ = NULL;
-	debuglog(YELLOW, "Server config data destroyed");
+  delete instance_;
+  instance_ = NULL;
+  debuglog(YELLOW, "Server config data destroyed");
 }
 
-std::vector<ConfigData> &Config::getConfigData() {
+void Config::initialize(std::string &config_file) {
+  if (instance_ == NULL) {
+    instance_ = new Config(config_file);
+  }
+}
+
+std::vector<ConfigData> &Config::getConfigData(char *config_file) {
   if (instance_ == NULL) {
     instance_ = new Config(Config::_filename);
   }
@@ -117,17 +123,28 @@ std::vector<ConfigData> &Config::getConfigData() {
 }
 
 const ConfigData *Config::getConfigByPort(uint16_t port) {
-  getConfigData(); // Ensure initialized
+  if (instance_ == NULL) {
+    instance_ = new Config(Config::_filename);
+    if (!validate()) {
+      cleanup();
+      debuglog(RED, "Configuration validation failed");
+      throw std::runtime_error("Invalid configuration");
+    }
+  }
   std::map<uint16_t, ConfigData *>::const_iterator it = port_map_.find(port);
   return (it != port_map_.end()) ? it->second : NULL;
 }
 
 bool Config::validate() {
   for (size_t i = 0; i < configs_.size(); ++i) {
-    if (configs_[i].ports.empty())
+    if (configs_[i].ports.empty()) {
+      debuglog(RED, "Configuration error: No ports specified");
       return false;
-    if (configs_[i].root.empty())
+    }
+    if (configs_[i].root.empty()) {
+      debuglog(RED, "Configuration error: Empty root directory");
       return false;
+    }
   }
   return true;
 }

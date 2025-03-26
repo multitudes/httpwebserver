@@ -21,7 +21,8 @@
  */
 class Config {
 public:
-  static std::vector<ConfigData>& getConfigData();
+  static void initialize(std::string& config_file);
+  static std::vector<ConfigData>& getConfigData(char *config_file);
   static const ConfigData* getConfigByPort(uint16_t port); 
   static void cleanup();
 
