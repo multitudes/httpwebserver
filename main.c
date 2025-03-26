@@ -1,7 +1,6 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,250 +9,241 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include "debug.h"
 
 #define SERVER_PORT 4244
 #define MAX_CONNECTIONS 10
 #define BUFFER_SIZE 4096
 
-/**
- * testing: use the following command to test the server
- *
- * nc localhost 4244
- * curl -X POST --data-raw "This is a test" localhost:4244
- * wget -v --post-data="hello world"  http://localhost:4244
- * telnet localhost 4244
- * curl "http://localhost:4244/?sss='this%20is'"
- * curl -H "Content-Type: application/json"
- * "http://localhost:4244/?data=This%20is%20a%20test" curl -X POST -H
- * "Content-Type: application/json" --data-raw '{"message": "This is a test"}'
- * localhost:4244 curl -I -H "Content-Type: application/json"
- * http://localhost:4244
- * 
- * this will create multipart file upload
- * curl -F "file=@test.txt" http://localhost:4244/test.txt
- * 
- * to test the file upload
- * curl --data-binary @test.txt http://localhost:4244/test.txt
- */
-// Connection structure to store client information and pipe file descriptors
 typedef struct connection_s {
-  int client_fd;
-  int file_fd;
-  char filename[256]; // Store filename
-  bool is_uploading;
+    int client_fd;
+    int file_fd;
+    char filename[256];
+    bool is_uploading;
+    size_t bytes_received;
 } connection_t;
 
-// Global variables to track connections and poll fds
 connection_t connections[MAX_CONNECTIONS];
-struct pollfd
-    poll_fds[MAX_CONNECTIONS * 3]; // Server socket + potentially 3 fds per
-                                   // client (client_fd, pipe_in, pipe_out)
+struct pollfd poll_fds[MAX_CONNECTIONS + 1]; // Server + clients
 int poll_fd_count = 0;
 
-// Add a file descriptor to the poll array
+void init_connection(int idx) {
+	debuglog(YELLOW,"Initializing connection %d", idx);
+    connections[idx].client_fd = -1;
+    connections[idx].file_fd = -1;
+    memset(connections[idx].filename, 0, sizeof(connections[idx].filename));
+    connections[idx].is_uploading = false;
+    connections[idx].bytes_received = 0;
+}
+
 void add_to_poll(int fd, short events) {
-  poll_fds[poll_fd_count].fd = fd;
-  poll_fds[poll_fd_count].events = events;
-  poll_fd_count++;
+    if (poll_fd_count >= MAX_CONNECTIONS + 1) return;
+    poll_fds[poll_fd_count].fd = fd;
+    poll_fds[poll_fd_count].events = events;
+    poll_fd_count++;
 }
 
-// Initialize a new connection
-void init_connection(connection_t *conn) {
-	conn->client_fd = -1;
-	conn->file_fd = -1;
-	memset(conn->filename, 0, sizeof(conn->filename));
+void remove_from_poll(int fd) {
+    for (int i = 0; i < poll_fd_count; i++) {
+        if (poll_fds[i].fd == fd) {
+            poll_fds[i] = poll_fds[poll_fd_count - 1];
+            poll_fd_count--;
+            break;
+        }
+    }
 }
 
-// Find an available connection slot
 int find_free_connection() {
-  for (int i = 0; i < MAX_CONNECTIONS; i++) {
-    if (connections[i].client_fd == -1) {
-      return i;
+    for (int i = 0; i < MAX_CONNECTIONS; i++) {
+        if (connections[i].client_fd == -1) {
+            return i;
+        }
     }
-  }
-  return -1; // No free slots
+    return -1;
 }
 
-// Find the connection index for a given file descriptor
-int find_connection_by_fd(int fd) {
-  for (int i = 0; i < MAX_CONNECTIONS; i++) {
-    if (connections[i].client_fd == fd || connections[i].file_fd == fd) {
-      return i;
+void close_connection(int idx) {
+    if (connections[idx].client_fd != -1) {
+        remove_from_poll(connections[idx].client_fd);
+        close(connections[idx].client_fd);
     }
-  }
-  return -1;
+    if (connections[idx].file_fd != -1) {
+        close(connections[idx].file_fd);
+    }
+    init_connection(idx);
 }
 
-// Remove a connection and its associated resources
-void close_connection(int conn_idx) {
-  connection_t *conn = &connections[conn_idx];
-
-  if (conn->client_fd != -1) close(conn->client_fd);
-  if (conn->file_fd != -1) close(conn->file_fd);
-  memset(conn, 0, sizeof(connection_t));
-  conn->client_fd = -1;
-  conn->file_fd = -1;
-
-}
-
-// Update the poll_fds array (rebuild it from scratch)
-void update_poll_fds(int server_fd) {
-  poll_fd_count = 0;
-
-  // Add server socket first (only need to check for incoming connections)
-  add_to_poll(server_fd, POLLIN);
-
-  // Add client connections and pipes
-  for (int i = 0; i < MAX_CONNECTIONS; i++) {
-    connection_t *conn = &connections[i];
-
-    if (conn->client_fd != -1) {
-      // Add client socket fd - monitor for both read and write
-      add_to_poll(conn->client_fd, POLLIN | POLLOUT);
-      // if the file_fd is open, add it to the poll list.
-      if (conn->file_fd != -1) {
-        add_to_poll(conn->file_fd, POLLIN);
-      }
+void extract_filename(const char *request, char *filename) {
+    // Simple extraction - look for first line with path
+    const char *start = strstr(request, " /");
+    if (!start) return;
+    
+    start += 2; // Skip the space and slash
+    const char *end = strchr(start, ' ');
+    if (!end) return;
+    
+    size_t len = end - start;
+    if (len >= sizeof(connections[0].filename)) {
+        len = sizeof(connections[0].filename) - 1;
     }
-  }
+    
+    strncpy(filename, start, len);
+    filename[len] = '\0';
 }
 
 int main() {
-  int server_fd;
-  struct sockaddr_in server_addr;
-
-  for (int i = 0; i < MAX_CONNECTIONS; i++) {
-    init_connection(&connections[i]);
-  }
-
-  server_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (server_fd < 0) {
-    perror("Socket creation failed");
-    exit(EXIT_FAILURE);
-  }
-
-  int opt = 1;
-  setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = INADDR_ANY;
-  server_addr.sin_port = htons(SERVER_PORT);
-
-  if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
-      0) {
-    perror("Bind failed");
-    close(server_fd);
-    exit(EXIT_FAILURE);
-  }
-
-  // 5 in listen means that the server can queue up to 5 client connections
-  // before it starts rejecting them.
-  if (listen(server_fd, 5) < 0) {
-    perror("Listen failed");
-    close(server_fd);
-    exit(EXIT_FAILURE);
-  }
-
-  printf("Server listening on port %d\n", SERVER_PORT);
-  add_to_poll(server_fd, POLLIN);
-
-  while (1) {
-    int ret = poll(poll_fds, poll_fd_count, -1);
-    if (ret < 0) {
-      perror("Poll failed");
-      break;
+    // Initialize connections
+    for (int i = 0; i < MAX_CONNECTIONS; i++) {
+        init_connection(i);
     }
 
-    for (int i = 0; i < poll_fd_count; i++) {
-      if (!poll_fds[i].revents)
-        continue;
-
-      int fd = poll_fds[i].fd;
-      if (fd == server_fd && (poll_fds[i].revents & POLLIN)) {
-        struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
-        int client_fd =
-            accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-
-        if (client_fd < 0) {
-          perror("Accept failed");
-          continue;
-        }
-
-        int idx = find_free_connection();
-        if (idx < 0) {
-          printf("No free slots\n");
-          close(client_fd);
-          continue;
-        }
-
-        connections[idx].client_fd = client_fd;
-        add_to_poll(client_fd, POLLIN);
-        printf("New connection from %s:%d\n", inet_ntoa(client_addr.sin_addr),
-               ntohs(client_addr.sin_port));
-        continue;
-      }
-
-      int idx = find_connection_by_fd(fd);
-      if (idx < 0)
-        continue;
-
-      connection_t *conn = &connections[idx];
-
-	  if (fd == conn->client_fd && (poll_fds[i].revents & POLLIN)) {
-		char buffer[BUFFER_SIZE];
-		ssize_t bytes_read = recv(conn->client_fd, buffer, BUFFER_SIZE, 0);
-
-		if (bytes_read <= 0) {
-			printf("Client disconnected\n");
-			close_connection(idx);
-			update_poll_fds(server_fd);
-			continue;
-		}
-		printf("Received %ld bytes\nreq is\n%s", bytes_read, buffer);
-
-		if (!conn->is_uploading) {
-			// Simple filename extraction
-			strncpy(conn->filename, buffer, sizeof(conn->filename) - 1);
-			conn->filename[sizeof(conn->filename) - 1] = '\0';
-			conn->file_fd = open("test.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-			if (conn->file_fd != -1) {
-				conn->is_uploading = true;
-				update_poll_fds(server_fd);
-				printf("File opened successfully for writing: test.txt\n");
-			} else {
-				perror("Failed to open file");
-				close_connection(idx);
-				update_poll_fds(server_fd);
-			}
-			// this will not happen because the whole req 
-			// is already consumed by the recv call previous to this.
-			// but folr bigger uploads it will get thet data in parts
-			// with curl -F option is sending multipart data...
-			// we can chose not to handle it? 
-			// or it sends raw data in parts? more logic is needed
-		} 
-
-		// here if the file is already opened and we are getting more of the file
-		if (conn->is_uploading) {
-			write(conn->file_fd, buffer, bytes_read);
-			if (bytes_read < BUFFER_SIZE) {
-				printf("Upload complete\n");
-				// close_connection(idx);
-				// update_poll_fds(server_fd);
-			}
-		}
-	} else if (fd == conn->client_fd && (poll_fds[i].revents & POLLOUT)) {
-		
-			char response[] = "HTTP/1.1 200 OK\r\nContent-Length: 18\r\nConnection: close\r\n\r\nUpload successful\n";
-			send(conn->client_fd, response, strlen(response), 0);
-			close_connection(idx);
-			update_poll_fds(server_fd);
-		
-	}
+    // Create server socket
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
     }
-  }
+	debuglog(YELLOW,"Socket created with fd %d", server_fd);
 
-  close(server_fd);
-  return 0;
+    // Set socket options
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	debuglog(YELLOW,"Socket options set to non blocking");
+    // Bind socket
+    struct sockaddr_in server_addr = {
+        .sin_family = AF_INET,
+        .sin_addr.s_addr = INADDR_ANY,
+        .sin_port = htons(SERVER_PORT)
+    };
+
+    if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+	debuglog(YELLOW,"Socket bound to port %d", SERVER_PORT);
+
+    // Listen for connections
+    if (listen(server_fd, 5) < 0) {
+        perror("Listen failed");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+	debuglog(YELLOW,"Socket listening on port %d", SERVER_PORT);
+
+    add_to_poll(server_fd, POLLIN);
+
+    while (1) {
+        int ret = poll(poll_fds, poll_fd_count, -1);
+        if (ret < 0) {
+            perror("Poll failed");
+            break;
+        }
+
+        for (int i = 0; i < poll_fd_count; i++) {
+            if (!poll_fds[i].revents) continue;
+
+            int fd = poll_fds[i].fd;
+            
+            // Handle new connections
+            if (fd == server_fd) {
+				debuglog(YELLOW,"New connection on server socket");
+                struct sockaddr_in client_addr;
+                socklen_t client_len = sizeof(client_addr);
+                int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+
+                if (client_fd < 0) {
+                    perror("Accept failed");
+                    continue;
+                }
+
+                int idx = find_free_connection();
+                if (idx == -1) {
+                    printf("No free slots\n");
+                    close(client_fd);
+                    continue;
+                }
+
+                connections[idx].client_fd = client_fd;
+                add_to_poll(client_fd, POLLIN);
+
+                printf("New connection from %s:%d\n", 
+                      inet_ntoa(client_addr.sin_addr), 
+                      ntohs(client_addr.sin_port));
+                continue;
+            }
+
+            // Find connection for this fd
+            int idx = -1;
+            for (int j = 0; j < MAX_CONNECTIONS; j++) {
+                if (connections[j].client_fd == fd) {
+                    idx = j;
+                    break;
+                }
+            }
+
+            if (idx == -1) continue;
+
+            connection_t *conn = &connections[idx];
+
+            // Handle client data
+            if (poll_fds[i].revents & POLLIN) {
+                char buffer[BUFFER_SIZE];
+                ssize_t bytes_read = recv(fd, buffer, sizeof(buffer), 0);
+
+                if (bytes_read <= 0) {
+                    close_connection(idx);
+                    continue;
+                }
+
+                buffer[bytes_read] = '\0';
+                printf("Received %ld bytes\n", bytes_read);
+
+                if (!conn->is_uploading) {
+                    // First chunk - extract filename and open file
+                    extract_filename(buffer, conn->filename);
+                    
+                    conn->file_fd = open(conn->filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    if (conn->file_fd < 0) {
+                        perror("Failed to open file for upload");
+                        close_connection(idx);
+                        continue;
+                    }
+
+                    conn->is_uploading = true;
+                    printf("Starting upload to: %s\n", conn->filename);
+                }
+
+                // Write data to file
+                ssize_t bytes_written = write(conn->file_fd, buffer, bytes_read);
+                if (bytes_written < 0) {
+                    perror("Failed to write to file");
+                    close_connection(idx);
+                    continue;
+                }
+
+                conn->bytes_received += bytes_written;
+                printf("Written %ld bytes to %s (total: %zu)\n", 
+                      bytes_written, conn->filename, conn->bytes_received);
+            }
+
+            // Handle client ready for write (response)
+            if (poll_fds[i].revents & POLLOUT) {
+                const char *response = 
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Length: 18\r\n"
+                    "Connection: close\r\n\r\n"
+                    "Upload successful\n";
+                
+                if (send(conn->client_fd, response, strlen(response), 0) < 0) {
+                    perror("Failed to send response");
+                }
+                
+                close_connection(idx);
+            }
+        }
+    }
+	// will not get here because we need to implement the signals to exit gracefully...
+	close(server_fd);
+    return 0;
 }
