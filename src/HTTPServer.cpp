@@ -1,6 +1,7 @@
 #include "HTTPServer.hpp"
 #include "debug.h"
 #include <sys/stat.h>
+#include "DirectoryListing.hpp"
 
 namespace HTTPServer {
 
@@ -148,10 +149,10 @@ void update_poll_events(int fd, short events) {
 
 // Prepare to serve the index.html file
 int prepare_response(int idx) {
-  connections[idx].file_fd = open("index.html", O_RDONLY);
-  // connections[idx].file_fd = open("dir.html", O_RDONLY);
-  debuglog(YELLOW, "Opening file index.html for fd %d",
-           connections[idx].file_fd);
+  // connections[idx].file_fd = open("index.html", O_RDONLY);
+  DirectoryListing::getDIRListing(connections[idx]);
+  //debuglog(YELLOW, "Opening file index.html for fd %d",
+  //         connections[idx].file_fd);
   if (connections[idx].file_fd < 0) {
     perror("Failed to open file");
     return -1;
