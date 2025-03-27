@@ -151,6 +151,9 @@ void update_poll_events(int fd, short events) {
 int prepare_response(int idx) {
   // connections[idx].file_fd = open("index.html", O_RDONLY);
   DirectoryListing::getDIRListing(connections[idx]);
+  if (connections[idx].state == CONN_SIMPLE_RESPONSE) {
+    return 0;
+  }
   //debuglog(YELLOW, "Opening file index.html for fd %d",
   //         connections[idx].file_fd);
   if (connections[idx].file_fd < 0) {
@@ -409,8 +412,7 @@ int run() {
               debug("Failed to prepare response");
               close_connection(conn_idx);
             }
-            remove_from_poll(current_fd);
-            add_to_poll(current_fd, POLLOUT);
+            update_poll_events(current_fd, POLLOUT);
             debuglog(YELLOW, "Sending response to connx %d", conn_idx);
           }
         }
@@ -420,6 +422,22 @@ int run() {
           // if header complete, set state
           // else continue parsing
           continue;
+        }
+        if (conn->state == CONN_SIMPLE_RESPONSE) {
+          
+          debuglog(YELLOW, "Connection %d in state SIMPLE_RESPONSE", conn_idx);
+          // check if the response is ready to be sent
+          // if not set to CONN_CLOSING
+          // else send the response
+          send(conn->client_fd, conn->data.response.c_str(),
+               conn->data.response.size(), 0);
+          // close_connection(conn_idx);
+          init_connection(conn);
+
+          conn->state = CONN_INCOMING;
+          continue;
+
+
         }
         if (conn->state == CONN_FILE_REQUEST) {
           // check if the file is ready to be sent
@@ -451,6 +469,8 @@ int run() {
                 remove_from_poll(current_fd);
                 add_to_poll(current_fd, POLLIN);
                 connections[conn_idx].state = CONN_INCOMING;
+                connections[conn_idx].data.request.clear();
+                close(connections[conn_idx].file_fd);
                 debuglog(YELLOW, "Switched connection %d back to POLLIN",
                          conn_idx);
               }

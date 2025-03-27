@@ -20,6 +20,7 @@ enum ConnectionState {
     CONN_PARSING_HEADER,// Receiving/parsing headers
     CONN_CGI,           // Processing CGI request
     CONN_FILE_REQUEST,  // Serving a file
+    CONN_SIMPLE_RESPONSE, 
     CONN_UPLOAD,        // Handling file upload
     CONN_CLOSING        // Ready to close
 };
