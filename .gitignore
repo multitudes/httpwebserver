@@ -20,3 +20,4 @@ obj/HTTPServer.o
 obj/CGI.o
 src/scrap.cpp
 upload
+tests/integration/venv/lib64

@@ -149,6 +149,7 @@ void update_poll_events(int fd, short events) {
 // Prepare to serve the index.html file
 int prepare_response(int idx) {
   connections[idx].file_fd = open("index.html", O_RDONLY);
+  // connections[idx].file_fd = open("dir.html", O_RDONLY);
   debuglog(YELLOW, "Opening file index.html for fd %d",
            connections[idx].file_fd);
   if (connections[idx].file_fd < 0) {
@@ -359,13 +360,14 @@ int run() {
           }
 
           printf("Received %d bytes from client\n", bytes_read);
-
+          // debug("request: %s", buffer);
           conn->data.request.append(buffer, bytes_read);
 
           if (!conn->parsingHeaders(conn->client_fd, *conn)) {
             close_connection(conn_idx);
             continue;
           }
+          debugcolor(PASTEL_MAGENTA,"Headers received \n%s", conn->data.request.c_str());
           if (!conn->data.headers_received) {
             continue;
           }
