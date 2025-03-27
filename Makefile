@@ -70,9 +70,14 @@ valrun: all
 	@echo
 	@PATH=".$${PATH:+:$${PATH}}" && valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out.txt ./$(NAME) $(ARGS)
 
-test: $(NAME)
-	python3 -m venv venv && \
-    . venv/bin/activate && pip install -r tests/requirements.txt && \
-    . venv/bin/activate && pytest tests
+venv:
+	python3 -m venv --without-pip venv && \
+	curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+	. venv/bin/activate && python get-pip.py && \
+	rm get-pip.py
+
+test: $(NAME) venv
+	. venv/bin/activate && pip install -r tests/requirements.txt && \
+	. venv/bin/activate && pytest tests
 
 .PHONY: all clean fclean re run valrun test
