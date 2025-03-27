@@ -78,6 +78,6 @@ venv:
 
 test: $(NAME) venv
 	. venv/bin/activate && pip install -r tests/requirements.txt && \
-	. venv/bin/activate && pytest tests
+	pytest tests
 
 .PHONY: all clean fclean re run valrun test
