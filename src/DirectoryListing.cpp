@@ -1,5 +1,6 @@
 #include "DirectoryListing.hpp"
 #include "HTTPConnxData.hpp"
+#include "SimpleResponse.hpp"
 #include "Config.hpp"
 #include "debug.h"
 #include <fcntl.h>
@@ -20,6 +21,7 @@ namespace DirectoryListing
     bool getDIRListing(HTTPConnxData &connection)
     {
         //  ConfigData config = Config::getConfigByPort(connection.data.port);
+        // TODO: Check connection to see if the directory listing is allowed
 
         std::string fullPath = "www" + connection.data.target;
 
@@ -39,7 +41,8 @@ namespace DirectoryListing
         if (dir == NULL)
         {
             debuglog(RED, "Failed to open directory: %s", path);
-            connection.file_fd = open("www/error_pages/404.html", O_RDONLY);
+            connection.state = CONN_SIMPLE_RESPONSE;
+            SimpleResponse::htmlErrorResponse(connection, 404);            
             return false;
         }
 
@@ -67,35 +70,10 @@ namespace DirectoryListing
         // update connection state and data
         connection.state = CONN_SIMPLE_RESPONSE;
         // generate HTTP header and include html payload
-        connection.data.response = "HTTP/1.1 200 OK\r\n"
-                                   "Content-Type: text/html\r\n"
-                                   "Content-Length: " +
-                                   intToString(dirString.size()) + "\r\n\r\n" +
-                                   dirString;
+        SimpleResponse::addHTTPHeader(connection, TEXT_HTML, dirString);
+
 
         debuglog(BLUE, "Directory simple response: \n%s", connection.data.response.c_str());
-
-        // // Write directory contents to a temporary file
-        // connection.file_fd = open("directory.html", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        // if (connection.file_fd == -1) {
-        //     debuglog(RED, "Failed to open directory.html for writing");
-        //     return false;
-        // }
-        // if (write(connection.file_fd, dirString.c_str(), dirString.size()) == -1) {
-        //     debuglog(RED, "Failed to write directory contents to file");
-        //     close(connection.file_fd);
-        //     return false;
-        // }
-
-        // debuglog(YELLOW, "Opening file directory.html for fd %d", connection.file_fd);
-
-        // // Make sure directory.html exists in the expected location
-        // connection.file_fd = open("directory.html", O_RDONLY);
-        // if (connection.file_fd == -1) {
-        //     debuglog(RED, "Failed to open directory.html template");
-        //     connection.file_fd = open("www/error_pages/404.html", O_RDONLY);
-        //     return false;
-        // }
 
         return true;
     }
