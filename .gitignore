@@ -26,3 +26,4 @@ tests/integration/__pycache__/test_httpconnection.cpython-310-pytest-8.3.5.pyc
 obj/DirectoryListing.o
 obj/URLMatcher.o
 obj/Constants.o
+obj/SimpleResponse.o
