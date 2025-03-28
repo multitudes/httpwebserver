@@ -1,3 +1,6 @@
+# Detect the operating system
+UNAME_S := $(shell uname -s)
+
 # The @ symbol at the beginning of the line suppresses the echoing of the command to the terminal when it is executed.
 # Without it, the command and its output would be printed to the terminal, which can make the output cleaner.
 # -o $@:
@@ -11,9 +14,15 @@ NAME 			= 	webserv
 CXX				= 	c++
 
 # CXXFLAGS 		= -Wall -Wextra -Werror 
+# CXXFLAGS        += -pedantic-errors
 CXXFLAGS		+= -std=c++98
 CXXFLAGS 		+= -Wconversion -Wunreachable-code 
-# CXXFLAGS        += -pedantic-errors
+
+# Add PIE flags only for Linux
+ifeq ($(UNAME_S), Linux)
+    CXXFLAGS	+= -fPIE
+    LDFLAGS 	+= -pie
+endif
 
 CFLAGS 			+= -Iinclude
 CFLAGS			+= -Isrc 
@@ -47,7 +56,7 @@ HDRS 			+= $(addprefix $(SRC_DIR), )
 all: $(NAME) test
 
 $(NAME): $(OBJS) $(HDRS)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) -o $(NAME)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) $(LDFLAGS) -o $(NAME)
 
 # Static pattern rule for compilation - adding the .o files in the obj folder
 $(OBJ_DIR)%.o: $(SRC_DIR)%.cpp
