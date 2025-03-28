@@ -1,6 +1,3 @@
-# Detect the operating system
-UNAME_S := $(shell uname -s)
-
 # The @ symbol at the beginning of the line suppresses the echoing of the command to the terminal when it is executed.
 # Without it, the command and its output would be printed to the terminal, which can make the output cleaner.
 # -o $@:
@@ -18,11 +15,7 @@ CXX				= 	c++
 CXXFLAGS		+= -std=c++98
 CXXFLAGS 		+= -Wconversion -Wunreachable-code 
 
-# Add PIE flags only for Linux
-ifeq ($(UNAME_S), Linux)
-    CXXFLAGS	+= -fPIE
-    LDFLAGS 	+= -pie
-endif
+
 
 CFLAGS 			+= -Iinclude
 CFLAGS			+= -Isrc 
@@ -54,6 +47,15 @@ HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )
 HDRS 			+= $(addprefix $(SRC_DIR), )
 
 all: $(NAME) test
+
+# Add PIE flags only for Linux
+ifeq ($(shell uname -s), Linux)
+	CXXFLAGS	+= -fPIE
+	LDFLAGS 	+= -pie
+else ifeq ($(shell uname -s), Darwin)
+	@echo "Building on macOS (Darwin)"
+	# No additional flags needed for macOS
+endif
 
 $(NAME): $(OBJS) $(HDRS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) $(LDFLAGS) -o $(NAME)
