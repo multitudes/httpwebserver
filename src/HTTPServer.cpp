@@ -1,10 +1,12 @@
-#include <ctime>
-#include <sys/stat.h>
-
+#include "HTTPServer.hpp"
 #include "Constants.hpp"
 #include "DirectoryListing.hpp"
-#include "HTTPServer.hpp"
+#include "URLMatcher.hpp"
 #include "debug.h"
+#include <ctime>
+#include <poll.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 using std::map;
 using std::string;
@@ -29,83 +31,45 @@ namespace HTTPServer {
 
 // pollfd is an array of pollfd which contain
 // the file descriptors to poll and the events we want to monitor
-vector<struct pollfd> pollfds;
+
+typedef std::vector<struct pollfd> PollfdsVector;
+PollfdsVector pollfds;
 vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
 
-// Global variables to track connections and poll fds
-
-struct pollfd
-    poll_fds[MAX_CONNECTIONS * 3 + 1]; // Server socket + potentially 3 fds per
-                                       // client (client_fd, pipe_in, pipe_out)
-int poll_fd_count = 1;
-
-// Initialize poll_fds at startup
-void init_poll_fds(int server_fd) {
-  poll_fds[0].fd = server_fd;
-  poll_fds[0].events = POLLIN;
-  poll_fds[0].revents = 0;
-  poll_fd_count = 1;
-}
-
 // Add a file descriptor to the poll array
-int add_to_poll(int fd, short events) {
-  if (poll_fd_count >= MAX_CONNECTIONS * 3 + 1)
-    return -1;
-  poll_fds[poll_fd_count].fd = fd;
-  poll_fds[poll_fd_count].events = events;
-  poll_fds[poll_fd_count].revents = 0;
-  return poll_fd_count++;
+void add_to_poll(int fd, short events) {
+  struct pollfd pfd;
+  std::memset(&pfd, 0, sizeof(pfd));
+  pfd.fd = fd;
+  pfd.events = events;
+  pollfds.push_back(pfd);
 }
 
 // Remove a fd by swapping with last element (O(1))
 void remove_from_poll(int fd) {
-  for (int i = 0; i < poll_fd_count; i++) {
-    if (poll_fds[i].fd == fd) {
-      // Swap with last element
-      if (i < poll_fd_count - 1) {
-        poll_fds[i] = poll_fds[poll_fd_count - 1];
-      }
-      poll_fd_count--;
-      break;
+  for (PollfdsVector::iterator it = pollfds.begin(); it != pollfds.end();
+       ++it) {
+    if (it->fd == fd) {
+      *it = pollfds.back();
+      pollfds.pop_back();
+      return;
     }
   }
 }
 
 // Update events for an existing fd
-void update_poll_events(int fd, short events) {
-  for (int i = 0; i < poll_fd_count; i++) {
-    if (poll_fds[i].fd == fd) {
-      poll_fds[i].events = events;
-      break;
+// Returns true if found and updated, false otherwise
+bool update_poll_events(int fd, short events) {
+  for (PollfdsVector::iterator it = pollfds.begin(); it != pollfds.end();
+       ++it) {
+    if (it->fd == fd) {
+      it->events = events;
+      return true; // Found and updated
     }
   }
-}
-
-// Prepare to serve the index.html file
-int prepare_response(HTTPConnxData &conn) {
-
-  DirectoryListing::getDIRListing(conn);
-  if (conn.state == CONN_SIMPLE_RESPONSE) {
-    return 0;
-  }
-  // debuglog(YELLOW, "Opening file index.html for fd %d",
-  //          conn.file_fd);
-  if (conn.file_fd < 0) {
-    perror("Failed to open file");
-    return -1;
-  }
-
-  struct stat file_stat;
-  if (fstat(conn.file_fd, &file_stat) < 0) {
-    perror("Failed to get file stats");
-    close(conn.file_fd);
-    return -1;
-  }
-
-  conn.file_size = file_stat.st_size;
-  return 0;
+  return false; // FD not found
 }
 
 // Send HTTP response headers
@@ -190,8 +154,6 @@ int run() {
     exit(EXIT_FAILURE);
   }
 
-  init_poll_fds(server_fd);
-
   if (!SocketUtils::listenSocket(server_fd)) {
     perror("Error listening on socket");
     close(server_fd);
@@ -206,7 +168,8 @@ int run() {
   // Main polling loop
   while (1) {
 
-    int poll_result = poll(poll_fds, poll_fd_count, 10000); // Wait indefinitely
+    int poll_result =
+        poll(&pollfds[0], pollfds.size(), 10000); // Wait indefinitely
     // printf("Poll returned %d\n", poll_result);
     if (poll_result < 0) {
       if (errno != EINTR) { // Interrupted by signal
@@ -220,28 +183,31 @@ int run() {
     }
 
     // Process events on file descriptors
-    for (int i = 0; i < poll_fd_count; i++) {
-      if (!(poll_fds[i].revents & (POLLIN | POLLOUT))) {
+    for (int i = 0; i < pollfds.size(); i++) {
+      if (!(pollfds[i].revents & (POLLIN | POLLOUT))) {
         continue; // No events on this fd
       }
-      if (poll_fds[i].revents & (POLLERR | POLLNVAL)) {
-        debuglog(RED, "Error condition on fd %d", poll_fds[i].fd);
-        connections[poll_fds[i].fd].reset();
-        remove_from_poll(poll_fds[i].fd);
+      // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
+      // requested
+
+      if (pollfds[i].revents & (POLLERR | POLLNVAL)) {
+        debuglog(RED, "Error condition on fd %d", pollfds[i].fd);
+        connections[pollfds[i].fd].reset();
+        remove_from_poll(pollfds[i].fd);
         continue;
       }
 
-      if (poll_fds[i].revents & POLLHUP) {
-        debuglog(RED, "Connection closed by client on fd %d ", poll_fds[i].fd);
-        connections[poll_fds[i].fd].reset();
-        remove_from_poll(poll_fds[i].fd);
+      if (pollfds[i].revents & POLLHUP) {
+        debuglog(RED, "Connection closed by client on fd %d ", pollfds[i].fd);
+        connections[pollfds[i].fd].reset();
+        remove_from_poll(pollfds[i].fd);
         continue;
       }
 
-      int current_fd = poll_fds[i].fd;
+      int current_fd = pollfds[i].fd;
 
       // Handle new connections on server socket
-      if (current_fd == server_fd && (poll_fds[i].revents & POLLIN)) {
+      if (current_fd == server_fd && (pollfds[i].revents & POLLIN)) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
         int client_fd =
@@ -257,19 +223,13 @@ int run() {
 
         HTTPConnxData &conn = connections[client_fd];
         conn.client_fd = client_fd;
-        conn.poll_client_idx = add_to_poll(client_fd, POLLIN);
+        add_to_poll(client_fd, POLLIN);
         conn.state = CONN_INCOMING;
 
         // Set client info in connection data
         conn.data.host = inet_ntoa(client_addr.sin_addr);
         debug("Connection data initialized in state INCOMING for client %d",
               client_fd);
-        continue;
-      }
-
-      if (connections.find(current_fd) == connections.end()) {
-        debuglog(RED, "Connection %d not found in connections", current_fd);
-        remove_from_poll(current_fd); // Remove fd from poll array
         continue;
       }
 
@@ -280,78 +240,8 @@ int run() {
       }
 
       if (conn.state == CONN_INCOMING) {
-        debug("connection incoming");
-        debuglog(YELLOW, "Connection on fd %d in state INCOMING",
-                 conn.client_fd);
-        // check if the headers are received
-        // if not set to CONN_PARSING_HEADER
-        char buffer[BUFFER_SIZE];
-        int bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
-
-        if (bytes_read <= 0) {
-          if (bytes_read == 0) {
-            debug("Client disconnected");
-          } else {
-            perror("recv failed");
-          }
-          conn.reset();
-          continue;
-        }
-
-        printf("Received %d bytes from client\n", bytes_read);
-        // debug("request: %s", buffer);
-        conn.data.request.append(buffer, bytes_read);
-
-        if (!conn.parsingHeaders(conn.client_fd, conn)) {
-          remove_from_poll(conn.client_fd);
-          conn.reset();
-          continue;
-        }
-        // debugcolor(PASTEL_MAGENTA,"Headers received \n%s",
-        // conn.data.request.c_str());
-        if (!conn.data.headers_received) {
-          continue;
-        }
-
-        // check if the request contain cgi for debug now
-        // if so set to CONN_CGI
-        if (conn.data.request.find("cgi") != string::npos) {
-          conn.state = CONN_CGI;
-          debug("CGI request detected");
-          // Start CGI process for this connection
-          if (CGI::prepareCGI(conn) < 0) {
-            conn.reset();
-            continue;
-          }
-        } else if (conn.data.request.find("upload") != string::npos) {
-          conn.state = CONN_UPLOAD;
-          debuglog(YELLOW, "Upload request detected");
-          // TODO prepare fd for upload
-
-          // First chunk - extract filename and open file
-          extract_filename(buffer, conn.filename);
-
-          conn.file_fd =
-              open(conn.filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-          if (conn.file_fd < 0) {
-            perror("Failed to open file for upload");
-            conn.reset();
-            continue;
-          }
-
-          debuglog(YELLOW, "Starting upload to: %s\n", conn.filename);
-
-        } else {
-          conn.state = CONN_FILE_REQUEST;
-          debuglog(YELLOW, "File request detected");
-          // TODO prepare fd for file transfer
-          if (prepare_response(conn) < 0) {
-            debug("Failed to prepare response");
-            conn.reset();
-          }
-          update_poll_events(current_fd, POLLOUT);
-          debuglog(YELLOW, "Sending response to fd %d", conn.client_fd);
-        }
+        URLMatcher::validateRequest(conn);
+        continue;
       }
 
       if (conn.state == CONN_PARSING_HEADER) {
@@ -377,14 +267,14 @@ int run() {
         conn.data.headers_received = false;
         conn.data = HTTPConnxData::ConnectionData();
         conn.state = CONN_INCOMING;
-		update_poll_events(current_fd, POLLIN);
+        update_poll_events(current_fd, POLLIN);
         continue;
       }
       if (conn.state == CONN_FILE_REQUEST) {
         // check if the file is ready to be sent
         // if not set to CONN_CLOSING
         // else send the file
-        if (poll_fds[i].revents & POLLOUT) {
+        if (pollfds[i].revents & POLLOUT) {
           debuglog(YELLOW, "Handling write event for connection fd %d",
                    conn.client_fd);
           if (!conn.headers_sent) {
@@ -418,7 +308,7 @@ int run() {
         // check if the upload is complete
         // if not set to CONN_CLOSING
         // else close the connection
-        if (poll_fds[i].revents & POLLIN) {
+        if (pollfds[i].revents & POLLIN) {
           debuglog(YELLOW, "Handling upload event for connection %d",
                    conn.client_fd);
           // because the previous header parsing consumed data and we stored it
@@ -487,7 +377,7 @@ int run() {
           }
           debuglog(YELLOW, "here here here? ");
           // Handle client ready for write (response)
-          if (poll_fds[i].revents & POLLOUT && conn.upload_completed) {
+          if (pollfds[i].revents & POLLOUT && conn.upload_completed) {
             debuglog(YELLOW, "Handling upload response for connection fd %d",
                      conn.client_fd);
             const char *response = "HTTP/1.1 200 OK\r\n"
@@ -497,11 +387,14 @@ int run() {
 
             if (send(conn.client_fd, response, strlen(response), 0) < 0) {
               perror("Failed to send response");
+              conn.reset();
+              remove_from_poll(conn.client_fd);
+              continue;
             }
-            update_poll_events(current_fd, POLLIN);
 
-            conn.reset();
             debuglog(YELLOW, "Upload response sent to client");
+            conn.state = CONN_INCOMING; // Transition back to INCOMING state
+            update_poll_events(current_fd, POLLIN); // Monitor for new requests
           }
         }
         continue;
@@ -511,7 +404,7 @@ int run() {
         // if not set to CONN_CLOSING
         // else send the cgi
         // Handle data from client and send to cgi
-        if (current_fd == conn.client_fd && (poll_fds[i].revents & POLLIN)) {
+        if (current_fd == conn.client_fd && (pollfds[i].revents & POLLIN)) {
           char buffer[BUFFER_SIZE];
           int bytes_read = 0;
           if (conn.data.request.empty()) {
@@ -560,7 +453,7 @@ int run() {
 
         // Handle data from CGI process (ready to write to client from cgi)
         if (conn.child_stdout_pipe[0] == current_fd &&
-            (poll_fds[i].revents & POLLIN)) {
+            (pollfds[i].revents & POLLIN)) {
           char buffer[BUFFER_SIZE];
           int bytes_read = read(conn.child_stdout_pipe[0], buffer, BUFFER_SIZE);
 
