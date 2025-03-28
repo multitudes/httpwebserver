@@ -1,10 +1,14 @@
-#include "HTTPServer.hpp"
-#include "debug.h"
+#include <ctime>
 #include <sys/stat.h>
+
+#include "HTTPServer.hpp"
 #include "DirectoryListing.hpp"
 #include "Constants.hpp"
+#include "debug.h"
 
-
+using std::string;
+using std::vector;
+using std::map;
 
 namespace HTTPServer {
 
@@ -22,6 +26,14 @@ namespace HTTPServer {
  * localhost:4244 curl -I -H "Content-Type: application/json"
  * http://localhost:4244
  */
+
+// pollfd is an array of pollfd which contain
+// the file descriptors to poll and the events we want to monitor
+vector<struct pollfd> pollfds;
+vector<int> serverSockets;
+map<int, HTTPConnxData> connections;
+map<int, std::time_t> lastActivityTime;
+
 
 // Global variables to track connections and poll fds
 HTTPConnxData connections[MAX_CONNECTIONS];
