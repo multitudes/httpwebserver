@@ -24,3 +24,5 @@ tests/integration/venv/lib64
 tests/integration/__pycache__/conftest.cpython-310-pytest-8.3.5.pyc
 tests/integration/__pycache__/test_httpconnection.cpython-310-pytest-8.3.5.pyc
 obj/DirectoryListing.o
+obj/URLMatcher.o
+obj/Constants.o
