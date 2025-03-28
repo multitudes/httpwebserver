@@ -35,12 +35,13 @@ SRCS 			+= $(addprefix $(SRC_DIR), HTTPConnxData.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), Config.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), CGI.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), HTTPServer.cpp)
+SRCS 			+= $(addprefix $(SRC_DIR), DirectoryListing.cpp)
 
 OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
 HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )
 HDRS 			+= $(addprefix $(SRC_DIR), )
 
-all: $(NAME) test
+all: $(NAME) #test
 
 $(NAME): $(OBJS) $(HDRS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) -o $(NAME)
@@ -76,7 +77,7 @@ venv:
 	. venv/bin/activate && python get-pip.py && \
 	rm get-pip.py
 
-test: $(NAME) venv
+test: $(NAME) 
 	. venv/bin/activate && pip install -r tests/requirements.txt && \
 	pytest tests
 
