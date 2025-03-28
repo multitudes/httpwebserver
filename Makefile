@@ -96,6 +96,7 @@ venv:
 		echo "Creating virtual environment..."; \
 		$(PYTHON) -m venv $(VENV_DIR); \
 		$(PIP) install --upgrade pip; \
+		$(PIP) install pytest; \
 		$(PIP_INSTALL); \
 	else \
 		echo "Virtual environment already exists."; \

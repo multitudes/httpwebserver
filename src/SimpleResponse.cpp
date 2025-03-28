@@ -8,16 +8,9 @@
 #include <dirent.h>
 #include <string>
 #include <sstream>
+#include "Utils.hpp"
 
-namespace SimpleResponse
-
-{
-    std::string intToString(int n)
-    {
-        std::ostringstream oss;
-        oss << n;
-        return oss.str();
-    }  
+namespace SimpleResponse {
 
     void addHTTPHeader(HTTPConnxData &connection, int content_type, std::string response)
     {
@@ -28,7 +21,7 @@ namespace SimpleResponse
         else if (content_type == TEXT_HTML)
             header += "text/html";
         header += "\r\n";
-        header += "Content-Length: " + intToString(response.size()) + "\r\n";
+        header += "Content-Length: " + Utils::to_string(response.size()) + "\r\n";
         header += "\r\n";
         connection.data.response = header + response;
         debuglog(GREEN, "Basic response: \n%s", connection.data.response.c_str());
@@ -64,7 +57,7 @@ namespace SimpleResponse
         htmlCode += "<head>\n";
         htmlCode += "<meta charset=\"UTF-8\">\n";
         htmlCode += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
-        htmlCode += "<title>" + intToString(statusCode) + " " + statusText + "</title>\n";
+        htmlCode += "<title>" + Utils::to_string(statusCode) + " " + statusText + "</title>\n";
         htmlCode += "<style> body {";
         htmlCode += "display: flex; flex-direction: column; justify-content: center;";
         htmlCode += "align-items: center; height: 100vh; margin: 0; background-color: black; color: white";
@@ -72,7 +65,7 @@ namespace SimpleResponse
         htmlCode += "</head>\n";
         htmlCode += "<body>\n";
 
-        htmlCode += "<h1>" + intToString(statusCode) + "</h1>\n";
+        htmlCode += "<h1>" + Utils::to_string(statusCode) + "</h1>\n";
         htmlCode += "<p>" + statusText + "</p>\n";
 
         htmlCode += "</body>\n";

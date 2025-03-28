@@ -50,7 +50,6 @@ extern vector<int> serverSockets;
 extern map<int, HTTPConnxData> connections;
 extern map<int, std::time_t> lastActivityTime;
 
-extern HTTPConnxData connections[MAX_CONNECTIONS];
 extern struct pollfd
     poll_fds[MAX_CONNECTIONS * 3 + 1]; // Server socket + potentially 3 fds per
                                        // client (client_fd, pipe_in, pipe_out)
