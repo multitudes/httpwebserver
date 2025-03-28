@@ -68,6 +68,7 @@ namespace DirectoryListing
         htmlCode += "body {background-color: black; color: white;} a {color: lightblue;}";
         htmlCode += "</style>";
         htmlCode += "</head><body><h1>" + fullPath + "</h1><ul>" + dirString + "</ul></body></html>";
+       // htmlCode += "</head><body><h1>" + connection.data.target + "</h1><ul>" + dirString + "</ul></body></html>";
         debuglog(GREEN, "Directory contents: \n%s", dirString.c_str());
         // update connection state and data
         connection.state = CONN_SIMPLE_RESPONSE;
