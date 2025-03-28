@@ -14,6 +14,6 @@ namespace SimpleResponse {
 
     void addHTTPHeader(HTTPConnxData &connections, int content_type, std::string response);
 
-    void htmlErrorResponse(HTTPConnxData &connections, int errorCode);  
+    void htmlErrorResponse(HTTPConnxData &connections, int statusCode);  
 
 } // namespace DirectoryListing

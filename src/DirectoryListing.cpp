@@ -21,9 +21,9 @@ namespace DirectoryListing
     bool getDIRListing(HTTPConnxData &connection)
     {
         //  ConfigData config = Config::getConfigByPort(connection.data.port);
-        // TODO: Check connection to see if the directory listing is allowed
+        // TODO: Check connection to if the directory listing is allowed
 
-        std::string fullPath = "www" + connection.data.target;
+        std::string fullPath = "html/www1" + connection.data.target;
 
         if (!fullPath.empty() && fullPath[fullPath.size() - 1] != '/')
         {
@@ -54,24 +54,25 @@ namespace DirectoryListing
             // Create an HTML list item for each entry
             dirString += "<li><a href=\"";
             dirString += connection.data.target;
-            dirString += "/";
+          //  dirString += "/";
             dirString += entry->d_name;
             dirString += "\">";
             dirString += entry->d_name;
             dirString += "</a></li>\n";
         }
         closedir(dir);
-
+        std::string htmlCode;
         // add html code to the directory string
-        dirString = "<html><head><title>Directory Listing</title></head><body><h3>Directory Listing for "
-                     + fullPath + "</h3><ul>"
-                     + dirString + "</ul></body></html>";
+        htmlCode = "<html><head><title>Directory Listing</title>";
+        htmlCode += "<style>";
+        htmlCode += "body {background-color: black; color: white;} a {color: lightblue;}";
+        htmlCode += "</style>";
+        htmlCode += "</head><body><h1>" + fullPath + "</h1><ul>" + dirString + "</ul></body></html>";
         debuglog(GREEN, "Directory contents: \n%s", dirString.c_str());
         // update connection state and data
         connection.state = CONN_SIMPLE_RESPONSE;
         // generate HTTP header and include html payload
-        SimpleResponse::addHTTPHeader(connection, TEXT_HTML, dirString);
-
+        SimpleResponse::addHTTPHeader(connection, TEXT_HTML, htmlCode);
 
         debuglog(BLUE, "Directory simple response: \n%s", connection.data.response.c_str());
 
