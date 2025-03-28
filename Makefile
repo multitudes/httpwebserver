@@ -48,14 +48,14 @@ HDRS 			+= $(addprefix $(SRC_DIR), )
 
 all: $(NAME) test
 
-# Add PIE flags only for Linux
-ifeq ($(shell uname -s), Linux)
-	CXXFLAGS	+= -fPIE
-	LDFLAGS 	+= -pie
-else ifeq ($(shell uname -s), Darwin)
-	@echo "Building on macOS (Darwin)"
-	# No additional flags needed for macOS
-endif
+# # Add PIE flags only for Linux
+# ifeq ($(shell uname -s), Linux)
+# 	CXXFLAGS	+= -fPIE
+# 	LDFLAGS 	+= -pie
+# else ifeq ($(shell uname -s), Darwin)
+# 	@echo "Building on macOS (Darwin)"
+# 	# No additional flags needed for macOS
+# endif
 
 $(NAME): $(OBJS) $(HDRS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) $(LDFLAGS) -o $(NAME)
