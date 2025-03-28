@@ -376,7 +376,7 @@ int run() {
             close_connection(conn_idx);
             continue;
           }
-          debugcolor(PASTEL_MAGENTA,"Headers received \n%s", conn->data.request.c_str());
+         // debugcolor(PASTEL_MAGENTA,"Headers received \n%s", conn->data.request.c_str());
           if (!conn->data.headers_received) {
             continue;
           }
