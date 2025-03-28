@@ -7,6 +7,6 @@
 namespace CGI {
 
 // Start a CGI process for a connection
-int prepareCGI(HTTPConnxData* connx);
+int prepareCGI(HTTPConnxData& connx);
 
 } // namespace CGI

@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
+#include <ctime>
 
 #include "HTTPConnxData.hpp"
 #include "SocketUtils.hpp"
@@ -22,6 +23,10 @@
 #define SERVER_PORT 4244
 #define MAX_CONNECTIONS 10
 #define BUFFER_SIZE 4096
+
+using std::string;
+using std::vector;
+using std::map;
 
 namespace HTTPServer {
 
@@ -41,8 +46,11 @@ namespace HTTPServer {
  * http://localhost:4244
  */
 
-// Global variables to track connections and poll fds
-extern HTTPConnxData connections[MAX_CONNECTIONS];
+extern vector<struct pollfd> pollfds;
+extern vector<int> serverSockets;
+extern map<int, HTTPConnxData> connections;
+extern map<int, std::time_t> lastActivityTime;
+
 extern struct pollfd
     poll_fds[MAX_CONNECTIONS * 3 + 1]; // Server socket + potentially 3 fds per
                                        // client (client_fd, pipe_in, pipe_out)
