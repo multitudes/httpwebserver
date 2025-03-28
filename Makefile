@@ -43,7 +43,7 @@ OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
 HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )
 HDRS 			+= $(addprefix $(SRC_DIR), )
 
-all: $(NAME) #test
+all: $(NAME) test
 
 $(NAME): $(OBJS) $(HDRS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) -o $(NAME)
@@ -73,14 +73,27 @@ valrun: all
 	@echo
 	@PATH=".$${PATH:+:$${PATH}}" && valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out.txt ./$(NAME) $(ARGS)
 
-venv:
-	python3 -m venv --without-pip venv && \
-	curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
-	. venv/bin/activate && python get-pip.py && \
-	rm get-pip.py
 
-test: $(NAME) 
-	. venv/bin/activate && pip install -r tests/requirements.txt && \
-	pytest tests
+# Check if venv exists, create if not
+VENV_DIR = venv
+PYTHON = python3
+PIP = $(VENV_DIR)/bin/pip
+PIP_INSTALL = $(PIP) install -r tests/requirements.txt
+
+venv:
+	@echo "Setting up virtual environment..."
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "Creating virtual environment..."; \
+		$(PYTHON) -m venv $(VENV_DIR); \
+		$(PIP) install --upgrade pip; \
+		$(PIP_INSTALL); \
+	else \
+		echo "Virtual environment already exists."; \
+	fi
+
+# Run tests (ensure venv is set up)
+test: $(NAME) venv
+	@echo "Running tests..."
+	@. $(VENV_DIR)/bin/activate && pytest tests
 
 .PHONY: all clean fclean re run valrun test
