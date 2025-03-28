@@ -36,6 +36,8 @@ SRCS 			+= $(addprefix $(SRC_DIR), Config.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), CGI.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), HTTPServer.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), DirectoryListing.cpp)
+SRCS 			+= $(addprefix $(SRC_DIR), Constants.cpp)
+SRCS 			+= $(addprefix $(SRC_DIR), URLMatcher.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), SimpleResponse.cpp)
 
 OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
@@ -80,6 +82,6 @@ venv:
 
 test: $(NAME) 
 	. venv/bin/activate && pip install -r tests/requirements.txt && \
-	. venv/bin/activate && pytest tests
+	pytest tests
 
 .PHONY: all clean fclean re run valrun test

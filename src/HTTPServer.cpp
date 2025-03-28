@@ -2,6 +2,9 @@
 #include "debug.h"
 #include <sys/stat.h>
 #include "DirectoryListing.hpp"
+#include "Constants.hpp"
+
+
 
 namespace HTTPServer {
 
@@ -243,6 +246,8 @@ void extract_filename(const char *request, char *filename) {
 int run() {
   // Set up signal handlers
   SocketUtils::setSignalHandlers();
+  Constants::initStatusMessageMap();
+  Constants::initMimeTypes();
 
   int server_fd;
   struct sockaddr_in server_addr;
