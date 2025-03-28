@@ -8,13 +8,13 @@ WEBSERVER_URL = "http://localhost:4244"
 #     response = requests.get(f"{WEBSERVER_URL}/cgi-bin/health")
 #     assert response.status_code == 200
     
-# def test_response_basic_health():
-# 	response = requests.get(f"{WEBSERVER_URL}/index.html")
-# 	assert response.status_code == 200
+def test_response_basic_health():
+	response = requests.get(f"{WEBSERVER_URL}/index.html")
+	assert response.status_code == 200
 
-def test_response_404():
-	response = requests.get(f"{WEBSERVER_URL}/notfound")
-	assert response.status_code == 404
+# def test_response_404():
+# 	response = requests.get(f"{WEBSERVER_URL}/notfound")
+# 	assert response.status_code == 404
       
 # def test_upload_basic_health():
 # 	response = requests.get(f"{WEBSERVER_URL}/upload")

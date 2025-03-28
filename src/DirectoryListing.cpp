@@ -11,13 +11,6 @@
 namespace DirectoryListing
 {
 
-    std::string intToString(int n)
-    {
-        std::ostringstream oss;
-        oss << n;
-        return oss.str();
-    }
-
     bool getDIRListing(HTTPConnxData &connection)
     {
         //  ConfigData config = Config::getConfigByPort(connection.data.port);

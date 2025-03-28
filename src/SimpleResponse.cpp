@@ -15,7 +15,7 @@ namespace SimpleResponse {
     void addHTTPHeader(HTTPConnxData &connection, int content_type, std::string response, int statusCode)
     {
         std::string header = "HTTP/1.1 ";
-        header += intToString(statusCode) + " OK\r\n";
+        header += Utils::to_string(statusCode) + " OK\r\n";
         header += "Content-Type: ";
         if (content_type == TEXT_PLAIN)
             header += "text/plain";
