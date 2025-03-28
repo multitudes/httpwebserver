@@ -19,9 +19,10 @@ namespace SimpleResponse
         return oss.str();
     }  
 
-    void addHTTPHeader(HTTPConnxData &connection, int content_type, std::string response)
+    void addHTTPHeader(HTTPConnxData &connection, int content_type, std::string response, int statusCode)
     {
-        std::string header = "HTTP/1.1 200 OK\r\n";
+        std::string header = "HTTP/1.1 ";
+        header += intToString(statusCode) + " OK\r\n";
         header += "Content-Type: ";
         if (content_type == TEXT_PLAIN)
             header += "text/plain";
@@ -31,6 +32,7 @@ namespace SimpleResponse
         header += "Content-Length: " + intToString(response.size()) + "\r\n";
         header += "\r\n";
         connection.data.response = header + response;
+        
         debuglog(GREEN, "Basic response: \n%s", connection.data.response.c_str());
     }
 
@@ -77,7 +79,8 @@ namespace SimpleResponse
 
         htmlCode += "</body>\n";
         htmlCode += "</html>\n";
-        addHTTPHeader(connection, TEXT_HTML, htmlCode); 
+       // connection.data.statusCode = statusCode;
+        addHTTPHeader(connection, TEXT_HTML, htmlCode, statusCode); 
 
     }
 }
