@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
+#include <ctime>
 
 #include "HTTPConnxData.hpp"
 #include "SocketUtils.hpp"
