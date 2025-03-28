@@ -1,3 +1,6 @@
+# Detect the operating system
+UNAME_S := $(shell uname -s)
+
 # The @ symbol at the beginning of the line suppresses the echoing of the command to the terminal when it is executed.
 # Without it, the command and its output would be printed to the terminal, which can make the output cleaner.
 # -o $@:
