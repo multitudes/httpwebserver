@@ -41,7 +41,7 @@ map<int, std::time_t> lastActivityTime;
 // Add a file descriptor to the poll array
 void add_to_poll(int fd, short events) {
   struct pollfd pfd;
-  std::memset(&pfd, 0, sizeof(pfd));
+  memset(&pfd, 0, sizeof(pfd));
   pfd.fd = fd;
   pfd.events = events;
   pollfds.push_back(pfd);
