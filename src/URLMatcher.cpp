@@ -23,6 +23,10 @@ void validateRequest(HTTPConnxData &conn) {
   if (bytes_read <= 0) {
     if (bytes_read == 0) {
       debug("Client disconnected");
+	  HTTPServer::remove_from_poll(conn.client_fd);
+	  close(conn.client_fd);
+	  conn.reset();
+	  	
     } else {
       perror("recv failed");
     }
