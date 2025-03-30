@@ -8,6 +8,7 @@
 #include <string>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include "SimpleResponse.hpp" // Ensure this header is included
 
 #define BUFFER_SIZE 4096
 
@@ -20,7 +21,8 @@ void validateRequest(HTTPConnxData &conn) {
   char buffer[BUFFER_SIZE];
   int bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
 
-  if (bytes_read <= 0) {
+  if (bytes_read <= 0) 
+  {
     if (bytes_read == 0) {
       debug("Client disconnected");
 	  HTTPServer::remove_from_poll(conn.client_fd);
@@ -58,7 +60,8 @@ void validateRequest(HTTPConnxData &conn) {
   // check if the request contain cgi for debug now
   // if so set to CONN_CGI - hardcoded for now
   // TODO check if the request is a cgi request
-  if (conn.data.request.find("cgi") != string::npos) {
+  if (conn.data.request.find("cgi") != string::npos) 
+  {
     conn.state = CONN_CGI;
     debug("CGI request detected");
     // Start CGI process for this connection
@@ -83,28 +86,43 @@ void validateRequest(HTTPConnxData &conn) {
     }
     debuglog(YELLOW, "Starting upload to: %s\n", conn.filename);
   } else {
+    std::string full_path; // holds the GET target path
+
+
+    std::string root = Config::getConfigByPort(4244)->root; // hardcoded but we need to add the port from the config
+    std::string target = conn.data.target;
+    if (target[0] == '/') { // checks for a leading '/' and skips it
+      target = target.substr(1);
+    }
+    full_path = root + "/" + target;
+    debuglog(YELLOW, "Full path: %s", full_path.c_str());
+    
     conn.state = CONN_FILE_REQUEST;
     debuglog(YELLOW, "File request detected");
 
-    if (DirectoryListing::getDIRListing(conn)) {
+    if (DirectoryListing::getDIRListing(conn, full_path)) 
+    {
       conn.state = CONN_SIMPLE_RESPONSE;
+      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
       return;
-    } else {
-      // hardcoded for now - return file
-      conn.file_fd = open("index.html", O_RDONLY);
-      if (conn.file_fd < 0) {
-        perror("Failed to open file");
-        // TODO
-        conn.state = CONN_SIMPLE_RESPONSE;
-        // TODO prepare error response
-        return;
-      }
+    } 
+    else {
+        conn.file_fd = open(full_path.c_str(), O_RDONLY);
+        if (conn.file_fd < 0) {
+          perror("Failed to open file");
+          
+          SimpleResponse::htmlErrorResponse(conn, 404);
+          HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+          return;
+        }
 
       struct stat file_stat;
       if (fstat(conn.file_fd, &file_stat) < 0) {
         perror("Failed to get file stats");
         close(conn.file_fd);
         conn.state = CONN_SIMPLE_RESPONSE;
+        SimpleResponse::htmlErrorResponse(conn, 404);
+        HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
         // TODO prepare error response
         return;
       }

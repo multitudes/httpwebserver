@@ -47,7 +47,7 @@ Config::Config(std::string filename) {
    */
   server1.server_names.push_back("myWebserver");
   server1.server_names.push_back("someWebserver");
-  server1.root = "www";
+  server1.root = "html/www1";
   server1.index = "index.html";
   server1.error_pages.insert(
       std::make_pair(400, server1.root + "/error_pages/400.html"));
@@ -64,7 +64,7 @@ Config::Config(std::string filename) {
   server1.error_pages.insert(
       std::make_pair(502, server1.root + "/error_pages/502.html"));
 
-  server1.upload_dir = "www/uploads";
+  server1.upload_dir = "http/www1/uploads";
   server1.maxBodySize = 100000000;
   server1.acceptedMethods.push_back("GET");
   server1.acceptedMethods.push_back("POST");
@@ -78,14 +78,14 @@ Config::Config(std::string filename) {
   server2.ports.push_back(4246);
   server2.server_names.push_back("myWebserver");
   server2.server_names.push_back("someWebserver");
-  server2.root = "./www/html";
+  server2.root = "http/www2/";
 
   // Third server configuration
   ConfigData server3;
   server3.ports.push_back(4247);
   server3.server_names.push_back("myWebserver");
   server3.server_names.push_back("someWebserver");
-  server3.root = "./www/html";
+  server3.root = "http/www3/";
 
   // Add all servers to configs_
   configs_.push_back(server1);
