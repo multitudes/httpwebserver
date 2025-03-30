@@ -13,31 +13,33 @@ namespace DirectoryListing
 
     bool getDIRListing(HTTPConnxData &connection)
     {
+		connection.state = CONN_FILE_REQUEST;
+		return false;
         //  ConfigData config = Config::getConfigByPort(connection.data.port);
         // TODO: Check connection to if the directory listing is allowed
 
-        std::string fullPath = "html/www1" + connection.data.target;
+    //     std::string fullPath = "html/www1" + connection.data.target;
 
-        if (!fullPath.empty() && fullPath[fullPath.size() - 1] != '/')
-        {
-            fullPath += '/';
-        }
+    //     if (!fullPath.empty() && fullPath[fullPath.size() - 1] != '/')
+    //     {
+    //         fullPath += '/';
+    //     }
 
-        // Get C-string pointer after all modifications
-        const char *path = fullPath.c_str();
+    //     // Get C-string pointer after all modifications
+    //     const char *path = fullPath.c_str();
 
-        debuglog(RED, "Directory Listing target: %s", path);
+    //     debuglog(RED, "Directory Listing target: %s", path);
 
-        // Check if directory exists and is readable
-        DIR *dir = opendir(path);
+    //     // Check if directory exists and is readable
+    //     DIR *dir = opendir(path);
 
-        if (dir == NULL)
-        {
-            debuglog(RED, "Failed to open directory: %s", path);
-            connection.state = CONN_SIMPLE_RESPONSE;
-            SimpleResponse::htmlErrorResponse(connection, 404);            
-            return false;
-        }
+    //     if (dir == NULL)
+    //     {
+    //         debuglog(RED, "Failed to open directory: %s", path);
+    //         connection.state = CONN_SIMPLE_RESPONSE;
+    //         SimpleResponse::htmlErrorResponse(connection, 404);            
+    //         return false;
+    //     }
 
         std::string dirString;
         // Read directory contents
@@ -67,9 +69,9 @@ namespace DirectoryListing
         // generate HTTP header and include html payload
         SimpleResponse::addHTTPHeader(connection, TEXT_HTML, htmlCode, 200);
 
-        debuglog(BLUE, "Directory simple response: \n%s", connection.data.response.c_str());
+    //     debuglog(BLUE, "Directory simple response: \n%s", connection.data.response.c_str());
 
-        return true;
+    //     return true;
     }
 
 } // namespace DirectoryListing
