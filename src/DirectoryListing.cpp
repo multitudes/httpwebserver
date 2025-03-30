@@ -15,7 +15,7 @@ namespace DirectoryListing
     {
 		connection.state = CONN_FILE_REQUEST;
 		return false;
-        //  ConfigData config = Config::getConfigByPort(connection.data.port);
+        //  ServerData config = Config::getConfigByPort(connection.data.port);
         // TODO: Check connection to if the directory listing is allowed
 
     //     std::string fullPath = "html/www1" + connection.data.target;

@@ -3,7 +3,7 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <stdint.h> // C-style header because stdint is C++11>
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include <map>
 #include <string>
 #include <vector>
@@ -12,7 +12,7 @@
  * @brief Server configuration provider
  *
  * This class will be responsible for reading the configuration
- * file and creating an array of ConfigData structs
+ * file and creating an array of ServerData structs
  * to be used by the server. The implementation is to make it a
  * singleton class. It will be initialized once at the beginning of the program
  * and never changed in our implementation. we could add a update method
@@ -22,9 +22,16 @@
 class Config {
 public:
   static void initialize(std::string& config_file);
-  static std::vector<ConfigData>& getConfigData(char *config_file);
-  static const ConfigData* getConfigByPort(uint16_t port); 
+  static std::vector<ServerData>& getServerData(char *config_file);
+  static const ServerData* getConfigByPort(uint16_t port); 
   static void cleanup();
+
+  void parseGlobalSettings(const std::string& httpContent, BaseConf& baseConfig);
+  void parseErrorPageBlock(const std::string& blockContent, BaseConf& baseConfig);
+  void parseServerBlocks(const std::string& serverContent, HttpConfig& httpConfig, BaseConf& baseConfig);
+  void parseServerBlock(const std::string& serverBlockContent, ServerData& serverData);
+  void parseLocationBlock(const std::string& locationContent, Location& location);
+  void parseCgiBlock(const std::string& cgiContent, CGIData& cgiConfig);
 
   private:
   // Private constructor to prevent instantiation
@@ -36,8 +43,10 @@ public:
   // better and clearer to have a func to validate acc to a set of rules
   static bool validate();
 
-  static std::map<uint16_t, ConfigData*> port_map_;
+  static std::map<uint16_t, ServerData*> port_map_;
   static Config *instance_;
-  static std::vector<ConfigData> configs_;
+  static std::vector<ServerData> configs_;
   static std::string _filename;
 };
+
+size_t findClosingBrace(const std::string& content, size_t start);

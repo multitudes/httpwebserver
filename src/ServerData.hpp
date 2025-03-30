@@ -62,7 +62,7 @@ struct BaseConf {
     }
 };
 
-struct ConfigData : public BaseConf {
+struct ServerData : public BaseConf {
   std::string serverListenAddress;
   std::vector<uint16_t> ports;
   std::vector<std::string> server_names;
@@ -72,22 +72,22 @@ struct ConfigData : public BaseConf {
   CGIData cgiData;
   std::vector<std::string> limit_except;
   bool cgi_exists;
-  bool has_directives;
+  bool has_locations;
 
-  ConfigData() :
+  ServerData() :
     BaseConf(),
     serverListenAddress("localhost"),
     index("index.html"),
     root("www"),
     cgi_exists(false),
-    has_directives(false) {}
+    has_locations(false) {}
 
   bool hasCGI() const { return cgi_exists; }
-  bool hasDirectives() const { return has_directives; }
+  bool hasDirectives() const { return has_locations; }
 };
 
 struct HttpConfig {
-  std::vector<ConfigData> servers;
+  std::vector<ServerData> servers;
 
   HttpConfig() {}
 };

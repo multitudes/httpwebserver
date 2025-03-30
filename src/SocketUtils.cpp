@@ -1,6 +1,6 @@
 #include "SocketUtils.hpp"
 #include "Config.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include "debug.h"
 #include <csignal>
 #include <cstring>
@@ -30,7 +30,7 @@ namespace SocketUtils {
  * socket could not be bound to the port or could not be set to listening mode.
  */
 void initialize() {
-  //   serverConfs = Config::getConfigData();
+  //   serverConfs = Config::getServerData();
   setSignalHandlers();
 
   // create the pollfd array empty but reserved

@@ -35,7 +35,7 @@ class BaseConf {
   + BaseConf()
 }
 
-class ConfigData {
+class ServerData {
   + serverListenAddress: std::string
   + ports: std::vector<uint16_t>
   + server_names: std::vector<std::string>
@@ -46,27 +46,27 @@ class ConfigData {
   + cgiData: CGIData
   + limit_except: std::vector<std::string>
   + error_pages: std::map<int, std::string>
-  + ConfigData()
+  + ServerData()
   + hasCGI() : bool
   + hasDirectives() : bool
 }
 
 class HttpConfig {
-  + servers: std::vector<ConfigData>
+  + servers: std::vector<ServerData>
   + HttpConfig()
 }
 
-ConfigData --|> BaseConf
-HttpConfig "1" *-- "*" ConfigData : servers
-ConfigData "1" *-- "0..1" CGIData : cgiData
-ConfigData "1" *-- "*" Directive : location_blocks
+ServerData --|> BaseConf
+HttpConfig "1" *-- "*" ServerData : servers
+ServerData "1" *-- "0..1" CGIData : cgiData
+ServerData "1" *-- "*" Directive : location_blocks
 
 note top of BaseConf
   Common configuration for all servers
   All values have defaults
 end note
 
-note top of ConfigData
+note top of ServerData
   Optional components:
   - CGI configuration
   - Location directives
