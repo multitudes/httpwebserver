@@ -47,7 +47,6 @@ namespace DirectoryListing
             // Create an HTML list item for each entry
             dirString += "<li><a href=\"";
             dirString += connection.data.target;
-          //  dirString += "/";
             dirString += entry->d_name;
             dirString += "\">";
             dirString += entry->d_name;
@@ -60,7 +59,7 @@ namespace DirectoryListing
         htmlCode += "<style>";
         htmlCode += "body {background-color: black; color: white;} a {color: lightblue;}";
         htmlCode += "</style>";
-        htmlCode += "</head><body><h1>" + fullPath + "</h1><ul>" + dirString + "</ul></body></html>";
+        htmlCode += "</head><body><h1>Index " + fullPath + "</h1><ul>" + dirString + "</ul></body></html>";
        // htmlCode += "</head><body><h1>" + connection.data.target + "</h1><ul>" + dirString + "</ul></body></html>";
         debuglog(GREEN, "Directory contents: \n%s", dirString.c_str());
         // update connection state and data
