@@ -89,11 +89,12 @@ void validateRequest(HTTPConnxData &conn) {
     std::string full_path; // holds the GET target path
 
 
-    std::string root = Config::getConfigByPort(4244)->root; // hardcoded but we need to add the port from the config
+    std::string root = Config::getConfigByPort(4244)->root; // TODO hardcoded for now: we need to add the port from the config
     std::string target = conn.data.target;
     if (target[0] == '/') { // checks for a leading '/' and skips it
       target = target.substr(1);
     }
+    // TODO check if index.html or other default file from config exists, if so return it
     full_path = root + "/" + target;
     debuglog(YELLOW, "Full path: %s", full_path.c_str());
     
