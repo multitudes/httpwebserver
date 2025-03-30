@@ -14,7 +14,7 @@ struct CGIData {
   CGIData() : cgi_path_alias(), upload_dir() {}
 };
 
-struct Directive {
+struct Location {
   std::vector<std::string> acceptedMethods;
   bool autoindex;
   bool file_upload;
@@ -24,7 +24,7 @@ struct Directive {
   std::pair<int, std::string> return_directive;
   std::map<int, std::string> error_pages;
 
-  Directive() : 
+  Location() : 
     autoindex(false), 
     file_upload(false),
     upload_dir("/www/uploads"),
@@ -68,7 +68,7 @@ struct ConfigData : public BaseConf {
   std::vector<std::string> server_names;
   std::string index;
   std::string root;
-  std::map<std::string, Directive> location_blocks;
+  std::map<std::string, Location> location_blocks;
   CGIData cgiData;
   std::vector<std::string> limit_except;
   bool cgi_exists;
