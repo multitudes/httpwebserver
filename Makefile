@@ -105,7 +105,7 @@ venv:
 	fi
 
 # Run tests (ensure venv is set up)
-test: $(NAME) venv
+test: $(NAME) #venv
 	@echo "Running tests..."
 	@. $(VENV_DIR)/bin/activate && pytest tests
 
