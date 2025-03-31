@@ -22,13 +22,10 @@ namespace DirectoryListing
 
         debuglog(RED, "Directory Listing target: %s", full_path.c_str());
 
-    // Check if directory exists , TODO: check config if the directory listing is allowed
+        // Check if directory exists 
         DIR *dir = opendir(full_path.c_str());
-
         if (dir == NULL)
-        {    
             return false;
-        }
 
         std::string dirString;
         // Read directory contents
