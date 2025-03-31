@@ -101,7 +101,7 @@ namespace URLMatcher
       {
         target = target.substr(1);
       }
-      // Basic directory traversal check
+      // Basic directory traversal check, to block attack method like ../../../etc/passwd
       if (target.find("..") != std::string::npos)
       {
         debuglog(RED, "URLMatcher: Directory traversal attempt detected: %s", conn.data.target.c_str());
@@ -174,7 +174,7 @@ namespace URLMatcher
         {
           index_file_path += '/';
         }
-        index_file_path += config->index; // Append configured index name (e.g., "index.html")
+        index_file_path += config->index; // index name from config (e.g., "index.html")
 
         struct stat index_stat;
         debuglog(YELLOW, "URLMatcher: Checking for index file at '%s'", index_file_path.c_str());
