@@ -37,17 +37,26 @@ void validateRequest(HTTPConnxData &conn) {
   debuglog(YELLOW, "Received %d bytes from client\n", bytes_read);
 
   conn.data.request.append(buffer, bytes_read);
-  if (!conn.parsingHeaders(conn.client_fd, conn)) {
-    HTTPServer::remove_from_poll(conn.client_fd);
-    conn.reset();
-    return;
-  }
-  // debugcolor(PASTEL_MAGENTA,"Headers received \n%s",
-  // conn.data.request.c_str());
-  if (!conn.data.headers_received) {
-    return;
-  }
+  switch (conn.parseHeaders(conn)) {
+	case PARSE_SUCCESS:
+	  debuglog(YELLOW, "Headers parsed successfully");
+	  break;
+	case PARSE_INCOMPLETE:
+	  debuglog(YELLOW, "Headers incomplete");
+	  conn.state = CONN_PARSING_HEADER;
+	  return;
+	case PARSE_ERROR:
+	  debuglog(RED, "Error parsing headers");
+	  HTTPServer::remove_from_poll(conn.client_fd);
+	  conn.reset();
+	  conn.state = CONN_SIMPLE_RESPONSE;
+	  debuglog(RED, "Error parsing headers");
+	  // TODO prepare error response
+	//   SimpleResponse::htmlErrorResponse(conn, 400);
+	  return;
+	}
 
+	debuglog(PASTEL_BLUE, "Headers parsed successfully %s", conn.formatConnectionDataLong(conn.data).c_str());
 
     /*
     ths code to check if directory or file if internal if file listing

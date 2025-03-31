@@ -13,5 +13,11 @@ jobs:
       with:
         submodules: true  
 
+    - name: Install dependencies
+      run: pip install pytest
+
     - name: Build
       run: make
+
+    - name: test
+      run: pytest tests/
