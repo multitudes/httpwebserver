@@ -143,6 +143,7 @@ struct HTTPConnxData {
   ParseStatus parseCookies(const string &cookieHeader);
   ParseStatus processContentHeaders();
   ParseStatus parseHeaders(HTTPConnxData &conn);
+  ParseStatus extractPortFromHost(std::string& host, uint16_t& port);
   string formatConnectionData(const ConnectionData &data);
   string formatConnectionDataLong(const ConnectionData &data);
 };

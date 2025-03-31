@@ -10,132 +10,19 @@ using std::map;
 using std::string;
 using std::vector;
 
-// TODO refactor - remove with new
-//  bool HTTPConnxData::parsingHeaders(int client_fd, HTTPConnxData &connx) {
-//    if (connx.data.request.empty()) {
-//      debuglog(YELLOW, "Empty request received in parseHeaders");
-//      return false;
-//    }
-//    connx.data.headers_end = connx.data.request.find("\r\n\r\n");
-//    // found the "\r\n\r\n" sequence
-//    if (connx.data.headers_end != string::npos) {
-//      debuglog(YELLOW, "Received headers");
-//      connx.data.headers_received = true;
-//      connx.data.headers_end += 4; // skip the \r\n\r\n
-
-//     // parse line by line and add to headers map
-//     std::istringstream iss(connx.data.request);
-//     string line;
-//     // parse the first request line, e.g. "GET /index.html HTTP/1.1"
-//     if (std::getline(iss, line)) {
-//       std::istringstream lineStream(line);
-//       if (!(lineStream >> connx.data.method >> connx.data.target >>
-//             connx.data.version)) {
-//         debuglog(RED, "failed to parse headers request line");
-//         return false;
-//       }
-//       // validation.
-//       // if (state.data.headers["version"] != "HTTP/1.1" &&
-//       // state.data.headers["version"] != "HTTP/1.0") { 	debuglog(RED,
-//       // "Unsupported HTTP version"); 	return
-//       // false;
-//       // }
-//     } else {
-//       debuglog(RED, "Empty request");
-//       return false;
-//     }
-//     // parse the rest
-//     while (std::getline(iss, line)) {
-//       // end of headers
-//       if (line.empty() || line == "\r") {
-//         break;
-//       }
-//       size_t delimiter = line.find(":");
-//       if (delimiter != string::npos) {
-//         string key = trim(line.substr(0, delimiter));
-//         string value = trim(line.substr(delimiter + 1));
-//         if (key == "Cookie") {
-//           // Parse cookies
-//           std::istringstream cookieStream(value);
-//           string cookiePair;
-//           while (std::getline(cookieStream, cookiePair, ';')) {
-//             cookiePair = trim(cookiePair);
-//             size_t cookieDelimiter = cookiePair.find("=");
-//             if (cookieDelimiter != string::npos) {
-//               string cookieName = trim(cookiePair.substr(0,
-//               cookieDelimiter)); string cookieValue =
-//               trim(cookiePair.substr(cookieDelimiter + 1));
-//               connx.data.cookies[cookieName] = cookieValue;
-//             }
-//           }
-//         } else {
-//           connx.data.headers.insert(std::make_pair(key, value));
-//         }
-//       } else {
-//         debugcolor(RED, "Invalid header line: %s", line.c_str());
-//         return false;
-//       }
-//     }
-//     // host is mandatory
-//     if (checkHeader(connx, "Host", connx.data.host)) {
-//       debuglog(YELLOW, "Host: %s", connx.data.host.c_str());
-//     } else {
-//       return false;
-//     }
-//     string content_length_str;
-//     if (checkHeader(connx, "Content-Length", content_length_str)) {
-// 		connx.data.content_length =
-// 			strtoul(content_length_str.c_str(), NULL, 10);
-//       debuglog(YELLOW, "Content-Length: %ld", connx.data.content_length);
-//     } else {
-//       debuglog(YELLOW, "No Content-Length header found");
-//       // check for chunked encoding
-//       string transfer_encoding;
-//       string multipart;
-//       if (checkHeader(connx, "Transfer-Encoding", transfer_encoding)) {
-//         if (transfer_encoding == "chunked") {
-//           debuglog(YELLOW, "Chunked transfer encoding detected");
-//           connx.data.chunked = true;
-//         }
-//       } else if (connx.data.request.find("Content-Type: multipart/") !=
-//                  string::npos) {
-//         size_t boundary_pos = connx.data.request.find("boundary=");
-//         if (boundary_pos != string::npos) {
-//           connx.data.multipart = true;
-//           boundary_pos += 9; // skip the "boundary="
-//           size_t boundary_end = connx.data.request.find("\r\n",
-//           boundary_pos); connx.data.boundary =
-//               "--" + connx.data.request.substr(boundary_pos,
-//                                                boundary_end - boundary_pos);
-//           debuglog(YELLOW, "Boundary: %s\n", connx.data.boundary.c_str());
-//           connx.data.headers["Content-Type"] = "multipart/form-data";
-//           connx.data.headers["boundary"] = connx.data.boundary;
-//         } else {
-//           debuglog(RED, "No boundary found - invalid multipart form data");
-//           return false;
-//         }
-//       } else if (connx.data.request.substr(0, 3) == "GET" ||
-//                  connx.data.request.substr(0, 6) == "DELETE") {
-//         debug("Request complete\n");
-//         connx.data.is_get_request = true;
-//         connx.data.headers_received = true;
-//       }
-//     }
-//   }
-//   return true;
-// }
-
 /**
  * @brief Reset the connection for reuse
+ *
+ * It does NOT close the socket clientfd
  */
 void HTTPConnxData::reset() {
   state = CONN_INCOMING;
+  data = ConnectionData();
   is_sending = 0;
   is_receiving = 0;
   headers_sent = false;
   cgi_processing = false;
   bytes_received = 0;
-  data = ConnectionData();
 
   // Close open file descriptors
   if (file_fd != -1)
@@ -165,6 +52,9 @@ string HTTPConnxData::trim(const string &str) {
   return trimmed.substr(start, end - start + 1);
 }
 
+/**
+ * @brief Check if a specific header is present and set the target variable
+ */
 bool HTTPConnxData::checkHeader(HTTPConnxData &state, const string &headerName,
                                 string &targetVariable) {
   map<string, string>::iterator headerIt = state.data.headers.find(headerName);
@@ -176,6 +66,11 @@ bool HTTPConnxData::checkHeader(HTTPConnxData &state, const string &headerName,
   }
 }
 
+/**
+ * @brief Parse the request line of the HTTP request
+ *
+ * It is a util function of the func parseHeaders()
+ */
 ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
   std::istringstream lineStream(line);
   if (!(lineStream >> data.method >> data.target >> data.version)) {
@@ -242,10 +137,48 @@ ParseStatus HTTPConnxData::parseCookies(const string &cookieHeader) {
   return PARSE_SUCCESS;
 }
 
+ParseStatus HTTPConnxData::extractPortFromHost(std::string& host, uint16_t& port) {
+    size_t colon_pos = host.find(':');
+    
+    if (colon_pos == std::string::npos) {
+        debuglog(RED, "No port specified in Host header");
+        return PARSE_ERROR;
+    }
+
+    // Extract port substring
+    std::string port_str = host.substr(colon_pos + 1);
+    host = host.substr(0, colon_pos); // Remove port from host string
+
+    // Convert port
+    char* endptr;
+    long port_long = strtol(port_str.c_str(), &endptr, 10);
+    
+    // Validate conversion
+    if (*endptr != '\0') {
+        debuglog(RED, "Port contains non-numeric characters: %s", port_str.c_str());
+        return PARSE_ERROR;
+    }
+    
+    // Validate range
+    if (port_long < 1 || port_long > 65535) {  // Port 0 is reserved
+        debuglog(RED, "Port out of range (1-65535): %ld", port_long);
+        return PARSE_ERROR;
+    }
+    
+    port = static_cast<uint16_t>(port_long);
+	debuglog(YELLOW, "Extracted port: %u", port);
+    return PARSE_SUCCESS;
+}
+
 ParseStatus HTTPConnxData::processContentHeaders() {
   // Process Host header
   if (!checkHeader(*this, "Host", data.host)) {
     debuglog(RED, "Missing Host header");
+    return PARSE_ERROR;
+  }
+
+  // Extract port (mandatory )
+  if (extractPortFromHost(data.host, data.port) != PARSE_SUCCESS) {
     return PARSE_ERROR;
   }
 
