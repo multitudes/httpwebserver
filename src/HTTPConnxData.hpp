@@ -38,6 +38,7 @@ struct HTTPConnxData {
     struct ConnectionData {
         string method;
         string target;
+        string full_path;
         string version;
         string host;
         string request;

@@ -2,6 +2,7 @@
 #include "HTTPConnxData.hpp"
 #include "SimpleResponse.hpp"
 #include "Config.hpp"
+#include "HTTPServer.hpp"
 #include "debug.h"
 #include <fcntl.h>
 #include <dirent.h>
@@ -11,26 +12,18 @@
 namespace DirectoryListing
 {
 
-    bool getDIRListing(HTTPConnxData &connection, std::string fullPath)
+    bool getDIRListing(HTTPConnxData &connection, std::string full_path)
     {
-        // Check if the target is a directory
-        if (connection.data.target.empty() || connection.data.target[0] != '/')
+        if (connection.data.target.empty() || connection.data.target[0] != '/' )
         {
             debuglog(RED, "Invalid target path: %s", connection.data.target.c_str());
             return false;
         }
 
-
-        //  ConfigData config = Config::getConfigByPort(connection.data.port);
-        // TODO: Check connection to if the directory listing is allowed
-
-        // Get C-string pointer after all modifications
-        const char *path = fullPath.c_str();
-
-        debuglog(RED, "Directory Listing target: %s", path);
+        debuglog(RED, "Directory Listing target: %s", full_path.c_str());
 
     // Check if directory exists , TODO: check config if the directory listing is allowed
-        DIR *dir = opendir(path);
+        DIR *dir = opendir(full_path.c_str());
 
         if (dir == NULL)
         {    
@@ -42,7 +35,6 @@ namespace DirectoryListing
         struct dirent *entry;
         while ((entry = readdir(dir)) != NULL)
         {
-            // Create an HTML list item for each entry
             dirString += "<li><a href=\"";
             dirString += connection.data.target;
             dirString += entry->d_name;
@@ -57,7 +49,7 @@ namespace DirectoryListing
         htmlCode += "<style>";
         htmlCode += "body {background-color: black; color: white;} a {color: lightblue;}";
         htmlCode += "</style>";
-        htmlCode += "</head><body><h1>Index " + fullPath + "</h1><ul>" + dirString + "</ul></body></html>";
+        htmlCode += "</head><body><h1>Index of " + full_path + "</h1><ul>" + dirString + "</ul></body></html>";
        // htmlCode += "</head><body><h1>" + connection.data.target + "</h1><ul>" + dirString + "</ul></body></html>";
         debuglog(GREEN, "Directory contents: \n%s", dirString.c_str());
         // update connection state and data

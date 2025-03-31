@@ -2,6 +2,7 @@
 #include "Config.hpp"
 #include "ConfigData.hpp"
 #include "debug.h"
+#include "HTTPServer.hpp"
 
 /** Initialize the static variables */
 std::vector<ConfigData> Config::configs_;
@@ -24,6 +25,7 @@ Config::Config(std::string filename) {
   // First server configuration
   ConfigData server1;
   server1.keepalive_timeout = 5;
+  server1.autoindex = true;
   Location location;
   location.return_directive = std::make_pair(301, "http://42berlin.de/");
   server1.location_blocks["/42"] = location;
@@ -36,8 +38,8 @@ Config::Config(std::string filename) {
   location = Location();
   location.file_upload = true;
   server1.location_blocks["/uploads"] = location;
-  server1.ports.push_back(4244);
-  server1.ports.push_back(4245);
+  server1.ports.push_back(SERVER_PORT);
+ // server1.ports.push_back(4245);
   /* test the servernames with curl -H "Host: myWebserver"
    * http://localhost:4244/ or curl -H "Host: someWebserver"
    * http://localhost:4244/ or curl -H "Host: myWebserver"
