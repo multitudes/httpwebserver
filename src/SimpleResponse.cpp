@@ -24,6 +24,8 @@ namespace SimpleResponse {
         header += "\r\n";
         header += "Content-Length: " + Utils::to_string(response.size()) + "\r\n";
         header += "\r\n";
+
+        connection.state = CONN_SIMPLE_RESPONSE;
         connection.data.response = header + response;
         
         debuglog(GREEN, "Basic response: \n%s", connection.data.response.c_str());
@@ -54,6 +56,5 @@ namespace SimpleResponse {
         htmlCode += "</html>\n";
        // connection.data.statusCode = statusCode;
         addHTTPHeader(connection, TEXT_HTML, htmlCode, statusCode); 
-
     }
 }

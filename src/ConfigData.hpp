@@ -1,5 +1,4 @@
-#ifndef CONFIG_STRUCTS_HPP
-#define CONFIG_STRUCTS_HPP
+#pragma once
 
 #include <map>
 #include <string>
@@ -57,7 +56,7 @@ struct BaseConf {
     file_server(true),
     upload_dir("./www/uploads") {
       defaultheaders["Content-Type"] = "text/html";
-      defaultheaders["Server"] = "nginx/1.18.0";
+      defaultheaders["Server"] = "webserv/1.0";
       defaultheaders["Connection"] = "keep-alive";
     }
 };
@@ -92,4 +91,4 @@ struct HttpConfig {
   HttpConfig() {}
 };
 
-#endif
+// 

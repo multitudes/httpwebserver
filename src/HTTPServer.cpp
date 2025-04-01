@@ -161,11 +161,11 @@ int run() {
     exit(EXIT_FAILURE);
   }
 
-  // printf("Server listening on port %d\n", SERVER_PORT);
+ 
   debug("Server listening on port %d", SERVER_PORT);
   // Add server socket to poll
   add_to_poll(server_fd, POLLIN);
-
+ 
   // Main polling loop
   while (1) {
 

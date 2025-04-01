@@ -5,6 +5,6 @@
 
 namespace DirectoryListing {
 
-    bool getDIRListing(HTTPConnxData &connections);
+    bool getDIRListing(HTTPConnxData &connections, std::string full_path);
 
 } // namespace DirectoryListing
