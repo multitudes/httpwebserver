@@ -1,4 +1,3 @@
-
 #include "SimpleResponse.hpp"
 #include "HTTPConnxData.hpp"
 #include "Constants.hpp"
@@ -18,8 +17,8 @@ namespace SimpleResponse {
     void addHTTPHeader(HTTPConnxData &connection, string contentType, std::string response, int statusCode)
     {
         string header = "HTTP/1.1 ";
-        header += Utils::to_string(statusCode) + " OK\r\n";
-        header += "Content-Type: " + contentType + "\r\n";
+        header += Utils::to_string(statusCode) + " " + Constants::statusMessages[statusCode] + "\r\n";
+        header += "Content-Type: " + contentType;
         header += "\r\n";
         header += "Content-Length: " + Utils::to_string(response.size()) + "\r\n";
         header += "\r\n";
@@ -54,7 +53,7 @@ namespace SimpleResponse {
 
         htmlCode += "</body>\n";
         htmlCode += "</html>\n";
-       // connection.data.statusCode = statusCode;
+       
         addHTTPHeader(connection, contentType, htmlCode, statusCode); 
     }
 

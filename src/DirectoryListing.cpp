@@ -53,7 +53,8 @@ namespace DirectoryListing
         // update connection state and data
         connection.state = CONN_SIMPLE_RESPONSE;
         // generate HTTP header and include html payload
-        SimpleResponse::addHTTPHeader(connection, Constants::mimeTypes["text"], htmlCode, 200);
+        string contentType = Constants::mimeTypes["html"];
+        SimpleResponse::addHTTPHeader(connection, contentType, htmlCode, 200);
 
         debuglog(BLUE, "Directory simple response: \n%s", connection.data.response.c_str());
 

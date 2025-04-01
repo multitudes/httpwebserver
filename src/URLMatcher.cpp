@@ -95,11 +95,9 @@ namespace URLMatcher
         return;
       }
 
-      //check for location
-      
+      //TODO check for location 
   
-
-      //check for redirect
+      //TODO check for redirect
 
       //test text response
       // SimpleResponse::addHTTPHeader(conn, Constants::mimeTypes["text"], "Hello World", 200);
@@ -147,6 +145,8 @@ namespace URLMatcher
         // File/Dir does not exist or stat failed (e.g., permissions on parent dir)
         perror("URLMatcher: stat failed");
         debuglog(RED, "URLMatcher: Path not found or inaccessible '%s'", path_for_stat.c_str());
+        //set state to CONN_SIMPLE_RESPONSE
+        conn.state = CONN_SIMPLE_RESPONSE;
         SimpleResponse::htmlErrorResponse(conn, 404); // Not Found
         HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
         return;
