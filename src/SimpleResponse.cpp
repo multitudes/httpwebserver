@@ -20,7 +20,7 @@ namespace SimpleResponse {
         header += Utils::to_string(statusCode) + " " + Constants::statusMessages[statusCode] + "\r\n";
         header += "Content-Type: " + contentType;
         header += "\r\n";
-        header += "Content-Length: " + Utils::to_string(response.size()) + "\r\n";
+        header += "Content-Length: " + Utils::to_string(static_cast<int>(response.size())) + "\r\n";
         header += "\r\n";
 
         connection.data.response = header + response;

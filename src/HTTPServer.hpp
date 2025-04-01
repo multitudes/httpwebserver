@@ -20,7 +20,7 @@
 #include "CGI.hpp"
 #include "debug.h"
 
-#define SERVER_PORT 4244
+
 #define BUFFER_SIZE 4096
 
 using std::string;

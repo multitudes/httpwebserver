@@ -35,9 +35,9 @@ namespace URLMatcher
     if (conn.data.request.empty() || !conn.data.headers_received)
     {
       char buffer[BUFFER_SIZE + 1];
-	  
+
       // Ensure BUFFER_SIZE > 0 for recv
-      int bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+      ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
 
       if (bytes_read <= 0)
       {
@@ -57,10 +57,10 @@ namespace URLMatcher
       }
       // Null-terminate buffer safely
       buffer[bytes_read] = '\0';
-      conn.data.request.append(buffer, bytes_read);
-      debuglog(YELLOW, "URLMatcher: Received %d bytes for fd %d", bytes_read, conn.client_fd);
+      conn.data.request.append(buffer, static_cast<std::string::size_type>(bytes_read));
+      debuglog(YELLOW, "URLMatcher: Received %lu bytes for fd %d", bytes_read, conn.client_fd);
 
-      conn.data.request.append(buffer, bytes_read);
+    //   conn.data.request.append(buffer, bytes_read);
       switch (conn.parseHeaders(conn))
       {
       case PARSE_SUCCESS:
@@ -78,6 +78,8 @@ namespace URLMatcher
         debuglog(RED, "Error parsing headers");
       }
 
+	//   formatConnectionData
+	    debuglog(MAGENTA, "Parsed connection data: %s", conn.formatConnectionDataLong(conn.data).c_str());
       // TODO prepare error response
       //   SimpleResponse::htmlErrorResponse(conn, 400);
       // --- End Placeholder ---
