@@ -22,7 +22,7 @@ namespace SimpleResponse {
         else if (content_type == TEXT_HTML)
             header += "text/html";
         header += "\r\n";
-        header += "Content-Length: " + Utils::to_string(response.size()) + "\r\n";
+        header += "Content-Length: " + Utils::to_string(static_cast<int>(response.size())) + "\r\n";
         header += "\r\n";
 
         connection.state = CONN_SIMPLE_RESPONSE;

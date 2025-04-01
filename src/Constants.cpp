@@ -5,6 +5,7 @@
 namespace Constants {
 	std::map<int, std::string> statusMessages;
     std::map<std::string, std::string> mimeTypes;
+	const char* default_config_file = "config/default.conf";
 
     void initStatusMessageMap() {
 		debuglog(YELLOW, "Initializing status code to status text mapping");

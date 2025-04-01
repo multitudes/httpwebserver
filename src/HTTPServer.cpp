@@ -147,25 +147,40 @@ int run() {
   Constants::initStatusMessageMap();
   Constants::initMimeTypes();
 
-  int server_fd;
+  vector<ConfigData> configs_ = Config::getConfigData(NULL);
+  vector<int> serverSockets;
+  serverSockets.reserve(10);
+
+  if (configs_.empty()) {
+	debuglog(RED, "No configuration data found");
+    throw std::runtime_error("Error: config with empty ports");
+}
+for (int i = 0; i < configs_.size(); i++) {
+	for (int j = 0; j < configs_[i].ports.size(); j++) {
+		int server_fd;
+		if ((server_fd = SocketUtils::createBindSocket(configs_[i].ports[j])) < 0) {
+		  perror("Error creating socket");
+		  throw std::runtime_error("Socket creation failed");
+		}
+		debuglog(YELLOW, "Socket created with fd %d", server_fd);
+		if (!SocketUtils::listenSocket(server_fd)) {
+		  perror("Error listening on socket");
+		  close(server_fd);
+		  throw std::runtime_error("Error listening on socket");
+		}
+	  serverSockets.push_back(server_fd);
+	  add_to_poll(server_fd, POLLIN);
+	//   int port = configs_[i].ports[j];
+	  debuglog(GREEN, "Server listening on port %d", configs_[i].ports[j]);
+	}
+  }
+
   struct sockaddr_in server_addr;
-
-  if ((server_fd = SocketUtils::createBindSocket(SERVER_PORT)) < 0) {
-    perror("Socket creation failed");
-    exit(EXIT_FAILURE);
-  }
-
-  if (!SocketUtils::listenSocket(server_fd)) {
-    perror("Error listening on socket");
-    close(server_fd);
-    exit(EXIT_FAILURE);
-  }
-
  
-  debug("Server listening on port %d", SERVER_PORT);
+//   debug("Server listening on port %d", SERVER_PORT);
   // Add server socket to poll
-  add_to_poll(server_fd, POLLIN);
  
+  bool skip_to_next_iteration = false;
   // Main polling loop
   while (1) {
 
@@ -174,15 +189,14 @@ int run() {
     // printf("Poll returned %d\n", poll_result);
     if (poll_result < 0) {
       if (errno != EINTR) { // Interrupted by signal
-        perror("poll");
+        perror("poll failed");
         break;
       }
-      perror("Poll failed");
+      perror("Poll interrupted by signal");
       continue; // Interrupted by signal
     } else if (poll_result == 0) {
       continue; // Timeout
     }
-
     // Process events on file descriptors
     for (int i = 0; i < pollfds.size(); i++) {
       if (!(pollfds[i].revents & (POLLIN | POLLOUT))) {
@@ -208,32 +222,40 @@ int run() {
       int current_fd = pollfds[i].fd;
 
       // Handle new connections on server socket
-      if (current_fd == server_fd && (pollfds[i].revents & POLLIN)) {
-        struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
-        int client_fd =
-            accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+	  for (int j = 0; j < serverSockets.size(); j++) {
+		int server_fd = serverSockets[j];
+		if (current_fd == server_fd && (pollfds[i].revents & POLLIN)) {
+			struct sockaddr_in client_addr;
+			socklen_t client_len = sizeof(client_addr);
+			int client_fd =
+				accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
 
-        if (client_fd < 0) {
-          perror("Accept failed");
-          continue;
-        }
+			if (client_fd < 0) {
+				perror("Accept failed");
+				skip_to_next_iteration = true;
+				break;
+			}
 
-        debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
-              ntohs(client_addr.sin_port));
+			debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
+				ntohs(client_addr.sin_port));
 
-        HTTPConnxData &conn = connections[client_fd];
-        conn.client_fd = client_fd;
-        add_to_poll(client_fd, POLLIN);
-        conn.state = CONN_INCOMING;
+			HTTPConnxData &conn = connections[client_fd];
+			conn.client_fd = client_fd;
+			add_to_poll(client_fd, POLLIN);
+			conn.state = CONN_INCOMING;
 
-        // Set client info in connection data
-        conn.data.host = inet_ntoa(client_addr.sin_addr);
-        debug("Connection data initialized in state INCOMING for client %d",
-              client_fd);
-        continue;
-      }
-
+			// Set client info in connection data
+			conn.data.host = inet_ntoa(client_addr.sin_addr);
+			debug("Connection data initialized in state INCOMING for client %d",
+				client_fd);
+				skip_to_next_iteration = true;
+			    
+			}
+	  }
+	  if (skip_to_next_iteration) {
+		skip_to_next_iteration = false;
+		continue;
+	  }
       HTTPConnxData &conn = connections[current_fd];
       if (conn.client_fd == -1) {
         debuglog(RED, "Connection fd %d not found in connections", current_fd);
@@ -476,7 +498,7 @@ int run() {
           // printf("Received %d bytes from cgi\n", bytes_read);
 
           // Send CGI output back to client
-          int bytes_sent = send(conn.client_fd, buffer, bytes_read, 0);
+          ssize_t bytes_sent = send(conn.client_fd, buffer, bytes_read, 0);
           if (bytes_sent < 0) {
             perror("Send to client failed");
             conn.reset();
