@@ -241,6 +241,11 @@ for (int i = 0; i < configs_.size(); i++) {
       // requested
       if (pollfds[i].revents & (POLLERR | POLLNVAL)) {
         debuglog(RED, "Error condition on fd %d", pollfds[i].fd);
+		int error = 0;
+		socklen_t len = sizeof(error);
+		if (getsockopt(pollfds[i].fd, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
+ 		   debuglog(RED, "Socket error on fd %d: %s", pollfds[i].fd, strerror(error));
+		} 
         connections[pollfds[i].fd].reset();
         remove_from_poll(pollfds[i].fd);
         continue;

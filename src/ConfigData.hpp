@@ -9,26 +9,30 @@
 struct CGIData {
   std::pair<std::string, std::string> cgi_path_alias;
   std::string upload_dir;
+  std::vector<std::string> cgi_extensions;
 
-  CGIData() : cgi_path_alias(), upload_dir() {}
+  CGIData() : cgi_path_alias(), upload_dir(), cgi_extensions() {}
 };
 
 struct Location {
+	std::string index;
+	std::string alias;
+	std::string upload_dir;
+	bool autoindex;
+	bool file_upload;
+	bool internal;
   std::vector<std::string> acceptedMethods;
-  bool autoindex;
-  bool file_upload;
-  std::string upload_dir;
-  std::string alias;
-  bool internal;
   std::pair<int, std::string> return_directive;
   std::map<int, std::string> error_pages;
 
   Location() : 
+    index("index.html"),
+    alias(""), 
+    upload_dir("/www/uploads"),
     autoindex(false), 
     file_upload(false),
-    upload_dir("/www/uploads"),
-    alias(""), 
-    internal(false), 
+    internal(false),
+	acceptedMethods(),
     return_directive(), 
     error_pages() {}
 };

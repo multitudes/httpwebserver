@@ -23,24 +23,74 @@ std::map<uint16_t, ConfigData *> Config::port_map_;
 Config::Config(std::string filename) {
   (void)filename;
 
-  // First server configuration
+  // First server configuration 
+
+  //defaults
   ConfigData server1;
-  server1.keepalive_timeout = 5;
-  server1.autoindex = true;
+  server1.keepalive_timeout = 60;
+  server1.requestTimeout = 60;
+  server1.responseTimeout = 60;
+  server1.maxConnections = 100;
+  server1.maxBodySize = 10000000;
+  server1.autoindex = false;
+
+  server1.error_pages.insert(
+	  std::make_pair(400, server1.root + "/error_pages/400.html"));
+  server1.error_pages.insert(
+	  std::make_pair(403, server1.root + "/error_pages/403.html"));
+  server1.error_pages.insert(
+	  std::make_pair(404, server1.root + "/error_pages/404.html"));
+  server1.error_pages.insert(
+	  std::make_pair(405, server1.root + "/error_pages/405.html"));
+  server1.error_pages.insert(
+	  std::make_pair(418, server1.root + "/error_pages/418.html"));
+  server1.error_pages.insert(
+	  std::make_pair(500, server1.root + "/error_pages/500.html"));
+  server1.error_pages.insert(
+	  std::make_pair(502, server1.root + "/error_pages/502.html")); 
+
+	  // common to the first block server locations
+	server1.ports.push_back(4244);
+	server1.ports.push_back(4245);
+	server1.server_names.push_back("myWebserver");
+	server1.server_names.push_back("someWebserver");
+	server1.root = "html/www1";
+	server1.index = "index.html";
+
+  // first server block location
   Location location;
+  location.index = "index.html";
+  location.autoindex = false;
+  location.file_upload = false;
+  location.return_directive = std::make_pair(200, "OK");
+  location.internal = false;
+  location.alias = server1.root; 
+  server1.location_blocks["/some/directory/"] = location;
+
+  location = Location();
   location.return_directive = std::make_pair(301, "http://42berlin.de/");
   server1.location_blocks["/42"] = location;
+
   location = Location();
   location.autoindex = true;
+  location.file_upload = false;
+  location.internal = false;
+  location.alias = "html/www2/";
   server1.location_blocks["/43"] = location;
+
   location = Location();
   location.return_directive = std::make_pair(301, "/here/index.html");
   server1.location_blocks["/go"] = location;
+
   location = Location();
   location.file_upload = true;
+  location.autoindex = false;
+  location.internal = false;
+  location.alias = "html/www1/";
+  location.upload_dir = "uploads/";
+  location.file_upload = true;
   server1.location_blocks["/uploads"] = location;
-  server1.ports.push_back(4244);
- server1.ports.push_back(4245);
+
   /* test the servernames with curl -H "Host: myWebserver"
    * http://localhost:4244/ or curl -H "Host: someWebserver"
    * http://localhost:4244/ or curl -H "Host: myWebserver"
@@ -48,24 +98,7 @@ Config::Config(std::string filename) {
    * http://localhost:4245/ or nc localhost 4244 and GET / HTTP/1.1 Host:
    * myWebserver
    */
-  server1.server_names.push_back("myWebserver");
-  server1.server_names.push_back("someWebserver");
-  server1.root = "html/www1";
-  server1.index = "index.html";
-  server1.error_pages.insert(
-      std::make_pair(400, server1.root + "/error_pages/400.html"));
-  server1.error_pages.insert(
-      std::make_pair(403, server1.root + "/error_pages/403.html"));
-  server1.error_pages.insert(
-      std::make_pair(404, server1.root + "/error_pages/404.html"));
-  server1.error_pages.insert(
-      std::make_pair(405, server1.root + "/error_pages/405.html"));
-  server1.error_pages.insert(
-      std::make_pair(418, server1.root + "/error_pages/418.html"));
-  server1.error_pages.insert(
-      std::make_pair(500, server1.root + "/error_pages/500.html"));
-  server1.error_pages.insert(
-      std::make_pair(502, server1.root + "/error_pages/502.html"));
+
 
   server1.upload_dir = "html/www1/uploads";
   server1.maxBodySize = 100000000;
@@ -73,11 +106,36 @@ Config::Config(std::string filename) {
   server1.acceptedMethods.push_back("POST");
   server1.acceptedMethods.push_back("DELETE");
   server1.acceptedMethods.push_back("PUT");
-  server1.cgiData.cgi_path_alias = std::make_pair("/cgi-bin", "/cgi-bin");
   server1.cgiData.upload_dir = "www/uploads";
-  // server1.cgiData = data;
+  server1.cgiData.cgi_path_alias = std::make_pair("/cgi", "/cgi-bin");
+  server1.cgiData.cgi_extensions.push_back("cgi");
+  server1.cgiData.cgi_extensions.push_back("py");
   // Second server configuration
   ConfigData server2;
+
+  // defaults
+  server2.keepalive_timeout = 60;
+  server2.requestTimeout = 60;
+  server2.responseTimeout = 60;
+  server2.maxConnections = 100;
+  server2.maxBodySize = 10000000;
+  server2.autoindex = false;
+
+  server2.error_pages.insert(
+      std::make_pair(400, server1.root + "/error_pages/400.html"));
+  server2.error_pages.insert(
+      std::make_pair(403, server1.root + "/error_pages/403.html"));
+  server2.error_pages.insert(
+      std::make_pair(404, server1.root + "/error_pages/404.html"));
+  server2.error_pages.insert(
+      std::make_pair(405, server1.root + "/error_pages/405.html"));
+  server2.error_pages.insert(
+      std::make_pair(418, server1.root + "/error_pages/418.html"));
+  server2.error_pages.insert(
+      std::make_pair(500, server1.root + "/error_pages/500.html"));
+  server2.error_pages.insert(
+      std::make_pair(502, server1.root + "/error_pages/502.html"));
+
   server2.ports.push_back(4246);
   server2.server_names.push_back("myWebserver");
   server2.server_names.push_back("someWebserver");
@@ -86,6 +144,31 @@ Config::Config(std::string filename) {
 
   // Third server configuration
   ConfigData server3;
+
+  // defaults
+  server3.keepalive_timeout = 60;
+  server3.requestTimeout = 60;
+  server3.responseTimeout = 60;
+  server3.maxConnections = 100;
+  server3.maxBodySize = 10000000;
+  server3.autoindex = false;
+
+
+  server3.error_pages.insert(
+      std::make_pair(400, server1.root + "/error_pages/400.html"));
+  server3.error_pages.insert(
+      std::make_pair(403, server1.root + "/error_pages/403.html"));
+  server3.error_pages.insert(
+      std::make_pair(404, server1.root + "/error_pages/404.html"));
+  server3.error_pages.insert(
+      std::make_pair(405, server1.root + "/error_pages/405.html"));
+  server3.error_pages.insert(
+      std::make_pair(418, server1.root + "/error_pages/418.html"));
+  server3.error_pages.insert(
+      std::make_pair(500, server1.root + "/error_pages/500.html"));
+  server3.error_pages.insert(
+      std::make_pair(502, server1.root + "/error_pages/502.html"));
+
   server3.ports.push_back(4247);
   server3.server_names.push_back("myWebserver");
   server3.server_names.push_back("someWebserver");
