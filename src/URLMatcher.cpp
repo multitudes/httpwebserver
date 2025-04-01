@@ -160,6 +160,32 @@ namespace URLMatcher
       if (S_ISREG(path_stat.st_mode))
       {
         debuglog(GREEN, "URLMatcher: Target is a regular file. Serving '%s'", path_for_stat.c_str());
+
+        // Extract file extension to determine content type
+        string content_type = "application/octet-stream"; // Default MIME type
+        string file_extension = "";
+        size_t dot_position = path_for_stat.rfind('.');
+        if (dot_position != string::npos) {
+          file_extension = path_for_stat.substr(dot_position);
+          // Convert to lowercase for case-insensitive comparison
+          for (size_t i = 0; i < file_extension.length(); i++) {
+            file_extension[i] = std::tolower(file_extension[i]);
+          }
+          
+          debuglog(GREEN, "URLMatcher: Looking up MIME type for extension: '%s'", file_extension.c_str());
+          
+          // Check if we have a MIME type mapping for this extension
+          if (Constants::mimeTypes.find(file_extension) != Constants::mimeTypes.end()) {
+            content_type = Constants::mimeTypes[file_extension];
+            debuglog(GREEN, "URLMatcher: Found MIME type: %s", content_type.c_str());
+          } else {
+            debuglog(YELLOW, "URLMatcher: No MIME type found for extension: %s, using default", file_extension.c_str());
+          }
+        }
+
+        debuglog(YELLOW, "URLMatcher: File '%s' has extension '%s', using MIME type '%s'", 
+                 path_for_stat.c_str(), file_extension.c_str(), content_type.c_str());
+
         conn.file_fd = open(path_for_stat.c_str(), O_RDONLY); // Use path_for_stat
         if (conn.file_fd < 0)
         {
@@ -172,9 +198,22 @@ namespace URLMatcher
         {
           conn.file_size = path_stat.st_size; // Get size from initial stat
           conn.state = CONN_FILE_REQUEST;     // Set state for file sending logic
+          
+          // Prepare HTTP headers for the file response with proper content type
+          std::stringstream headers;
+          headers << "HTTP/1.1 200 OK\r\n";
+          headers << "Content-Type: " << content_type << "\r\n";
+          headers << "Content-Length: " << conn.file_size << "\r\n";
+          headers << "Connection: close\r\n";
+          headers << "\r\n"; // Empty line to separate headers from body
+          
+          // Store headers in conn.data.response for sending
+          conn.data.response = headers.str();
           conn.headers_sent = false;          // Reset flags for sending this file
           conn.data.bytes_sent = 0;
+          
           debuglog(GREEN, "URLMatcher: Set state to CONN_FILE_REQUEST for fd %d, size %ld", conn.client_fd, conn.file_size);
+          debuglog(YELLOW, "URLMatcher: Prepared response headers with content-type: %s", content_type.c_str());
           HTTPServer::update_poll_events(conn.client_fd, POLLOUT); // Signal ready to send
         }
       }
@@ -210,11 +249,41 @@ namespace URLMatcher
           }
           else
           {
+            // Extract file extension to determine content type for index file
+            string content_type = "text/html"; // Default for index files is HTML
+            string file_extension = "";
+            size_t dot_position = index_file_path.rfind('.');
+            if (dot_position != string::npos) {
+              file_extension = index_file_path.substr(dot_position);
+              // Convert to lowercase for case-insensitive comparison
+              for (size_t i = 0; i < file_extension.length(); i++) {
+                file_extension[i] = std::tolower(file_extension[i]);
+              }
+              
+              // Check for file extension in mime types map
+              if (Constants::mimeTypes.find(file_extension) != Constants::mimeTypes.end()) {
+                content_type = Constants::mimeTypes[file_extension];
+              }
+            }
+
             conn.file_size = index_stat.st_size; // Size from index_stat
             conn.state = CONN_FILE_REQUEST;      // Set state to serve the index file
+            
+            // Prepare HTTP headers for the file response with proper content type
+            std::stringstream headers;
+            headers << "HTTP/1.1 200 OK\r\n";
+            headers << "Content-Type: " << content_type << "\r\n";
+            headers << "Content-Length: " << conn.file_size << "\r\n";
+            headers << "Connection: close\r\n";
+            headers << "\r\n"; // Empty line to separate headers from body
+            
+            // Store headers in conn.data.response for sending
+            conn.data.response = headers.str();
             conn.headers_sent = false;
             conn.data.bytes_sent = 0;
+            
             debuglog(GREEN, "URLMatcher: Set state to CONN_FILE_REQUEST for index fd %d, size %ld", conn.client_fd, conn.file_size);
+            debuglog(YELLOW, "URLMatcher: Prepared response headers with content-type: %s", content_type.c_str());
             HTTPServer::update_poll_events(conn.client_fd, POLLOUT); // Ready to send index file
           }
         }
