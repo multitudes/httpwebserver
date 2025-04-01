@@ -1,0 +1,2281 @@
+#include "CGI.hpp"
+#include "HTTPServer.hpp"
+
+namespace CGI {
+
+// Start a CGI process for a connection
+int prepareCGI(HTTPConnxData& conn) {
+  // Create pipes
+  if (pipe(conn.child_stdin_pipe) < 0 || pipe(conn.child_stdout_pipe) < 0) {
+    perror("Failed to create pipes");
+    return -1;
+  }
+
+  // Create child process
+  pid_t pid = fork();
+
+  if (pid < 0) {
+    perror("Failed to fork");
+    return -1;
+  } else if (pid == 0) {
+    // Child process
+
+    // Close unused pipe ends
+    close(conn.child_stdin_pipe[1]);  // Close write end of stdin pipe
+    close(conn.child_stdout_pipe[0]); // Close read end of stdout pipe
+
+    // Redirect stdin and stdout
+    dup2(conn.child_stdin_pipe[0], STDIN_FILENO);
+    dup2(conn.child_stdout_pipe[1], STDOUT_FILENO);
+
+    // Close original file descriptors
+    close(conn.child_stdin_pipe[0]);
+    close(conn.child_stdout_pipe[1]);
+
+    // Execute the Python script
+    execve("cgi-bin/cgi_handler.py", NULL, NULL);
+
+    // If execve fails
+    perror("Failed to execute CGI script");
+    exit(1);
+  } else {
+    // Parent process
+    // conn.poll_stdin_idx = HTTPServer::add_to_poll(conn.child_stdin_pipe[1], POLLOUT);
+    // conn.poll_stdout_idx = HTTPServer::add_to_poll(conn.child_stdout_pipe[0], POLLIN);
+
+    // Close unused pipe ends
+    close(conn.child_stdin_pipe[0]);  // Close read end of stdin pipe
+    close(conn.child_stdout_pipe[1]); // Close write end of stdout pipe
+
+    conn.child_pid = pid;
+    conn.is_sending = 1;   // Ready to send data to CGI
+    conn.is_receiving = 0; // Ready to receive data from CGI
+    debug("Started CGI process with PID %d", pid);
+    return 0;
+  }
+}
+
+} // namespace CGI# pragma once
+
+#include "HTTPConnxData.hpp"
+#include "ConfigData.hpp"
+#include "debug.h"
+
+namespace CGI {
+
+// Start a CGI process for a connection
+int prepareCGI(HTTPConnxData& connx);
+
+} // namespace CGI#include <stdexcept>
+#include "Config.hpp"
+#include "ConfigData.hpp"
+#include "debug.h"
+#include "HTTPServer.hpp"
+
+/** Initialize the static variables */
+std::vector<ConfigData> Config::configs_;
+Config *Config::instance_ = NULL;
+std::string Config::_filename = "config/default.conf"; // Default filename
+std::map<uint16_t, ConfigData *> Config::port_map_;
+
+/**
+ * @brief Constructor for the Config class
+ *
+ * It will get a filename and read the configuration file
+ * or default to a default configuration file if none is provided.
+ *
+ * For now it is hardcoded.alignas
+ * The configuration according to the subject is an array of servers
+ */
+Config::Config(std::string filename) {
+  (void)filename;
+
+  // First server configuration
+  ConfigData server1;
+  server1.keepalive_timeout = 5;
+  Location location;
+  location.return_directive = std::make_pair(301, "http://42berlin.de/");
+  server1.location_blocks["/42"] = location;
+  location = Location();
+  location.autoindex = true;
+  server1.location_blocks["/43"] = location;
+  location = Location();
+  location.return_directive = std::make_pair(301, "/here/index.html");
+  server1.location_blocks["/go"] = location;
+  location = Location();
+  location.file_upload = true;
+  server1.location_blocks["/uploads"] = location;
+  server1.ports.push_back(SERVER_PORT);
+ // server1.ports.push_back(4245);
+  /* test the servernames with curl -H "Host: myWebserver"
+   * http://localhost:4244/ or curl -H "Host: someWebserver"
+   * http://localhost:4244/ or curl -H "Host: myWebserver"
+   * http://localhost:4245/ or curl -H "Host: someWebserver"
+   * http://localhost:4245/ or nc localhost 4244 and GET / HTTP/1.1 Host:
+   * myWebserver
+   */
+  server1.server_names.push_back("myWebserver");
+  server1.server_names.push_back("someWebserver");
+  server1.root = "html/www1";
+  server1.index = "index.html";
+  server1.error_pages.insert(
+      std::make_pair(400, server1.root + "/error_pages/400.html"));
+  server1.error_pages.insert(
+      std::make_pair(403, server1.root + "/error_pages/403.html"));
+  server1.error_pages.insert(
+      std::make_pair(404, server1.root + "/error_pages/404.html"));
+  server1.error_pages.insert(
+      std::make_pair(405, server1.root + "/error_pages/405.html"));
+  server1.error_pages.insert(
+      std::make_pair(418, server1.root + "/error_pages/418.html"));
+  server1.error_pages.insert(
+      std::make_pair(500, server1.root + "/error_pages/500.html"));
+  server1.error_pages.insert(
+      std::make_pair(502, server1.root + "/error_pages/502.html"));
+
+  server1.upload_dir = "http/www1/uploads";
+  server1.maxBodySize = 100000000;
+  server1.acceptedMethods.push_back("GET");
+  server1.acceptedMethods.push_back("POST");
+  server1.acceptedMethods.push_back("DELETE");
+  server1.acceptedMethods.push_back("PUT");
+  server1.cgiData.cgi_path_alias = std::make_pair("/cgi-bin", "/cgi-bin");
+  server1.cgiData.upload_dir = "www/uploads";
+  // server1.cgiData = data;
+  // Second server configuration
+  ConfigData server2;
+  server2.ports.push_back(4246);
+  server2.server_names.push_back("myWebserver");
+  server2.server_names.push_back("someWebserver");
+  server2.root = "http/www2/";
+
+  // Third server configuration
+  ConfigData server3;
+  server3.ports.push_back(4247);
+  server3.server_names.push_back("myWebserver");
+  server3.server_names.push_back("someWebserver");
+  server3.root = "http/www3/";
+
+  // Add all servers to configs_
+  configs_.push_back(server1);
+  configs_.push_back(server2);
+  configs_.push_back(server3);
+  // map ports to server configurations
+  for (size_t i = 0; i < configs_.size(); ++i) {
+    for (size_t j = 0; j < configs_[i].ports.size(); ++j) {
+      port_map_[configs_[i].ports[j]] = &configs_[i];
+    }
+  }
+  debuglog(YELLOW, "Config initialized with %zu servers", configs_.size());
+}
+
+Config::Config(const Config &) {}
+Config &Config::operator=(const Config &) { return *this; }
+Config::~Config() {}
+
+void Config::cleanup() {
+  delete instance_;
+  instance_ = NULL;
+  debuglog(YELLOW, "Server config data destroyed");
+}
+
+void Config::initialize(std::string &config_file) {
+  if (instance_ == NULL) {
+    instance_ = new Config(config_file);
+  }
+}
+
+std::vector<ConfigData> &Config::getConfigData(char *config_file) {
+  if (instance_ == NULL) {
+    instance_ = new Config(Config::_filename);
+  }
+  return Config::configs_;
+}
+
+const ConfigData *Config::getConfigByPort(uint16_t port) {
+  if (instance_ == NULL) {
+    instance_ = new Config(Config::_filename);
+    if (!validate()) {
+      cleanup();
+      debuglog(RED, "Configuration validation failed");
+      throw std::runtime_error("Invalid configuration");
+    }
+  }
+  std::map<uint16_t, ConfigData *>::const_iterator it = port_map_.find(port);
+  return (it != port_map_.end()) ? it->second : NULL;
+}
+
+bool Config::validate() {
+  for (size_t i = 0; i < configs_.size(); ++i) {
+    if (configs_[i].ports.empty()) {
+      debuglog(RED, "Configuration error: No ports specified");
+      return false;
+    }
+    if (configs_[i].root.empty()) {
+      debuglog(RED, "Configuration error: Empty root directory");
+      return false;
+    }
+  }
+  return true;
+}#ifndef CONFIG_STRUCTS_HPP
+#define CONFIG_STRUCTS_HPP
+
+#include <map>
+#include <string>
+#include <utility>
+#include <vector>
+#include <stdint.h> 
+
+struct CGIData {
+  std::pair<std::string, std::string> cgi_path_alias;
+  std::string upload_dir;
+
+  CGIData() : cgi_path_alias(), upload_dir() {}
+};
+
+struct Location {
+  std::vector<std::string> acceptedMethods;
+  bool autoindex;
+  bool file_upload;
+  std::string upload_dir;
+  std::string alias;
+  bool internal;
+  std::pair<int, std::string> return_directive;
+  std::map<int, std::string> error_pages;
+
+  Location() : 
+    autoindex(false), 
+    file_upload(false),
+    upload_dir("/www/uploads"),
+    alias(""), 
+    internal(false), 
+    return_directive(), 
+    error_pages() {}
+};
+
+struct BaseConf {
+  size_t maxBodySize;
+  std::size_t maxConnections;
+  int requestTimeout;
+  int responseTimeout;
+  int keepalive_timeout;
+  std::map<std::string, std::string> defaultheaders;
+  bool autoindex;
+  bool file_server;
+  std::vector<std::string> acceptedMethods;
+  std::map<int, std::string> error_pages;
+  std::string upload_dir;
+
+  BaseConf() :
+    maxConnections(100),
+    requestTimeout(60),
+    responseTimeout(60),
+    keepalive_timeout(30),
+    maxBodySize(10000000),
+    autoindex(false),
+    file_server(true),
+    upload_dir("./www/uploads") {
+      defaultheaders["Content-Type"] = "text/html";
+      defaultheaders["Server"] = "nginx/1.18.0";
+      defaultheaders["Connection"] = "keep-alive";
+    }
+};
+
+struct ConfigData : public BaseConf {
+  std::string serverListenAddress;
+  std::vector<uint16_t> ports;
+  std::vector<std::string> server_names;
+  std::string index;
+  std::string root;
+  std::map<std::string, Location> location_blocks;
+  CGIData cgiData;
+  std::vector<std::string> limit_except;
+  bool cgi_exists;
+  bool has_directives;
+
+  ConfigData() :
+    BaseConf(),
+    serverListenAddress("localhost"),
+    index("index.html"),
+    root("www"),
+    cgi_exists(false),
+    has_directives(false) {}
+
+  bool hasCGI() const { return cgi_exists; }
+  bool hasDirectives() const { return has_directives; }
+};
+
+struct HttpConfig {
+  std::vector<ConfigData> servers;
+
+  HttpConfig() {}
+};
+
+#endif#pragma once
+
+#include <netdb.h>
+#include <pthread.h>
+#include <stdint.h> // C-style header because stdint is C++11>
+#include "ConfigData.hpp"
+#include <map>
+#include <string>
+#include <vector>
+
+/**
+ * @brief Server configuration provider
+ *
+ * This class will be responsible for reading the configuration
+ * file and creating an array of ConfigData structs
+ * to be used by the server. The implementation is to make it a
+ * singleton class. It will be initialized once at the beginning of the program
+ * and never changed in our implementation. we could add a update method
+ * to the class to reload the configuration file later if we want to implement
+ * this
+ */
+class Config {
+public:
+  static void initialize(std::string& config_file);
+  static std::vector<ConfigData>& getConfigData(char *config_file);
+  static const ConfigData* getConfigByPort(uint16_t port); 
+  static void cleanup();
+
+  private:
+  // Private constructor to prevent instantiation
+  Config(std::string filename);
+  Config(const Config &);
+  Config &operator=(const Config &);
+  ~Config();
+
+  // better and clearer to have a func to validate acc to a set of rules
+  static bool validate();
+
+  static std::map<uint16_t, ConfigData*> port_map_;
+  static Config *instance_;
+  static std::vector<ConfigData> configs_;
+  static std::string _filename;
+};
+#include "Constants.hpp"
+#include "debug.h"
+#include <string>
+
+namespace Constants {
+	std::map<int, std::string> statusMessages;
+    std::map<std::string, std::string> mimeTypes;
+
+    void initStatusMessageMap() {
+		debuglog(YELLOW, "Initializing status code to status text mapping");
+		statusMessages[100] = "Continue";
+		statusMessages[101] = "Switching Protocols";
+		statusMessages[102] = "Processing";
+		statusMessages[103] = "Early Hints";
+		statusMessages[200] = "OK";
+		statusMessages[201] = "Created";
+		statusMessages[202] = "Accepted";
+		statusMessages[203] = "Non-Authoritative Information";
+		statusMessages[204] = "No Content";
+		statusMessages[205] = "Reset Content";
+		statusMessages[206] = "Partial Content";
+		statusMessages[207] = "Multi-Status";
+		statusMessages[208] = "Already Reported";
+		statusMessages[226] = "IM Used";
+		statusMessages[300] = "Multiple Choices";
+		statusMessages[301] = "Moved Permanently";
+		statusMessages[302] = "Found";
+		statusMessages[303] = "See Other";
+		statusMessages[304] = "Not Modified";
+		statusMessages[305] = "Use Proxy";
+		statusMessages[306] = "Switch Proxy";
+		statusMessages[307] = "Temporary Redirect";
+		statusMessages[308] = "Permanent Redirect";
+		statusMessages[404] = "error on Wikimedia";
+		statusMessages[400] = "Bad Request";
+		statusMessages[401] = "Unauthorized";
+		statusMessages[402] = "Payment Required";
+		statusMessages[403] = "Forbidden";
+		statusMessages[404] = "Not Found";
+		statusMessages[405] = "Method Not Allowed";
+		statusMessages[406] = "Not Acceptable";
+		statusMessages[407] = "Proxy Authentication Required";
+		statusMessages[408] = "Request Timeout";
+		statusMessages[409] = "Conflict";
+		statusMessages[410] = "Gone";
+		statusMessages[411] = "Length Required";
+		statusMessages[412] = "Precondition Failed";
+		statusMessages[413] = "Payload Too Large";
+		statusMessages[414] = "URI Too Long";
+		statusMessages[415] = "Unsupported Media Type";
+		statusMessages[416] = "Range Not Satisfiable";
+		statusMessages[417] = "Expectation Failed";
+		statusMessages[418] = "I'm a teapot";
+		statusMessages[421] = "Misdirected Request";
+		statusMessages[422] = "Unprocessable Content";
+		statusMessages[423] = "Locked";
+		statusMessages[424] = "Failed Dependency";
+		statusMessages[425] = "Too Early";
+		statusMessages[426] = "Upgrade Required";
+		statusMessages[428] = "Precondition Required";
+		statusMessages[429] = "Too Many Requests";
+		statusMessages[431] = "Request Header Fields Too Large";
+		statusMessages[451] = "Unavailable For Legal Reasons";
+		statusMessages[500] = "Internal Server Error";
+		statusMessages[501] = "Not Implemented";
+		statusMessages[502] = "Bad Gateway";
+		statusMessages[503] = "Service Unavailable";
+		statusMessages[504] = "Gateway Timeout";
+		statusMessages[505] = "HTTP Version Not Supported";
+		statusMessages[506] = "Variant Also Negotiates";
+		statusMessages[507] = "Insufficient Storage";
+		statusMessages[508] = "Loop Detected";
+		statusMessages[510] = "Not Extended";
+		statusMessages[511] = "Network Authentication Required";
+	}
+
+	void initMimeTypes() {
+		debuglog(YELLOW, "Initializing extension to MIME type mapping");
+	
+		// Web 
+		mimeTypes["html"] = "text/html";
+		mimeTypes["htm"] = "text/html";
+		mimeTypes["css"] = "text/css";
+		mimeTypes["js"] = "application/javascript";
+		mimeTypes["xml"] = "application/xml";
+		mimeTypes["json"] = "application/json";
+	
+		// Text 
+		mimeTypes["txt"] = "text/plain";
+		mimeTypes["csv"] = "text/csv";
+		mimeTypes["md"] = "text/markdown";
+		mimeTypes["sh"] = "text/x-shellscript";
+	
+		// Images
+		mimeTypes["jpg"] = "image/jpeg";
+		mimeTypes["jpeg"] = "image/jpeg";
+		mimeTypes["png"] = "image/png";
+		mimeTypes["gif"] = "image/gif";
+		mimeTypes["svg"] = "image/svg+xml";
+		mimeTypes["ico"] = "image/x-icon";
+		mimeTypes["webp"] = "image/webp";
+	
+		// Documents
+		mimeTypes["pdf"] = "application/pdf";
+		mimeTypes["doc"] = "application/msword";
+		mimeTypes["docx"] = "application/msword";
+		mimeTypes["xls"] = "application/vnd.ms-excel";
+		mimeTypes["xlsx"] = "application/vnd.ms-excel";
+		mimeTypes["zip"] = "application/zip";
+	
+		// Multimedia
+		mimeTypes["mp3"] = "audio/mpeg";
+		mimeTypes["mp4"] = "video/mp4";
+		mimeTypes["webm"] = "video/webm";
+	
+	}
+
+
+
+
+} // namespace Constants#pragma once
+
+#include <map>
+#include <string>
+
+
+namespace Constants {
+	extern std::map<int, std::string> statusMessages;
+    extern std::map<std::string, std::string> mimeTypes;
+
+	void initStatusMessageMap();
+	void initMimeTypes();
+
+} // namespace Constants#include "DirectoryListing.hpp"
+#include "HTTPConnxData.hpp"
+#include "SimpleResponse.hpp"
+#include "Config.hpp"
+#include "debug.h"
+#include <fcntl.h>
+#include <dirent.h>
+#include <string>
+#include <sstream>
+
+namespace DirectoryListing
+{
+
+    bool getDIRListing(HTTPConnxData &connection, std::string full_path)
+    {
+        // Check if the target is a directory
+        if (connection.data.target.empty() || connection.data.target[0] != '/' )
+        {
+            debuglog(RED, "Invalid target path: %s", connection.data.target.c_str());
+            return false;
+        }
+
+        // check if the directory listing is allowed
+        if (!Config::getConfigByPort(4244).location_blocks["43"].autoindex)
+            return false;
+
+        // TODO: Check connection to if the directory listing is allowed
+
+        // Get C-string pointer after all modifications
+        const char *path = full_path.c_str();
+
+        debuglog(RED, "Directory Listing target: %s", path);
+
+    // Check if directory exists , TODO: check config if the directory listing is allowed
+        DIR *dir = opendir(path);
+
+        if (dir == NULL)
+        {    
+            return false;
+        }
+
+        std::string dirString;
+        // Read directory contents
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL)
+        {
+            // Create an HTML list item for each entry
+            dirString += "<li><a href=\"";
+            dirString += connection.data.target;
+            dirString += entry->d_name;
+            dirString += "\">";
+            dirString += entry->d_name;
+            dirString += "</a></li>\n";
+        }
+        closedir(dir);
+        std::string htmlCode;
+        // add html code to the directory string
+        htmlCode = "<html><head><title>Directory Listing</title>";
+        htmlCode += "<style>";
+        htmlCode += "body {background-color: black; color: white;} a {color: lightblue;}";
+        htmlCode += "</style>";
+        htmlCode += "</head><body><h1>Index of " + full_path + "</h1><ul>" + dirString + "</ul></body></html>";
+       // htmlCode += "</head><body><h1>" + connection.data.target + "</h1><ul>" + dirString + "</ul></body></html>";
+        debuglog(GREEN, "Directory contents: \n%s", dirString.c_str());
+        // update connection state and data
+        connection.state = CONN_SIMPLE_RESPONSE;
+        // generate HTTP header and include html payload
+        SimpleResponse::addHTTPHeader(connection, TEXT_HTML, htmlCode, 200);
+
+        debuglog(BLUE, "Directory simple response: \n%s", connection.data.response.c_str());
+
+        return true;
+    }
+
+} // namespace DirectoryListing#pragma once
+
+// #include <stdbool.h>
+#include "HTTPConnxData.hpp"
+
+namespace DirectoryListing {
+
+    bool getDIRListing(HTTPConnxData &connections, std::string full_path);
+
+} // namespace DirectoryListing#include "HTTPConnxData.hpp"
+#include "debug.h"
+#include <sstream>
+#include <stdbool.h>
+#include <string>
+#include <unistd.h>
+#include <stdlib.h> // for strtoul
+
+bool HTTPConnxData::parsingHeaders(int client_fd, HTTPConnxData &state) {
+  if (state.data.request.empty()) {
+    debuglog(YELLOW, "Empty request received in parseHeaders");
+    return false;
+  }
+  state.data.headers_end = state.data.request.find("\r\n\r\n");
+  // found the "\r\n\r\n" sequence
+  if (state.data.headers_end != string::npos) {
+    debuglog(YELLOW, "Received headers");
+    state.data.headers_received = true;
+    state.data.headers_end += 4; // skip the \r\n\r\n
+
+    // parse line by line and add to headers map
+    std::istringstream iss(state.data.request);
+    string line;
+    // parse the first request line, e.g. "GET /index.html HTTP/1.1"
+    if (std::getline(iss, line)) {
+      std::istringstream lineStream(line);
+      if (!(lineStream >> state.data.method >> state.data.target >>
+            state.data.version)) {
+        debuglog(RED, "failed to parse headers request line");
+        return false;
+      }
+      // validation.
+      // if (state.data.headers["version"] != "HTTP/1.1" &&
+      // state.data.headers["version"] != "HTTP/1.0") { 	debuglog(RED,
+      // "Unsupported HTTP version"); 	return
+      // false;
+      // }
+    } else {
+      debuglog(RED, "Empty request");
+      return false;
+    }
+    // parse the rest
+    while (std::getline(iss, line)) {
+      // end of headers
+      if (line.empty() || line == "\r") {
+        break;
+      }
+      size_t delimiter = line.find(":");
+      if (delimiter != string::npos) {
+        string key = trim(line.substr(0, delimiter));
+        string value = trim(line.substr(delimiter + 1));
+        if (key == "Cookie") {
+          // Parse cookies
+          std::istringstream cookieStream(value);
+          string cookiePair;
+          while (std::getline(cookieStream, cookiePair, ';')) {
+            cookiePair = trim(cookiePair);
+            size_t cookieDelimiter = cookiePair.find("=");
+            if (cookieDelimiter != string::npos) {
+              string cookieName = trim(cookiePair.substr(0, cookieDelimiter));
+              string cookieValue = trim(cookiePair.substr(cookieDelimiter + 1));
+              state.data.cookies[cookieName] = cookieValue;
+            }
+          }
+        } else {
+          state.data.headers.insert(std::make_pair(key, value));
+        }
+      } else {
+        debugcolor(RED, "Invalid header line: %s", line.c_str());
+        return false;
+      }
+    }
+    // host is mandatory
+    if (checkHeader(state, "Host", state.data.host)) {
+      debuglog(YELLOW, "Host: %s", state.data.host.c_str());
+    } else {
+      return false;
+    }
+    string content_length_str;
+    if (checkHeader(state, "Content-Length", content_length_str)) {
+		state.data.content_length =
+			strtoul(content_length_str.c_str(), NULL, 10);
+      debuglog(YELLOW, "Content-Length: %ld", state.data.content_length);
+    } else {
+      debuglog(YELLOW, "No Content-Length header found");
+      // check for chunked encoding
+      string transfer_encoding;
+      string multipart;
+      if (checkHeader(state, "Transfer-Encoding", transfer_encoding)) {
+        if (transfer_encoding == "chunked") {
+          debuglog(YELLOW, "Chunked transfer encoding detected");
+          state.data.chunked = true;
+        }
+      } else if (state.data.request.find("Content-Type: multipart/") !=
+                 string::npos) {
+        size_t boundary_pos = state.data.request.find("boundary=");
+        if (boundary_pos != string::npos) {
+          state.data.multipart = true;
+          boundary_pos += 9; // skip the "boundary="
+          size_t boundary_end = state.data.request.find("\r\n", boundary_pos);
+          state.data.boundary =
+              "--" + state.data.request.substr(boundary_pos,
+                                               boundary_end - boundary_pos);
+          debuglog(YELLOW, "Boundary: %s\n", state.data.boundary.c_str());
+          state.data.headers["Content-Type"] = "multipart/form-data";
+          state.data.headers["boundary"] = state.data.boundary;
+        } else {
+          debuglog(RED, "No boundary found - invalid multipart form data");
+          return false;
+        }
+      } else if (state.data.request.substr(0, 3) == "GET" ||
+                 state.data.request.substr(0, 6) == "DELETE") {
+        debug("Request complete\n");
+        state.data.is_get_request = true;
+        state.data.headers_received = true;
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * @brief Reset the connection for reuse
+ */
+void HTTPConnxData::reset() {
+  state = CONN_INCOMING;
+  is_sending = 0;
+  is_receiving = 0;
+  headers_sent = false;
+  cgi_processing = false;
+  bytes_received = 0;
+  data = ConnectionData();
+
+  // Close open file descriptors
+  if (file_fd != -1)
+    close(file_fd);
+  if (writeto_fd != -1)
+    close(writeto_fd);
+
+  file_fd = -1;
+  writeto_fd = -1;
+  filename[0] = '\0';
+}
+
+/**
+ * @brief Trim leading and trailing whitespace from a string
+ *
+ * @param str The string to trim
+ * @return The trimmed string
+ */
+string HTTPConnxData::trim(const string &str) {
+  string trimmed = str;
+  string whitespaces = " \r\n\t";
+  size_t start = trimmed.find_first_not_of(whitespaces);
+  if (start == string::npos) {
+    return "";
+  }
+  size_t end = trimmed.find_last_not_of(whitespaces);
+  return trimmed.substr(start, end - start + 1);
+}
+
+bool HTTPConnxData::checkHeader(HTTPConnxData &state,
+                                 const string &headerName,
+                                 string &targetVariable) {
+  map<string, string>::iterator headerIt = state.data.headers.find(headerName);
+  if (headerIt != state.data.headers.end()) {
+    targetVariable = headerIt->second;
+    return true; // Header found and set
+  } else {
+    return false; // Header not found
+  }
+}#pragma once
+
+#include <map>
+#include <string>
+#include <sys/types.h>
+#include <vector>
+#include <unistd.h>
+
+using std::map;
+using std::string;
+using std::vector;
+
+/**
+ * @brief Connection state enum
+ *
+ * Tracks the current state of a connection throughout its lifecycle
+ */
+enum ConnectionState {
+    CONN_INCOMING,      // New connection, nothing processed yet
+    CONN_PARSING_HEADER,// Receiving/parsing headers
+    CONN_CGI,           // Processing CGI request
+    CONN_FILE_REQUEST,  // Serving a file
+    CONN_SIMPLE_RESPONSE, 
+    CONN_UPLOAD,        // Handling file upload
+    CONN_CLOSING        // Ready to close
+};
+
+/**
+ * @brief Connection state struct
+ *
+ * Tracks the state of a connection including request data,
+ * file transfers, and CGI processing
+ */
+struct HTTPConnxData {
+    /**
+     * @brief Request data and metadata
+     */
+    struct ConnectionData {
+        string method;
+        string target;
+        string full_path;
+        string version;
+        string host;
+        string request;
+        size_t content_length;
+        map<std::string, std::string> headers;
+        map<std::string, std::string> cookies;
+        bool headers_received;
+        bool is_get_request;
+        bool chunked;
+        bool multipart;
+        string boundary;
+        size_t headers_end;
+        bool sending_response;
+        string response;
+        size_t bytes_sent;
+        bool response_sent;
+		bool headers_sent;
+
+        ConnectionData() :
+            method(""), target(""), version(""), host(""), request(""),
+            content_length(0), headers(), cookies(),
+            headers_received(false), is_get_request(false),
+            chunked(false), multipart(false), boundary(""),
+            headers_end(0), sending_response(false),
+            response(""), bytes_sent(0), response_sent(false), 
+			headers_sent(false) {}
+    };
+
+    // Connection state and metadata
+    ConnectionState state;
+    int client_fd;
+    ssize_t indexServerConf;
+	int poll_client_idx;
+    
+    // I/O state flags
+    int is_sending;
+    int is_receiving;
+    bool headers_sent;
+
+    // CGI processing
+    int child_stdin_pipe[2];
+    int child_stdout_pipe[2];
+    int poll_stdin_idx;
+    int poll_stdout_idx;
+    pid_t child_pid;
+    bool cgi_processing;
+
+    // File handling
+    int file_fd;
+    long file_size;
+    long file_offset;
+
+    // Upload handling
+    int writeto_fd;
+    char filename[256];
+    bool upload_completed;
+    size_t bytes_received;
+
+    // Request data
+    ConnectionData data;
+
+    HTTPConnxData() :
+        state(CONN_INCOMING),
+        client_fd(-1),
+        indexServerConf(-1),
+        is_sending(0),
+        is_receiving(0),
+        headers_sent(false),
+        poll_stdin_idx(-1),
+        poll_stdout_idx(-1),
+        child_pid(-1),
+        cgi_processing(false),
+        file_fd(-1),
+        file_size(0),
+        file_offset(0),
+        writeto_fd(-1),
+        upload_completed(false),
+        bytes_received(0),
+        data() {
+        filename[0] = '\0';
+    }
+
+    void reset();
+	bool checkHeader(HTTPConnxData& state,
+		const string& headerName,
+		string& targetVariable);
+	string trim(const string& str);
+	bool parsingHeaders(int client_fd, HTTPConnxData& state);
+};#include "HTTPServer.hpp"
+#include "Constants.hpp"
+#include "DirectoryListing.hpp"
+#include "URLMatcher.hpp"
+#include "debug.h"
+#include <ctime>
+#include <poll.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+using std::map;
+using std::string;
+using std::vector;
+
+namespace HTTPServer {
+
+/**
+ * testing: use the following command to test the server
+ *
+ * nc localhost 4244
+ * curl -X POST --data-raw "This is a test" localhost:4244
+ * wget -v --post-data="hello world"  http://localhost:4244
+ * telnet localhost 4244
+ * curl "http://localhost:4244/?sss='this%20is'"
+ * curl -H "Content-Type: application/json"
+ * "http://localhost:4244/?data=This%20is%20a%20test" curl -X POST -H
+ * "Content-Type: application/json" --data-raw '{"message": "This is a test"}'
+ * localhost:4244 curl -I -H "Content-Type: application/json"
+ * http://localhost:4244
+ */
+
+// pollfd is an array of pollfd which contain
+// the file descriptors to poll and the events we want to monitor
+
+typedef std::vector<struct pollfd> PollfdsVector;
+PollfdsVector pollfds;
+vector<int> serverSockets;
+map<int, HTTPConnxData> connections;
+map<int, std::time_t> lastActivityTime;
+
+// Add a file descriptor to the poll array
+void add_to_poll(int fd, short events) {
+  struct pollfd pfd;
+  memset(&pfd, 0, sizeof(pfd));
+  pfd.fd = fd;
+  pfd.events = events;
+  pollfds.push_back(pfd);
+}
+
+// Remove a fd by swapping with last element (O(1))
+void remove_from_poll(int fd) {
+  for (PollfdsVector::iterator it = pollfds.begin(); it != pollfds.end();
+       ++it) {
+    if (it->fd == fd) {
+      *it = pollfds.back();
+      pollfds.pop_back();
+      return;
+    }
+  }
+}
+
+// Update events for an existing fd
+// Returns true if found and updated, false otherwise
+bool update_poll_events(int fd, short events) {
+  for (PollfdsVector::iterator it = pollfds.begin(); it != pollfds.end();
+       ++it) {
+    if (it->fd == fd) {
+      it->events = events;
+      return true; // Found and updated
+    }
+  }
+  return false; // FD not found
+}
+
+// Send HTTP response headers
+int send_headers(HTTPConnxData &conn) {
+  char headers[512];
+  int len = snprintf(headers, sizeof(headers),
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: text/html\r\n"
+                     "Content-Length: %ld\r\n"
+                     "Connection: keep-alive\r\n\r\n",
+                     conn.file_size);
+
+  if (send(conn.client_fd, headers, len, 0) < 0) {
+    perror("Failed to send headers");
+    return -1;
+  }
+  conn.headers_sent = true;
+  return 0;
+}
+
+int send_file(HTTPConnxData &conn) {
+  char buffer[BUFFER_SIZE];
+  ssize_t bytes_read = read(conn.file_fd, buffer, sizeof(buffer));
+
+  if (bytes_read < 0) {
+    perror("Failed to read file");
+    return -1;
+  }
+  if (bytes_read == 0) {
+    close(conn.file_fd);
+    conn.file_fd = -1;
+    return 0; // EOF
+  }
+
+  ssize_t bytes_sent = send(conn.client_fd, buffer, bytes_read, 0);
+  if (bytes_sent < 0) {
+    perror("Failed to send data");
+    return -1;
+  }
+
+  conn.data.bytes_sent += bytes_sent;
+
+  // Check if we've sent the entire file
+  if (conn.data.bytes_sent >= conn.file_size) {
+    return 0; // File sent completely
+  }
+
+  return 1; // More data to send
+}
+
+void extract_filename(const char *request, char *filename) {
+  // Simple extraction - look for first line with path
+  const char *start = strstr(request, " /");
+  if (!start)
+    return;
+
+  start += 2; // Skip the space and slash
+  const char *end = strchr(start, ' ');
+  if (!end)
+    return;
+
+  size_t len = end - start;
+  if (len >= sizeof(connections[0].filename)) {
+    len = sizeof(connections[0].filename) - 1;
+  }
+
+  strncpy(filename, start, len);
+  filename[len] = '\0';
+}
+
+int run() {
+  // Set up signal handlers
+  SocketUtils::setSignalHandlers();
+  Constants::initStatusMessageMap();
+  Constants::initMimeTypes();
+
+  int server_fd;
+  struct sockaddr_in server_addr;
+
+  if ((server_fd = SocketUtils::createBindSocket(SERVER_PORT)) < 0) {
+    perror("Socket creation failed");
+    exit(EXIT_FAILURE);
+  }
+
+  if (!SocketUtils::listenSocket(server_fd)) {
+    perror("Error listening on socket");
+    close(server_fd);
+    exit(EXIT_FAILURE);
+  }
+
+ 
+  debug("Server listening on port %d", SERVER_PORT);
+  // Add server socket to poll
+  add_to_poll(server_fd, POLLIN);
+ 
+  // Main polling loop
+  while (1) {
+
+    int poll_result =
+        poll(&pollfds[0], pollfds.size(), 10000); // Wait indefinitely
+    // printf("Poll returned %d\n", poll_result);
+    if (poll_result < 0) {
+      if (errno != EINTR) { // Interrupted by signal
+        perror("poll");
+        break;
+      }
+      perror("Poll failed");
+      continue; // Interrupted by signal
+    } else if (poll_result == 0) {
+      continue; // Timeout
+    }
+
+    // Process events on file descriptors
+    for (int i = 0; i < pollfds.size(); i++) {
+      if (!(pollfds[i].revents & (POLLIN | POLLOUT))) {
+        continue; // No events on this fd
+      }
+      // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
+      // requested
+
+      if (pollfds[i].revents & (POLLERR | POLLNVAL)) {
+        debuglog(RED, "Error condition on fd %d", pollfds[i].fd);
+        connections[pollfds[i].fd].reset();
+        remove_from_poll(pollfds[i].fd);
+        continue;
+      }
+
+      if (pollfds[i].revents & POLLHUP) {
+        debuglog(RED, "Connection closed by client on fd %d ", pollfds[i].fd);
+        connections[pollfds[i].fd].reset();
+        remove_from_poll(pollfds[i].fd);
+        continue;
+      }
+
+      int current_fd = pollfds[i].fd;
+
+      // Handle new connections on server socket
+      if (current_fd == server_fd && (pollfds[i].revents & POLLIN)) {
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        int client_fd =
+            accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+
+        if (client_fd < 0) {
+          perror("Accept failed");
+          continue;
+        }
+
+        debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
+              ntohs(client_addr.sin_port));
+
+        HTTPConnxData &conn = connections[client_fd];
+        conn.client_fd = client_fd;
+        add_to_poll(client_fd, POLLIN);
+        conn.state = CONN_INCOMING;
+
+        // Set client info in connection data
+        conn.data.host = inet_ntoa(client_addr.sin_addr);
+        debug("Connection data initialized in state INCOMING for client %d",
+              client_fd);
+        continue;
+      }
+
+      HTTPConnxData &conn = connections[current_fd];
+      if (conn.client_fd == -1) {
+        debuglog(RED, "Connection fd %d not found in connections", current_fd);
+        continue;
+      }
+
+      if (conn.state == CONN_INCOMING) {
+        URLMatcher::validateRequest(conn);
+        continue;
+      }
+
+      if (conn.state == CONN_PARSING_HEADER) {
+        // parse header
+        // if header complete, set state
+        // else continue parsing
+        continue;
+      }
+      if (conn.state == CONN_SIMPLE_RESPONSE) {
+
+        debuglog(YELLOW, "Connection fd %d in state SIMPLE_RESPONSE",
+                 conn.client_fd);
+        // check if the response is ready to be sent
+        // if not set to CONN_CLOSING
+        // else send the response
+        ssize_t sent = send(conn.client_fd, conn.data.response.c_str(),
+                            conn.data.response.size(), 0);
+        if (sent < 0) {
+          perror("Failed to send simple response");
+          remove_from_poll(conn.client_fd);
+          conn.reset();
+        }
+        conn.data.headers_received = false;
+        conn.data = HTTPConnxData::ConnectionData();
+        conn.state = CONN_INCOMING;
+        update_poll_events(current_fd, POLLIN);
+        continue;
+      }
+      if (conn.state == CONN_FILE_REQUEST) {
+        // check if the file is ready to be sent
+        // if not set to CONN_CLOSING
+        // else send the file
+        if (pollfds[i].revents & POLLOUT) {
+          debuglog(YELLOW, "Handling write event for connection fd %d",
+                   conn.client_fd);
+          if (!conn.headers_sent) {
+            if (send_headers(conn) < 0) {
+              conn.reset();
+            }
+          } else {
+            int result = send_file(conn);
+            if (result < 0) {
+              conn.reset();
+            } else if (result == 0) {
+              // File sent completely - reset for next request
+              // Close the file descriptor
+              if (conn.file_fd != -1) {
+                close(conn.file_fd);
+              }
+              conn.reset();
+
+              // Switch back to POLLIN for the next request
+              update_poll_events(current_fd, POLLIN);
+              conn.state = CONN_INCOMING;
+
+              debuglog(YELLOW, "Switched connection %d fd back to POLLIN",
+                       conn.client_fd);
+            }
+          }
+        }
+
+        continue;
+      } else if (conn.state == CONN_UPLOAD) {
+        // check if the upload is complete
+        // if not set to CONN_CLOSING
+        // else close the connection
+        if (pollfds[i].revents & POLLIN) {
+          debuglog(YELLOW, "Handling upload event for connection %d",
+                   conn.client_fd);
+          // because the previous header parsing consumed data and we stored it
+          if (!conn.data.request.empty()) {
+            debuglog(YELLOW, "first writing content of request");
+            ssize_t bytes_written =
+                write(conn.file_fd, conn.data.request.c_str(),
+                      conn.data.request.size());
+            if (bytes_written < 0) {
+              perror("Failed to write to file");
+              conn.reset();
+              continue;
+            } else if (bytes_written == 0) {
+              debug("No data written to file");
+              conn.reset();
+              continue;
+            }
+            conn.bytes_received += bytes_written;
+            // if we have received all data, close the connection
+            if (conn.bytes_received >= conn.data.content_length) {
+              debuglog(YELLOW, "Upload complete first write");
+              debuglog(YELLOW, "Written %ld bytes to %s (total: %zu)\n",
+                       bytes_written, conn.filename, conn.bytes_received);
+              conn.upload_completed = true;
+              close(conn.file_fd);
+              update_poll_events(current_fd, POLLOUT);
+              conn.reset();
+            } else {
+              continue;
+            }
+          } else {
+            // read again
+            char buffer[BUFFER_SIZE];
+            int bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+            if (bytes_read <= 0) {
+              if (bytes_read == 0) {
+                debug("Client disconnected");
+              } else {
+                perror("recv failed");
+              }
+              conn.reset();
+              continue;
+            }
+            printf("Received %d bytes from client\n", bytes_read);
+            //   conn.data.request.append(buffer, bytes_read);
+            debuglog(YELLOW, "Received %d bytes from client\n", bytes_read);
+            // erite to file
+            ssize_t bytes_written = write(conn.file_fd, buffer, bytes_read);
+            if (bytes_written < 0) {
+              perror("Failed to write to file");
+              close(conn.file_fd);
+              conn.reset();
+              continue;
+            }
+            conn.bytes_received += bytes_written;
+            // if we have received all data, close the connection
+            if (conn.bytes_received >= conn.data.content_length) {
+              debuglog(YELLOW, "Upload complete");
+              debuglog(YELLOW, "Written %ld bytes to %s (total: %zu)\n",
+                       bytes_written, conn.filename, conn.bytes_received);
+              conn.upload_completed = true;
+              update_poll_events(current_fd, POLLOUT);
+            } else {
+              continue;
+            }
+          }
+          debuglog(YELLOW, "here here here? ");
+          // Handle client ready for write (response)
+          if (pollfds[i].revents & POLLOUT && conn.upload_completed) {
+            debuglog(YELLOW, "Handling upload response for connection fd %d",
+                     conn.client_fd);
+            const char *response = "HTTP/1.1 200 OK\r\n"
+                                   "Content-Length: 18\r\n"
+                                   "Connection: close\r\n\r\n"
+                                   "Upload successful\n";
+
+            if (send(conn.client_fd, response, strlen(response), 0) < 0) {
+              perror("Failed to send response");
+              conn.reset();
+              remove_from_poll(conn.client_fd);
+              continue;
+            }
+
+            debuglog(YELLOW, "Upload response sent to client");
+            conn.state = CONN_INCOMING; // Transition back to INCOMING state
+            update_poll_events(current_fd, POLLIN); // Monitor for new requests
+          }
+        }
+        continue;
+      } else if (conn.state == CONN_CGI) {
+        debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
+        // check if the cgi is ready to be sent
+        // if not set to CONN_CLOSING
+        // else send the cgi
+        // Handle data from client and send to cgi
+        if (current_fd == conn.client_fd && (pollfds[i].revents & POLLIN)) {
+          char buffer[BUFFER_SIZE];
+          int bytes_read = 0;
+          if (conn.data.request.empty()) {
+
+            bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+
+            if (bytes_read <= 0) {
+              if (bytes_read == 0) {
+                // printf("Client disconnected\n");
+                debuglog(YELLOW, "Client disconnected");
+              } else {
+                perror("recv failed");
+              }
+              conn.reset();
+              continue;
+            }
+
+            printf("Received %d bytes from client\n", bytes_read);
+
+          } else {
+            bytes_read = conn.data.request.size();
+            memcpy(buffer, conn.data.request.c_str(), conn.data.request.size());
+          }
+          // Forward data to CGI process
+
+          int bytes_written =
+              write(conn.child_stdin_pipe[1], buffer, bytes_read);
+          if (bytes_written < 0) {
+            perror("Write to CGI failed");
+            conn.reset();
+            continue;
+          }
+
+          if (bytes_read < BUFFER_SIZE) {
+            // Close the write end of the pipe to signal EOF to the CGI
+            // process
+            debuglog(YELLOW, "Closing write end of pipe");
+            close(conn.child_stdin_pipe[1]);
+            conn.is_sending = 0;
+            conn.is_receiving = 1;
+            update_poll_events(conn.child_stdin_pipe[1],
+                               0); // Remove POLLOUT
+            update_poll_events(conn.child_stdout_pipe[0], POLLIN);
+          }
+        }
+
+        // Handle data from CGI process (ready to write to client from cgi)
+        if (conn.child_stdout_pipe[0] == current_fd &&
+            (pollfds[i].revents & POLLIN)) {
+          char buffer[BUFFER_SIZE];
+          int bytes_read = read(conn.child_stdout_pipe[0], buffer, BUFFER_SIZE);
+
+          if (bytes_read <= 0) {
+            // CGI process closed pipe or error
+            if (bytes_read == 0) {
+              printf("CGI process finished\n");
+              conn.is_receiving = 0;
+            } else {
+              perror("Read from CGI failed");
+              conn.reset();
+            }
+            continue;
+          }
+          // printf("Received %d bytes from cgi\n", bytes_read);
+
+          // Send CGI output back to client
+          int bytes_sent = send(conn.client_fd, buffer, bytes_read, 0);
+          if (bytes_sent < 0) {
+            perror("Send to client failed");
+            conn.reset();
+            continue;
+          }
+
+          // printf("Sent %d bytes to client\n", bytes_sent);
+
+          // Close the connection after sending the response
+          if (bytes_read < BUFFER_SIZE) {
+            // printf("Closing client connection\n");
+            conn.reset();
+          }
+        }
+
+        continue;
+      }
+    }
+  }
+
+  // Cleanup
+  // TODO
+  return 0;
+}
+
+} // namespace HTTPServer#pragma once
+
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/poll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <errno.h>
+#include <ctime>
+
+#include "HTTPConnxData.hpp"
+#include "SocketUtils.hpp"
+#include "Config.hpp"
+#include "ConfigData.hpp"
+#include "CGI.hpp"
+#include "debug.h"
+
+#define SERVER_PORT 4247
+#define BUFFER_SIZE 4096
+
+using std::string;
+using std::vector;
+using std::map;
+
+namespace HTTPServer {
+
+
+/**
+ * testing: use the following command to test the server
+ *
+ * nc localhost 4244
+ * curl -X POST --data-raw "This is a test" localhost:4244
+ * wget -v --post-data="hello world"  http://localhost:4244
+ * telnet localhost 4244
+ * curl "http://localhost:4244/?sss='this%20is'"
+ * curl -H "Content-Type: application/json"
+ * "http://localhost:4244/?data=This%20is%20a%20test" curl -X POST -H
+ * "Content-Type: application/json" --data-raw '{"message": "This is a test"}'
+ * localhost:4244 curl -I -H "Content-Type: application/json"
+ * http://localhost:4244
+ */
+
+extern vector<struct pollfd> pollfds;
+extern vector<int> serverSockets;
+extern map<int, HTTPConnxData> connections;
+extern map<int, std::time_t> lastActivityTime;
+
+// Add a file descriptor to the poll array
+void add_to_poll(int fd, short events);
+
+// Remove a fd by swapping with last element (O(1))
+void remove_from_poll(int fd);
+
+// Update events for an existing fd
+bool update_poll_events(int fd, short events);
+void extract_filename(const char *request, char *filename);
+
+
+int run();
+
+
+} // namespace HTTPServer#include "Config.hpp"
+#include "HTTPServer.hpp"
+#include <iostream>
+#include <string>
+
+int main(int argc, char *argv[]) {
+    try {
+        std::string configFile = "config/default.conf"; // Default config path
+        if (argc > 2) {
+            std::cerr << "Usage: " << argv[0] << " [config_file]" << std::endl;
+            return 1;
+        } else if (argc == 2) {
+            configFile = argv[1]; 
+        }
+		Config::initialize(configFile); // Explicit initialization
+        HTTPServer::run();
+        Config::cleanup();
+    } catch (const std::exception& e) {
+        std::cerr << "Fatal error: " << e.what() << std::endl;
+        return 1;
+    }
+}
+#include "SimpleResponse.hpp"
+#include "HTTPConnxData.hpp"
+#include "Constants.hpp"
+#include "Config.hpp"
+#include "debug.h"
+#include <fcntl.h>
+#include <dirent.h>
+#include <string>
+#include <sstream>
+#include "Utils.hpp"
+
+namespace SimpleResponse {
+
+    void addHTTPHeader(HTTPConnxData &connection, int content_type, std::string response, int statusCode)
+    {
+        std::string header = "HTTP/1.1 ";
+        header += Utils::to_string(statusCode) + " OK\r\n";
+        header += "Content-Type: ";
+        if (content_type == TEXT_PLAIN)
+            header += "text/plain";
+        else if (content_type == TEXT_HTML)
+            header += "text/html";
+        header += "\r\n";
+        header += "Content-Length: " + Utils::to_string(response.size()) + "\r\n";
+        header += "\r\n";
+
+        connection.state = CONN_SIMPLE_RESPONSE;
+        connection.data.response = header + response;
+        
+        debuglog(GREEN, "Basic response: \n%s", connection.data.response.c_str());
+    }
+
+    void htmlErrorResponse(HTTPConnxData &connection, int statusCode)
+    {
+        std::string htmlCode;
+        std::string statusText = Constants::statusMessages[statusCode];
+
+        htmlCode = "<!DOCTYPE html>\n";
+        htmlCode += "<html lang = \"en\">\n";
+        htmlCode += "<head>\n";
+        htmlCode += "<meta charset=\"UTF-8\">\n";
+        htmlCode += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
+        htmlCode += "<title>" + Utils::to_string(statusCode) + " " + statusText + "</title>\n";
+        htmlCode += "<style> body {";
+        htmlCode += "display: flex; flex-direction: column; justify-content: center;";
+        htmlCode += "align-items: center; height: 100vh; margin: 0; background-color: black; color: white";
+        htmlCode += "} </style>";
+        htmlCode += "</head>\n";
+        htmlCode += "<body>\n";
+
+        htmlCode += "<h1>" + Utils::to_string(statusCode) + "</h1>\n";
+        htmlCode += "<p>" + statusText + "</p>\n";
+
+        htmlCode += "</body>\n";
+        htmlCode += "</html>\n";
+       // connection.data.statusCode = statusCode;
+        addHTTPHeader(connection, TEXT_HTML, htmlCode, statusCode); 
+
+    }
+}
+#pragma once
+
+#include "HTTPConnxData.hpp"
+
+
+enum CONTENT_TYPE {
+    TEXT_PLAIN = 0,
+    TEXT_HTML = 1
+};
+
+
+namespace SimpleResponse {
+
+    void addHTTPHeader(HTTPConnxData &connections, int content_type, std::string response, int statusCode);
+
+    void htmlErrorResponse(HTTPConnxData &connections, int statusCode);  
+
+} // namespace DirectoryListing#include "SocketUtils.hpp"
+#include "Config.hpp"
+#include "ConfigData.hpp"
+#include "debug.h"
+#include <csignal>
+#include <cstring>
+#include <errno.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <sstream>
+#include <stdlib.h>
+#include <string>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+using std::signal;
+
+namespace SocketUtils {
+
+/**
+ * @brief Initialize the webserver
+ *
+ * This function initializes creating and binding the server
+ * sockets, setting up the pollfd array, and setting up the signal handler for
+ * SIGINT.
+ * It will throw a runtime error if I could not create the server socket. If the
+ * socket could not be bound to the port or could not be set to listening mode.
+ */
+void initialize() {
+  //   serverConfs = Config::getConfigData();
+  setSignalHandlers();
+
+  // create the pollfd array empty but reserved
+  //     Networker::pollfds.reserve(100);
+  // 	Networker::pollfdsIOConnx.reserve(100);
+  //     if (Networker::serverConfs.empty()) {
+  //       debug("Error: config with empty servers\n");
+  //       throw std::runtime_error("Error: config with empty servers");
+  //     }
+  //     // I start the sockets, bind and listen here
+  //     for (size_t i = 0; i < Networker::serverConfs.size(); ++i) {
+  //       const ServerConf& conf = Networker::serverConfs[i];
+
+  //       if (conf.ports.empty()) {
+  //         debug("Error: config with empty ports\n");
+  //         throw std::runtime_error("Error: config with empty ports");
+  //       }
+  //       for (size_t j = 0; j < conf.ports.size(); ++j) {
+  //         uint16_t port = conf.ports[j];
+
+  //         int server_socket = NetUtils::createSocket(port);
+  //         if (server_socket == -1) {
+  //           debug("Error creating server socket\n");
+  //           throw std::runtime_error("Error creating server socket");
+  //         }
+
+  //         if (!NetUtils::listenSocket(server_socket)) {
+  //           debug("Error creating with listening socket\n");
+  //           throw std::runtime_error("Error with listening server socket");
+  //         }
+  //         // add the listening socket to the pollfd array
+  //         // we want to monitor these sockets for read events
+  //         // TODO extract this push_back to utilities?
+  //         struct pollfd server_pollfd;
+  //         server_pollfd.fd = server_socket;
+  //         server_pollfd.events = POLLIN | POLLOUT;
+  //         Networker::pollfds.push_back(server_pollfd);
+  //         Networker::serverSockets.push_back(server_socket);
+  //         // the logic, each fd is mapped to the index where found in the
+  //         server
+  //         // configuration array - so if conf[0] has port 4243 and i create a
+  //         // socket with that port, the index will be 0. every client socket
+  //         // created from that server socket will be mapped to the index 0
+  //         later
+  //         // so i associate the conf to the client connection
+  //         Networker::socketToServerConf[server_socket] = i;
+  //         debug("Added server socket to pollfds and server sockets
+  //         arrays\n");
+  // 	  }
+  //   }
+}
+
+void setSignalHandlers() {
+	signal(SIGINT, handleSignal);
+	signal(SIGQUIT, handleSignal);
+	signal(SIGTERM, handleSignal);
+	signal(SIGHUP, handleHangup);
+	signal(SIGPIPE, handlePipe);
+	struct sigaction sa;
+	sa.sa_handler = handleChild;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;  // Critical flags
+	
+	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+		perror("sigaction");
+		exit(EXIT_FAILURE);
+	}
+}
+
+/**
+ * @brief Handle SIGINT signal and shotdown the server
+ */
+void handleSignal(int signal) {
+  if (signal == SIGINT || signal == SIGQUIT || signal == SIGTERM) {
+    debuglog(YELLOW, "Caught signal %d - Shutting down the server", signal);
+    //   shutdownServer();
+	Config::cleanup();
+    std::exit(0);
+  }
+}
+
+/**
+ * @brief Handle child process termination
+ *
+ * This function is called when a child process terminates
+ * waitpid might change errno so I save it and restore it
+ * the WNOHANG option is used to return immediately if no
+ * child has exited
+ */
+void handleChild(int signal) {
+  debuglog(YELLOW,
+           "Received SIGCHLD signal %d, reaping child ...",
+           signal);
+  int savedErrno;
+
+  savedErrno = errno;
+  while (waitpid(-1, NULL, WNOHANG) > 0)
+    continue;
+  errno = savedErrno;
+}
+
+/**
+ * @brief Handle SIGHUP signal
+ *
+ * Sent when the controlling terminal is closed.
+ * Common Usage: Often used to signal a process to reload its configuration.
+ */
+void handleHangup(int signal) {
+  debug("Received SIGHUP signal %d, reloading configuration...", signal);
+  // TODO insert what to do here
+}
+
+/**
+ * @brief Handle SIGPIPE signal
+ *
+ * It will be ignored. I will get a EPIPE error when writing to a socket
+ * that has been closed by the client
+ */
+void handlePipe(int signal) {
+  debuglog(RED, "Received SIGPIPE signal %d, ignoring...", signal);
+}
+
+/**
+ * @brief Handle SIGALRM signal
+ *
+ * This signal is sent when a timeout with the alarm(timeout) function
+ * has occurred.
+ */
+void handleAlarm(int signal) {
+  debuglog(RED, "Received SIGALRM signal %d for cgi timeout", signal);
+}
+
+/**
+ * @brief Shutdown the server
+ *
+ * This function shuts down the server by closing all server sockets and client
+ * sockets.
+ */
+// void shutdownServer() {
+// 	int maxServerFd = *std::max_element(Networker::serverSockets.begin(),
+// 										Networker::serverSockets.end());
+// 	if (!Networker::serverSockets.empty()) {
+// 	  for (std::vector<struct pollfd>::const_iterator it =
+// 			   Networker::pollfds.begin();
+// 		   it != Networker::pollfds.end(); ++it) {
+// 		int fd = it->fd;
+// 		if (fd <= maxServerFd) {
+// 		  debug("Closing server socket %d\n", fd);
+// 		  close(fd);
+// 		} else {
+// 		  if (it->revents & POLLOUT) {
+// 			debug("Sending 503 Service Unavailable\n");
+// 			// TODO
+// 			// NetUtils::sendErrorResponse(fd, 503, "Service
+// Unavailable");
+// 		  }
+// 		  debug("Closing client socket %d\n", fd);
+// 		  close(fd);
+// 		}
+// 	  }
+// 	}
+//   }
+
+/**
+ * @brief Create a socket and bind it to a port
+ *
+ * @param port The port to bind the socket to
+ * @return int The file descriptor of the created socket
+ */
+int createBindSocket(uint16_t port) {
+  struct sockaddr_in sa;
+  std::memset(&sa, 0, sizeof sa);
+  sa.sin_family = AF_INET;
+  // Bind to all available interfaces - INADDR_ANY
+  sa.sin_addr.s_addr = htonl(INADDR_ANY);
+  sa.sin_port = htons(port);
+
+#ifdef __linux__
+  int server_socket = socket(sa.sin_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+  if (server_socket == -1) {
+    debug("Error - server socket: %s\n", strerror(errno));
+    return -1;
+  }
+#endif
+
+#ifdef __APPLE__
+  int server_socket = socket(sa.sin_family, SOCK_STREAM, 0);
+  if (server_socket == -1) {
+    debug("Error - server socket: %s\n", strerror(errno));
+    return -1;
+  }
+#endif
+
+  // avoiding the address already in use error with SO_REUSEADDR
+  int optval = 1;
+  if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval,
+                 sizeof(optval)) == -1) {
+    debug("Error - server setsockopt: %s\n", strerror(errno));
+    close(server_socket); // TODO should i close all server sockets?
+    return -1;
+  }
+  debug("Created server socket fd: %d on port %d\n", server_socket, port);
+
+// as per subject this code is for macos only
+// Sets the server socket to non-blocking mode - retrieve the flags
+#ifdef __APPLE__
+  int flags = fcntl(server_socket, F_GETFL, 0);
+  if (flags == -1) {
+    debug("Error - fcntl F_GETFL: %s\n", strerror(errno));
+    close(server_socket);
+    return -1;
+  }
+
+  // so we set the flags so the socket to non-blocking
+  if (fcntl(server_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+    debug("Error - fcntl F_SETFL: %s\n", strerror(errno));
+    close(server_socket);
+    return -1;
+  }
+
+  // Set the file descriptor flags to include FD_CLOEXEC
+  int fd_flags = fcntl(server_socket, F_GETFD);
+  if (fd_flags == -1) {
+    debug("Error - fcntl F_GETFD: %s\n", strerror(errno));
+    close(server_socket);
+    return -1;
+  }
+
+  if (fcntl(server_socket, F_SETFD, fd_flags | FD_CLOEXEC) == -1) {
+    debug("Error - fcntl F_SETFD: %s\n", strerror(errno));
+    close(server_socket);
+    return -1;
+  }
+#endif
+
+  int status = bind(server_socket, (struct sockaddr *)&sa, sizeof sa);
+  if (status != 0) {
+    debug("Error - bind port:%d socket %d - %s\n", port, server_socket,
+          strerror(errno));
+    close(server_socket);
+    return -1;
+  }
+  debug("Bound server_socket [%d] to localhost port %d\n", server_socket, port);
+  return server_socket;
+}
+
+/**
+ * @brief Listen on a socket
+ *
+ * @param server_socket The server socket file descriptor
+ * @return bool True if the socket is listening, false if an error occurred
+ */
+bool listenSocket(int server_socket) {
+  int backlog = 10;
+  int status = listen(server_socket, backlog);
+  if (status != 0) {
+    debug("listen error: %s\n", strerror(errno));
+    close(server_socket);
+    return false;
+  }
+  debug("Listening on localhost server fd %d\n", server_socket);
+  return true;
+}
+} // namespace SocketUtils
+
+// /**
+//  * @brief Set the send and receive timeouts for a client socket
+//  *
+//  * @param conf The server configuration
+//  * @param clientfd The client socket file descriptor
+//  *
+//  * I use the values in the server configuration to set the send and receive
+//  * timeouts for the client socket. This is useful for handling slow or
+//  * unresponsive clients.
+//  */
+// void NetUtils::setSendRecTimeout(ServerConf conf, int clientfd) {
+//   // connections timeout rcvd
+//   struct timeval tv;
+//   tv.tv_sec = conf.requestTimeout;
+//   tv.tv_usec = 0;
+//   if (setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+//     debug("setsockopt SO_RCVTIMEO failed");
+//     NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
+//     close(clientfd);
+//   }
+
+//   // Set send timeout
+//   tv.tv_sec = conf.responseTimeout;
+//   if (setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+//     debug("setsockopt SO_SNDTIMEO failed"); // todo check if this works in
+//     cgi NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
+//     close(clientfd);
+//   }
+// }
+
+// /**
+//  * @brief Check for idle connections
+//  *
+//  * This function checks for idle connections by iterating through the
+//  * lastActivityTime map
+//  */
+// void NetUtils::checkForIdleConnections() {
+//   std::time_t now = std::time(NULL);
+//   std::vector<int> idleConnections;
+//   idleConnections.reserve(100);
+//   // lastActivityTime is a map client_fd to the last time active
+//   // so i get tthe serverConf for the client and check
+//   for (std::map<int, time_t>::iterator it =
+//   Networker::lastActivityTime.begin();
+//        it != Networker::lastActivityTime.end(); ++it) {
+//     size_t serveridx = Networker::socketToServerConf[it->first];
+//     if (now - it->second >
+//         Networker::serverConfs[serveridx].keepalive_timeout) {
+//       debug(
+//           "[Server] Detected idle connection %d for a keep-alive timeout of
+//           %d", it->first,
+//           Networker::serverConfs[serveridx].keepalive_timeout);
+//       idleConnections.push_back(it->first);
+//     }
+//   }
+
+//   for (size_t i = 0; i < idleConnections.size(); ++i) {
+//     int fd = idleConnections[i];
+//     for (size_t j = 0; j < Networker::pollfds.size(); ++j) {
+//       if (Networker::pollfds[j].fd == fd) {
+//         debug("[Server] Closing client socket %d", fd);
+//         close(fd);
+//         Networker::deleteFromPollfds(fd);
+//         break;
+//       }
+//     }
+//     Networker::lastActivityTime.erase(fd);
+//     Networker::connectionStates.erase(fd);
+//   }
+//   idleConnections.clear();
+// }
+
+// /**
+//  * @brief Max connection check
+//  *
+//  * @param clientfd The client socket file descriptor
+//  *
+//  * In the server conf we have the max connections allowed for each server if
+//  * specified or a default value. We dont allow new connections in the poll
+//  loop
+//  * if the max connections are reached.
+//  */
+// bool NetUtils::maxConnectionsCheck(int clientfd) {
+//   size_t serveridx = Networker::socketToServerConf[clientfd];
+//   if (Networker::pollfds.size() >=
+//       Networker::serverConfs[serveridx].maxConnections) {
+//     debug("Maximum connections reached, rejecting new connection");
+//     NetUtils::sendErrorResponse(clientfd, 503, "Service Unavailable");
+//     return false;
+//   }
+//   return true;
+// }
+
+// /**
+//  * @brief Print the local address of the client
+//  *
+//  * @param clientfd The client socket file descriptor
+//  * @return bool True if the address was printed successfully, false otherwise
+//  *
+//  * The local address refers to the IP address and port number assigned to the
+//  * server's socket on the local machine. This is the address that the server
+//  * uses to listen for incoming connections from clients.
+//  */
+// bool NetUtils::printLocalAddress(int clientfd) {
+//   struct sockaddr_in local_addr;
+//   socklen_t addr_len = sizeof(local_addr);
+//   if (getsockname(clientfd, (struct sockaddr *)&local_addr, &addr_len) == -1)
+//   {
+//     debug("[Server] getsockname error: %s\n", strerror(errno));
+//     NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
+//     return false;
+//   }
+//   uint16_t local_port = ntohs(local_addr.sin_port);
+//   debug("[Server] Accepted new connection on client socket %d, port %d",
+//         clientfd, local_port);
+//   return true;
+// }
+
+// /**
+//  * @brief Get the client IP address
+//  *
+//  * @param clientfd The client socket file descriptor
+//  * @return std::string The client IP address
+//  */
+// std::string NetUtils::getclient_ip(int clientfd) {
+//   debugcolor(RED, "Getting client IP address for client socket %d",
+//   clientfd); return Networker::remoteAddresses[clientfd];
+// }
+
+// /**
+//  * @brief Custom inet_ntop implementation for IPv4 addresses
+//  *
+//  * @param af The address family
+//  * @param src The source address
+//  * @param dst The destination buffer
+//  * @param size The size of the buffer
+//  * @return const char* The string representation of the address
+//  *
+//  * This function is a custom implementation of inet_ntop for IPv4 addresses.
+//  * It takes an address family, a source address, a destination buffer, and
+//  the
+//  * size of the buffer. It returns the string representation of the address.
+//  * The reason for this custom implementation is that inet_ntop is allowed in
+//  the
+//  * subject for webserv and it is a simple function to implement. Also
+//  * considering that we develop for linux and macos only.
+//  */
+// const char *NetUtils::custom_inet_ntop(int af, const void *src, char *dst,
+//                                        socklen_t size) {
+//   if (af == AF_INET) {
+//     const struct in_addr *addr = static_cast<const struct in_addr *>(src);
+//     unsigned char *bytes = (unsigned char *)&addr->s_addr;
+//     snprintf(dst, size, "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2],
+//     bytes[3]); return dst;
+//   }
+//   errno = EAFNOSUPPORT;
+//   return NULL;
+// }
+
+// /**
+//  * @brief send a generic error response
+//  *
+//  * @param clientfd The client socket file descriptor
+//  * @param status_code The HTTP status code
+//  *
+//  * We have our dedicated error response pages for each status code
+//  * but this is a generic error response that will be sent if we
+//  * dont have the specific error page.
+//  */
+// void NetUtils::sendErrorResponse(int clientfd, int status_code,
+//                                  const char *status_message) {
+//   std::ostringstream oss;
+//   oss << "HTTP/1.1 " << status_code << " " << status_message
+//       << "\r\nContent-Length: 0\r\n\r\n";
+//   std::string response = oss.str();
+//   debugcolor(YELLOW, "Sending error response to client socket %d %s",
+//   clientfd,
+//              response.c_str());
+//   send(clientfd, response.c_str(), strlen(response.c_str()), 0);
+// }
+
+// /**
+//  * @brief [Debug func] Convert a binary buffer to a hex string
+//  *
+//  * @param input The binary buffer to convert
+//  * @param len The length of the buffer
+//  *
+//  * In input I have an array of unsigned chars, binary code like
+//  *   const unsigned char data[] = {0xDE, 0xAD, 0xBE, 0xEF};
+//  * As input I do not need to pass a null terminated string, it supports
+//  binary
+//  * data Good for debugging. A binary buffer can be also of type uint8_t in
+//  * output I will have the same but in hex like "DE AD BE EF" The function
+//  return
+//  * a string which will need to be freed!
+//  */
+// char *NetUtils::binToHex(const unsigned char *input, size_t len) {
+//   char *result;
+
+//   if (input == NULL || len <= 0) {
+//     return (NULL);
+//   }
+
+//   // (2 hexits+space/chr + NULL
+//   size_t resultlen = (len * 3) + 1;
+//   result = new char[resultlen];
+//   std::memset(result, 0, resultlen);
+
+//   for (size_t i = 0; i < len; i++) {
+//     result[i * 3] = "0123456789ABCDEF"[input[i] >> 4];
+//     result[(i * 3) + 1] = "0123456789ABCDEF"[input[i] & 0x0F];
+//     result[(i * 3) + 2] = ' '; // for readability
+//   }
+//   return (result);
+// }
+
+// std::string NetUtils::trim(const std::string &str) {
+//   std::string trimmed = str;
+//   std::string whitespaces = " \r\n\t";
+//   size_t start = trimmed.find_first_not_of(whitespaces);
+//   if (start == std::string::npos) {
+//     return "";
+//   }
+//   size_t end = trimmed.find_last_not_of(whitespaces);
+//   return trimmed.substr(start, end - start + 1);
+// }
+#pragma once
+
+#include <netinet/in.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include "sys/socket.h"
+#include <csignal>
+#include "Config.hpp"
+#include "ConfigData.hpp"
+
+
+namespace SocketUtils {
+	// std::vector<ConfigData> serverConfs;
+	void initialize();
+	void setSignalHandlers();
+	void handleSignal(int signal);
+	void handleChild(int signal);
+	void handleHangup(int signal);
+	void handlePipe(int signal);
+	void handleAlarm(int signal);
+
+	// void shutdownServer();
+	int createBindSocket(uint16_t port);
+	bool listenSocket(int server_socket);
+}
+
+/**
+ * @brief Network Utilities class
+ *
+ * Used to refactor and group network related functions
+ * like creating a socket, listening on it, sending error responses
+ */
+// class NetUtils {
+//  public:
+// //   static void initialize();
+//   static int createSocket(uint16_t port);
+//   static bool listenSocket(int server_socket);
+//   static const char* custom_inet_ntop(int af, const void* src, char* dst, socklen_t size);
+//   static std::string getclient_ip(int clientfd);
+//   static void setSendRecTimeout(ServerConf conf, int clientfd);
+//   static void checkForIdleConnections();
+//   static bool maxConnectionsCheck(int clientfd);
+//   static bool printLocalAddress(int clientfd);
+//   static void shutdownServer();
+//   static void sendErrorResponse(int clientfd, int status_code,
+//                                 const char* status_message);
+//   static char* binToHex(const unsigned char* input, size_t len);
+//   static std::string trim(const std::string& str);
+
+// };#include "URLMatcher.hpp"
+#include "CGI.hpp"
+#include "DirectoryListing.hpp"
+#include "HTTPConnxData.hpp"
+#include "HTTPServer.hpp"
+#include "debug.h"
+#include <map>
+#include <string>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include "SimpleResponse.hpp" // Ensure this header is included
+
+#define BUFFER_SIZE 4096
+
+namespace URLMatcher {
+
+void validateRequest(HTTPConnxData &conn) {
+  debuglog(YELLOW, "Connection on fd %d in state INCOMING", conn.client_fd);
+  // check if the headers are received
+  // if not set to CONN_PARSING_HEADER
+  char buffer[BUFFER_SIZE];
+  int bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+
+  if (bytes_read <= 0) 
+  {
+    if (bytes_read == 0) {
+      debug("Client disconnected");
+	  HTTPServer::remove_from_poll(conn.client_fd);
+	  close(conn.client_fd);
+	  conn.reset();
+	  	
+    } else {
+      perror("recv failed");
+    }
+    conn.reset();
+    return;
+  }
+
+  debuglog(YELLOW, "Received %d bytes from client\n", bytes_read);
+
+  conn.data.request.append(buffer, bytes_read);
+  if (!conn.parsingHeaders(conn.client_fd, conn)) {
+    HTTPServer::remove_from_poll(conn.client_fd);
+    conn.reset();
+    return;
+  }
+  // debugcolor(PASTEL_MAGENTA,"Headers received \n%s",
+  // conn.data.request.c_str());
+  if (!conn.data.headers_received) {
+    return;
+  }
+
+
+    /*
+    ths code to check if directory or file if internal if file listing
+    should be here not in getdir listing
+    */
+   
+
+  // check if the request contain cgi for debug now
+  // if so set to CONN_CGI - hardcoded for now
+  // TODO check if the request is a cgi request
+  if (conn.data.request.find("cgi") != string::npos) 
+  {
+    conn.state = CONN_CGI;
+    debug("CGI request detected");
+    // Start CGI process for this connection
+    if (CGI::prepareCGI(conn) < 0) {
+      conn.reset();
+      return;
+    }
+    // hardcoded for now ---
+  } else if (conn.data.request.find("upload") != string::npos) {
+    conn.state = CONN_UPLOAD;
+    debuglog(YELLOW, "Upload request detected");
+    // TODO prepare fd for upload
+
+    // First chunk - extract filename and open file
+    HTTPServer::extract_filename(buffer, conn.filename);
+
+    conn.file_fd = open(conn.filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (conn.file_fd < 0) {
+      perror("Failed to open file for upload");
+      conn.reset();
+      return;
+    }
+    debuglog(YELLOW, "Starting upload to: %s\n", conn.filename);
+  } else {
+    std::string full_path; // holds the GET target path
+
+
+    std::string root = Config::getConfigByPort(SERVER_PORT)->root; // TODO hardcoded for now: we need to add the port from the config
+    std::string target = conn.data.target;
+    if (target[0] == '/') { // checks for a leading '/' and skips it
+      target = target.substr(1);
+    }
+    // TODO check if index.html or other default file from config exists, if so return it
+    full_path = root + "/" + target;
+    debuglog(YELLOW, "Full path: %s", full_path.c_str());
+    
+    conn.state = CONN_FILE_REQUEST;
+    debuglog(YELLOW, "File request detected");
+
+    if (DirectoryListing::getDIRListing(conn, full_path)) 
+    {
+      conn.state = CONN_SIMPLE_RESPONSE;
+      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      return;
+    } 
+    else {
+        conn.file_fd = open(full_path.c_str(), O_RDONLY);
+        if (conn.file_fd < 0) {
+          perror("Failed to open file");
+          
+          SimpleResponse::htmlErrorResponse(conn, 404);
+          HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+          return;
+        }
+
+      struct stat file_stat;
+      if (fstat(conn.file_fd, &file_stat) < 0) {
+        perror("Failed to get file stats");
+        close(conn.file_fd);
+        conn.state = CONN_SIMPLE_RESPONSE;
+        SimpleResponse::htmlErrorResponse(conn, 404);
+        HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+        // TODO prepare error response
+        return;
+      }
+
+      conn.file_size = file_stat.st_size;
+      debuglog(YELLOW, "Opening file index.html for fd %d", conn.file_fd);
+    }
+
+    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    debuglog(YELLOW, "Sending response to fd %d", conn.client_fd);
+  }
+}
+
+} // namespace URLMatcher#pragma once
+
+#include "HTTPConnxData.hpp"
+#include <map>
+
+/**
+ * This module is called when an incoming request is received
+ * and header are parsed and it will validate the target url
+ * agains the server configuration and change the state of
+ * the connection to either CONN_FILE_REQUEST or CONN_CGI
+ * or CONN_UPLOAD or CONN_SIMPLE_RESPONSE depending on the request
+ * and the server configuration
+ */
+namespace URLMatcher {
+
+void validateRequest(HTTPConnxData &conn);
+
+} // namespace URLMatcher#include "Utils.hpp"#pragma once
+
+#include <sstream>
+#include <string>
+
+using std::string;
+
+namespace Utils {
+
+	inline string to_string(int n) {
+        std::ostringstream oss;
+        oss << n;
+        return oss.str();
+    }
+
+} // UTILS_HPP

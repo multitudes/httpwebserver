@@ -6,6 +6,7 @@
 #include <sstream>
 #include <string>
 #include <cstdlib>
+#include "HTTPServer.hpp"
 
 /** Initialize the static variables */
 std::vector<ServerData> Config::servers;
@@ -891,6 +892,7 @@ Config::Config(std::string filename) {
   // First server configuration
   ServerData server1;
   server1.keepalive_timeout = 5;
+  server1.autoindex = true;
   Location location;
   location.return_directive = std::make_pair(301, "http://42berlin.de/");
   server1.location_blocks["/42"] = location;
@@ -903,8 +905,8 @@ Config::Config(std::string filename) {
   location = Location();
   location.file_upload = true;
   server1.location_blocks["/uploads"] = location;
-  server1.ports.push_back(4244);
-  server1.ports.push_back(4245);
+  server1.ports.push_back(SERVER_PORT);
+ // server1.ports.push_back(4245);
   /* test the servernames with curl -H "Host: myWebserver"
    * http://localhost:4244/ or curl -H "Host: someWebserver"
    * http://localhost:4244/ or curl -H "Host: myWebserver"
@@ -915,7 +917,7 @@ Config::Config(std::string filename) {
   /*
   server1.server_names.push_back("myWebserver");
   server1.server_names.push_back("someWebserver");
-  server1.root = "www";
+  server1.root = "html/www1";
   server1.index = "index.html";
   server1.error_pages.insert(
       std::make_pair(400, server1.root + "/error_pages/400.html"));
@@ -932,7 +934,7 @@ Config::Config(std::string filename) {
   server1.error_pages.insert(
       std::make_pair(502, server1.root + "/error_pages/502.html"));
 
-  server1.upload_dir = "www/uploads";
+  server1.upload_dir = "http/www1/uploads";
   server1.maxBodySize = 100000000;
   server1.acceptedMethods.push_back("GET");
   server1.acceptedMethods.push_back("POST");
@@ -946,14 +948,14 @@ Config::Config(std::string filename) {
   server2.ports.push_back(4246);
   server2.server_names.push_back("myWebserver");
   server2.server_names.push_back("someWebserver");
-  server2.root = "./www/html";
+  server2.root = "http/www2/";
 
   // Third server configuration
   ServerData server3;
   server3.ports.push_back(4247);
   server3.server_names.push_back("myWebserver");
   server3.server_names.push_back("someWebserver");
-  server3.root = "./www/html";
+  server3.root = "http/www3/";
 
   // Add all servers to servers
   servers.push_back(server1);

@@ -73,6 +73,7 @@ bool update_poll_events(int fd, short events) {
 }
 
 // Send HTTP response headers
+//TODO check content type as well
 int send_headers(HTTPConnxData &conn) {
   char headers[512];
   int len = snprintf(headers, sizeof(headers),
@@ -160,11 +161,11 @@ int run() {
     exit(EXIT_FAILURE);
   }
 
-  // printf("Server listening on port %d\n", SERVER_PORT);
+ 
   debug("Server listening on port %d", SERVER_PORT);
   // Add server socket to poll
   add_to_poll(server_fd, POLLIN);
-
+ 
   // Main polling loop
   while (1) {
 
@@ -277,8 +278,12 @@ int run() {
         if (pollfds[i].revents & POLLOUT) {
           debuglog(YELLOW, "Handling write event for connection fd %d",
                    conn.client_fd);
+		  // I first send the headers here since I know it is a file request and 
+		//   I know the file size for the content type and length TODO check content type
           if (!conn.headers_sent) {
             if (send_headers(conn) < 0) {
+			// do i try again? or close?
+			// it will be sending error 500 because local file cannot be read TODO :)
               conn.reset();
             }
           } else {

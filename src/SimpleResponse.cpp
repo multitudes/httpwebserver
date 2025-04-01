@@ -24,30 +24,12 @@ namespace SimpleResponse {
         header += "\r\n";
         header += "Content-Length: " + Utils::to_string(response.size()) + "\r\n";
         header += "\r\n";
+
+        connection.state = CONN_SIMPLE_RESPONSE;
         connection.data.response = header + response;
         
         debuglog(GREEN, "Basic response: \n%s", connection.data.response.c_str());
     }
-
-    // <!DOCTYPE html>
-    // <html lang = "en">
-    //     <head>
-    //         <meta charset="UTF-8">
-    //         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    //         <title>404 Not Found</title>
-    //         <link rel="icon" href="../favicon/favicon.ico" type="image/x-icon">
-    //         <link rel="stylesheet" type="text/css" href="../css/style.css">
-    //     </head>
-    //     <body>
-    //         <div class="rectangle">
-    //             <div class="circle">
-    //                 <h1>404</h1>
-    //                 <p>Page Not Found</p>
-    //             </div>
-    //             <p>The address you were looking for cannot be found or is not valid</p>
-    //         </div>
-    //     </body>
-    // </html>
 
     void htmlErrorResponse(HTTPConnxData &connection, int statusCode)
     {
@@ -74,6 +56,5 @@ namespace SimpleResponse {
         htmlCode += "</html>\n";
        // connection.data.statusCode = statusCode;
         addHTTPHeader(connection, TEXT_HTML, htmlCode, statusCode); 
-
     }
 }
