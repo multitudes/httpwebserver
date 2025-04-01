@@ -150,7 +150,17 @@ int run() {
   int server_fd;
   struct sockaddr_in server_addr;
 
-  if ((server_fd = SocketUtils::createBindSocket(SERVER_PORT)) < 0) {
+  std::vector<ServerData> &serverConfigs = Config::getServerData(NULL);
+    
+    // Create server sockets for each unique port
+    for (size_t i = 0; i < serverConfigs.size(); ++i) {
+        ServerData &server = serverConfigs[i];
+        
+        // Create a socket for each port this server listens on
+        for (size_t j = 0; j < server.ports.size(); ++j) {
+            uint16_t port = server.ports[j];
+
+  if ((server_fd = SocketUtils::createBindSocket(port)) < 0) {
     perror("Socket creation failed");
     exit(EXIT_FAILURE);
   }
@@ -162,10 +172,10 @@ int run() {
   }
 
  
-  debug("Server listening on port %d", SERVER_PORT);
+  debug("Server listening on port %d", port);
   // Add server socket to poll
   add_to_poll(server_fd, POLLIN);
- 
+}}
   // Main polling loop
   while (1) {
 

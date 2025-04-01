@@ -83,7 +83,7 @@ namespace URLMatcher
       // 2. Get Configuration & Construct Path
       // ================================================================
 
-      const ConfigData *config = Config::getConfigByPort(conn.data.port);
+      const ServerData *config = Config::getConfigByPort(conn.data.port);
       if (!config)
       {
         debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
@@ -106,7 +106,7 @@ namespace URLMatcher
         HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
-      std::string full_path = config->root + "/" + target;
+      std::string full_path = config->root + target;
       // path_for_stat is adjusted for reliable stat() calls (removes trailing slash usually)
       std::string path_for_stat = full_path;
 

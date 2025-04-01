@@ -73,6 +73,19 @@ void Config::parseGlobalSettings(const std::string& httpContent, BaseConf &baseC
                 }
             }
         }
+        else if (trimmedLine.find("autoindex") == 0)
+        {
+            std::string autoindexValue = trimmedLine.substr(10);
+            if (autoindexValue == "on") {
+                baseConfig.autoindex = true;
+                debuglog(GREEN, "autoindex: on");
+            } else if (autoindexValue == "off") {
+                baseConfig.autoindex = false;
+                debuglog(GREEN, "autoindex: off");
+            } else {
+                debuglog(YELLOW, "Warning: Invalid autoindex value: %s", autoindexValue.c_str());
+            }
+        }
         else if (trimmedLine.find("maxConnections") == 0) {
           size_t maxConnections;
           if (parseNumericValue(trimmedLine, "maxConnections", 14, maxConnections)) {
@@ -285,7 +298,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
         if (valueEnd != std::string::npos) {
             std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
             serverData.root = value;
-            serverData.upload_dir = value + "/uploads";
+            serverData.upload_dir = value + "uploads";
             debuglog(GREEN, "Server root: %s", serverData.root.c_str());
             debuglog(GREEN, "Server upload_dir: %s", serverData.upload_dir.c_str());
         }
@@ -479,7 +492,7 @@ void Config::parseLocationBlock(const std::string& locationContent, Location& lo
             
             if (valueEnd != std::string::npos) {
                 std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
-                // location.index = value; // Uncomment if you add index field
+                location.index = value; // Uncomment if you add index field
                 debuglog(GREEN, "Location index: %s", value.c_str());
             }
         }
@@ -518,6 +531,7 @@ void Config::parseLocationBlock(const std::string& locationContent, Location& lo
                 debuglog(GREEN, "Location return: %d %s", code, url.c_str());
             }
         }
+
         else if (trimmedLine.find("file_upload") == 0) {
             size_t valueStart = trimmedLine.find_first_not_of(" \t", 11);
             size_t valueEnd = trimmedLine.find(';', valueStart);
@@ -1064,6 +1078,9 @@ void Config::debugprintConfigs() {
                     }
                     debuglog(BLUE, "    Accepted Methods: %s", methods.c_str());
                 }
+                if(!loc.index.empty()) {
+                    debuglog(BLUE, "    Index: %s", loc.index.c_str());
+                }
             }
         }
         
@@ -1230,6 +1247,10 @@ void Config::debugprintServerData(const ServerData& serverData)
                 debuglog(YELLOW, "    alias: %s", loc.alias.c_str());
             }
             
+            if (!loc.index.empty()) {
+                debuglog(YELLOW, "    index: %s", loc.index.c_str());
+            }
+
             debuglog(YELLOW, "    internal: %s", loc.internal ? "true" : "false");
             
             if (loc.return_directive.first != 0) {

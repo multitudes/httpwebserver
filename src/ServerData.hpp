@@ -26,6 +26,7 @@ struct Location {
   std::string upload_dir;
   std::string alias;
   bool internal;
+  std::string index;
   std::pair<int, std::string> return_directive;
   std::map<int, std::string> error_pages;
 
