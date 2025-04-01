@@ -75,54 +75,14 @@ bool update_poll_events(int fd, short events) {
 
 // Send HTTP response headers
 int send_headers(HTTPConnxData &conn) {
-  // char headers[512];
-  
-  // Check if conn.data.response contains Content-Type information from URLMatcher
   if (!conn.data.response.empty()) {
-    // std::string content_type = "text/html"; // Default fallback
-    // std::string response_str = conn.data.response;
-    // size_t content_type_pos = response_str.find("Content-Type: ");
-    
-    // if (content_type_pos != std::string::npos) {
-    //   size_t start = content_type_pos + 14; // Length of "Content-Type: "
-    //   size_t end = response_str.find("\r\n", start);
-    //   if (end != std::string::npos) {
-    //     content_type = response_str.substr(start, end - start);
-    //     debuglog(YELLOW, "HTTPServer: Using Content-Type: %s", content_type.c_str());
-    //   }
-    // }
-    
-    // // Use the extracted content type
-    // int len = snprintf(headers, sizeof(headers),
-    //                   "HTTP/1.1 200 OK\r\n"
-    //                   "Content-Type: %s\r\n"
-    //                   "Content-Length: %ld\r\n"
-    //                   "Connection: keep-alive\r\n\r\n",
-    //                   content_type.c_str(), conn.file_size);
-
     if (send(conn.client_fd, conn.data.response.c_str(), conn.data.response.size(), 0) < 0) {
       perror("Failed to send headers");
       return -1;
     }
     conn.headers_sent = true;
-    return 0;
-  } 
-  else {
-    // // Original behavior if no content type was set in response
-    // int len = snprintf(headers, sizeof(headers),
-    //                   "HTTP/1.1 200 OK\r\n"
-    //                   "Content-Type: text/html\r\n"
-    //                   "Content-Length: %ld\r\n"
-    //                   "Connection: keep-alive\r\n\r\n",
-    //                   conn.file_size);
-
-    // if (send(conn.client_fd, headers, len, 0) < 0) {
-    //   perror("Failed to send headers");
-    //   return -1;
-    // }
-    // conn.headers_sent = true;
-    // return 0;
   }
+  return 0;
 }
 
 int send_file(HTTPConnxData &conn) {
@@ -139,13 +99,13 @@ int send_file(HTTPConnxData &conn) {
     return 0; // EOF
   }
 
-  ssize_t bytes_sent = send(conn.client_fd, buffer, bytes_read, 0);
+  ssize_t bytes_sent = send(conn.client_fd, buffer, static_cast<size_t>(bytes_read), 0);
   if (bytes_sent < 0) {
     perror("Failed to send data");
     return -1;
   }
 
-  conn.data.bytes_sent += bytes_sent;
+  conn.data.bytes_sent += static_cast<size_t>(bytes_sent);
 
   // Check if we've sent the entire file
   if (conn.data.bytes_sent >= conn.file_size) {
@@ -166,7 +126,7 @@ void extract_filename(const char *request, char *filename) {
   if (!end)
     return;
   
-  size_t len = end - start;
+  size_t len = static_cast<size_t>(end - start);
   if (len >= sizeof(connections[0].filename)) {
     len = sizeof(connections[0].filename) - 1;
   }
@@ -189,8 +149,8 @@ int run() {
 	debuglog(RED, "No configuration data found");
     throw std::runtime_error("Error: config with empty ports");
 }
-for (int i = 0; i < configs_.size(); i++) {
-	for (int j = 0; j < configs_[i].ports.size(); j++) {
+for (size_t i = 0; i < configs_.size(); i++) {
+	for (size_t j = 0; j < configs_[i].ports.size(); j++) {
 		int server_fd;
 		if ((server_fd = SocketUtils::createBindSocket(configs_[i].ports[j])) < 0) {
 		  perror("Error creating socket");
@@ -232,7 +192,7 @@ for (int i = 0; i < configs_.size(); i++) {
       continue; // Timeout
     }
     // Process events on file descriptors
-    for (int i = 0; i < pollfds.size(); i++) {
+    for (size_t i = 0; i < pollfds.size(); i++) {
       if (!(pollfds[i].revents & (POLLIN | POLLOUT))) {
         continue; // No events on this fd
       }
@@ -262,7 +222,7 @@ for (int i = 0; i < configs_.size(); i++) {
 
       // Handle new connections on server socket
 
-	  for (int j = 0; j < serverSockets.size(); j++) {
+	  for (size_t j = 0; j < serverSockets.size(); j++) {
 		int server_fd = serverSockets[j];
 		if (current_fd == server_fd && (pollfds[i].revents & POLLIN)) {
 			struct sockaddr_in client_addr;
@@ -451,7 +411,7 @@ for (int i = 0; i < configs_.size(); i++) {
         // Handle data from client and send to cgi
         if (current_fd == conn.client_fd && (pollfds[i].revents & POLLIN)) {
           char buffer[BUFFER_SIZE];
-          int bytes_read = 0;
+          ssize_t bytes_read = 0;
           if (conn.data.request.empty()) {
             bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
             if (bytes_read <= 0) {
@@ -463,13 +423,13 @@ for (int i = 0; i < configs_.size(); i++) {
               conn.reset();
               continue;
             }
-            printf("Received %d bytes from client\n", bytes_read);
+            printf("Received %ld bytes from client\n", bytes_read);
           } else {
             bytes_read = conn.data.request.size();
             memcpy(buffer, conn.data.request.c_str(), conn.data.request.size());
           }
           // Forward data to CGI process
-          int bytes_written =
+          ssize_t bytes_written =
               write(conn.child_stdin_pipe[1], buffer, bytes_read);
           if (bytes_written < 0) {
             perror("Write to CGI failed");
@@ -490,7 +450,7 @@ for (int i = 0; i < configs_.size(); i++) {
         if (conn.child_stdout_pipe[0] == current_fd &&
             (pollfds[i].revents & POLLIN)) {
           char buffer[BUFFER_SIZE];
-          int bytes_read = read(conn.child_stdout_pipe[0], buffer, BUFFER_SIZE);
+          ssize_t bytes_read = read(conn.child_stdout_pipe[0], buffer, BUFFER_SIZE);
           if (bytes_read <= 0) {
             // CGI process closed pipe or error
             if (bytes_read == 0) {

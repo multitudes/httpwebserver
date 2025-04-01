@@ -171,7 +171,7 @@ namespace URLMatcher
           file_extension = path_for_stat.substr(dot_position);
           // Convert to lowercase for case-insensitive comparison
           for (size_t i = 0; i < file_extension.length(); i++) {
-            file_extension[i] = std::tolower(file_extension[i]);
+            file_extension[i] = static_cast<char>(std::tolower(file_extension[i]));
           }
           
           debuglog(GREEN, "URLMatcher: Looking up MIME type for extension: '%s'", file_extension.c_str());
@@ -259,7 +259,7 @@ namespace URLMatcher
               file_extension = index_file_path.substr(dot_position);
               // Convert to lowercase for case-insensitive comparison
               for (size_t i = 0; i < file_extension.length(); i++) {
-                file_extension[i] = std::tolower(file_extension[i]);
+                file_extension[i] = static_cast<char>(std::tolower(file_extension[i]));
               }
               
               // Check for file extension in mime types map

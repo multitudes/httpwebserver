@@ -11,6 +11,14 @@ Config *Config::instance_ = NULL;
 std::string Config::_filename = "config/default.conf"; // Default filename
 std::map<uint16_t, ConfigData *> Config::port_map_;
 
+/* test the servernames with curl -H "Host: myWebserver"
+ * http://localhost:4244/ or curl -H "Host: someWebserver"
+ * http://localhost:4244/ or curl -H "Host: myWebserver"
+ * http://localhost:4245/ or curl -H "Host: someWebserver"
+ * http://localhost:4245/ or nc localhost 4244 and GET / HTTP/1.1 Host:
+ * myWebserver
+ */
+
 /**
  * @brief Constructor for the Config class
  *
@@ -34,6 +42,11 @@ Config::Config(std::string filename) {
   server1.maxBodySize = 10000000;
   server1.autoindex = false;
 
+  server1.acceptedMethods.push_back("GET");
+  server1.acceptedMethods.push_back("POST");
+  server1.acceptedMethods.push_back("DELETE");
+  server1.acceptedMethods.push_back("PUT");
+
   server1.error_pages.insert(
 	  std::make_pair(400, server1.root + "/error_pages/400.html"));
   server1.error_pages.insert(
@@ -56,6 +69,7 @@ Config::Config(std::string filename) {
 	server1.server_names.push_back("someWebserver");
 	server1.root = "html/www1";
 	server1.index = "index.html";
+	server1.upload_dir = "html/www1/uploads";
 
   // first server block location
   Location location;
@@ -87,29 +101,26 @@ Config::Config(std::string filename) {
   location.autoindex = false;
   location.internal = false;
   location.alias = "html/www1/";
-  location.upload_dir = "uploads/";
   location.file_upload = true;
+  location.upload_dir = "uploads/";
   server1.location_blocks["/uploads"] = location;
 
-  /* test the servernames with curl -H "Host: myWebserver"
-   * http://localhost:4244/ or curl -H "Host: someWebserver"
-   * http://localhost:4244/ or curl -H "Host: myWebserver"
-   * http://localhost:4245/ or curl -H "Host: someWebserver"
-   * http://localhost:4245/ or nc localhost 4244 and GET / HTTP/1.1 Host:
-   * myWebserver
-   */
-
-
-  server1.upload_dir = "html/www1/uploads";
-  server1.maxBodySize = 100000000;
-  server1.acceptedMethods.push_back("GET");
-  server1.acceptedMethods.push_back("POST");
-  server1.acceptedMethods.push_back("DELETE");
-  server1.acceptedMethods.push_back("PUT");
   server1.cgiData.upload_dir = "www/uploads";
   server1.cgiData.cgi_path_alias = std::make_pair("/cgi", "/cgi-bin");
   server1.cgiData.cgi_extensions.push_back("cgi");
   server1.cgiData.cgi_extensions.push_back("py");
+
+location = Location();
+  location.autoindex = false;
+  location.internal = false;
+  location.file_upload = true;
+  location.upload_dir = "/tmp/uploads";
+  location.acceptedMethods.push_back("POST");
+  location.acceptedMethods.push_back("PUT");
+  location.acceptedMethods.push_back("DELETE");
+  location.acceptedMethods.push_back("GET");
+  server1.location_blocks["/mypictures"] = location;
+
   // Second server configuration
   ConfigData server2;
 
@@ -137,8 +148,8 @@ Config::Config(std::string filename) {
       std::make_pair(502, server1.root + "/error_pages/502.html"));
 
   server2.ports.push_back(4246);
-  server2.server_names.push_back("myWebserver");
-  server2.server_names.push_back("someWebserver");
+  server2.server_names.push_back("myWebserver2");
+  server2.server_names.push_back("someWebserver2");
   server2.index = "index.html";
   server2.root = "html/www2";
 
