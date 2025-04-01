@@ -10,8 +10,14 @@
 struct CGIData {
   std::pair<std::string, std::string> cgi_path_alias;
   std::string upload_dir;
+  std::vector<std::string> file_extensions;  // Added for .cgi .py
+  std::vector<std::string> limit_except;     // Added for GET POST DELETE PUT
+  bool deny_all;                            // Added for "deny all"
 
-  CGIData() : cgi_path_alias(), upload_dir() {}
+  CGIData() : 
+    cgi_path_alias(), 
+    upload_dir(),
+    deny_all(false) {}
 };
 
 struct Location {
@@ -55,10 +61,15 @@ struct BaseConf {
     maxBodySize(10000000),
     autoindex(false),
     file_server(true),
-    upload_dir("./www/uploads") {
+    upload_dir("./www/uploads")
+    {
       defaultheaders["Content-Type"] = "text/html";
       defaultheaders["Server"] = "nginx/1.18.0";
       defaultheaders["Connection"] = "keep-alive";
+      acceptedMethods.push_back("GET");
+      acceptedMethods.push_back("POST");
+      acceptedMethods.push_back("DELETE");
+      acceptedMethods.push_back("PUT");
     }
 };
 
@@ -75,12 +86,12 @@ struct ServerData : public BaseConf {
   bool has_locations;
 
   ServerData() :
-    BaseConf(),
     serverListenAddress("localhost"),
     index("index.html"),
     root("www"),
     cgi_exists(false),
-    has_locations(false) {}
+    has_locations(false)
+    {};
 
   bool hasCGI() const { return cgi_exists; }
   bool hasDirectives() const { return has_locations; }

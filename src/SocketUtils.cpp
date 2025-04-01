@@ -38,7 +38,7 @@ void initialize() {
   // 	Networker::pollfdsIOConnx.reserve(100);
   //     if (Networker::serverConfs.empty()) {
   //       debug("Error: config with empty servers\n");
-  //       throw std::runtime_error("Error: config with empty servers");
+  //       servers std::runtime_error("Error: config with empty servers");
   //     }
   //     // I start the sockets, bind and listen here
   //     for (size_t i = 0; i < Networker::serverConfs.size(); ++i) {
