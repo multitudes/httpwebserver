@@ -10,31 +10,31 @@
 #include <sstream>
 #include "Utils.hpp"
 
+using std::string;
+
 namespace SimpleResponse {
 
-    void addHTTPHeader(HTTPConnxData &connection, int content_type, std::string response, int statusCode)
+    // addd HTTP header to the response and set the response
+    void addHTTPHeader(HTTPConnxData &connection, string contentType, std::string response, int statusCode)
     {
-        std::string header = "HTTP/1.1 ";
+        string header = "HTTP/1.1 ";
         header += Utils::to_string(statusCode) + " OK\r\n";
-        header += "Content-Type: ";
-        if (content_type == TEXT_PLAIN)
-            header += "text/plain";
-        else if (content_type == TEXT_HTML)
-            header += "text/html";
+        header += "Content-Type: " + contentType + "\r\n";
         header += "\r\n";
         header += "Content-Length: " + Utils::to_string(response.size()) + "\r\n";
         header += "\r\n";
 
-        connection.state = CONN_SIMPLE_RESPONSE;
         connection.data.response = header + response;
         
         debuglog(GREEN, "Basic response: \n%s", connection.data.response.c_str());
     }
 
+    // generate a simple HTML error response
     void htmlErrorResponse(HTTPConnxData &connection, int statusCode)
     {
-        std::string htmlCode;
-        std::string statusText = Constants::statusMessages[statusCode];
+        string htmlCode;
+        string statusText = Constants::statusMessages[statusCode];
+        string contentType = Constants::mimeTypes["html"];
 
         htmlCode = "<!DOCTYPE html>\n";
         htmlCode += "<html lang = \"en\">\n";
@@ -55,6 +55,19 @@ namespace SimpleResponse {
         htmlCode += "</body>\n";
         htmlCode += "</html>\n";
        // connection.data.statusCode = statusCode;
-        addHTTPHeader(connection, TEXT_HTML, htmlCode, statusCode); 
+        addHTTPHeader(connection, contentType, htmlCode, statusCode); 
     }
+
+    // generate a simple text response
+    void simpleStatusResponse(HTTPConnxData &connection, int statusCode)
+    {
+        string response;
+        string statusText = Constants::statusMessages[statusCode];
+        string contentType = Constants::mimeTypes["text"];
+
+        response = Utils::to_string(statusCode) + statusText;
+        addHTTPHeader(connection, contentType, response, statusCode); 
+    }
+
+
 }

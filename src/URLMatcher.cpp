@@ -1,16 +1,19 @@
 #include "URLMatcher.hpp"
-#include "CGI.hpp"              // Include if needed for other logic
-#include "DirectoryListing.hpp" // Include your original DirectoryListing header
+#include "CGI.hpp"              
+#include "DirectoryListing.hpp" 
 #include "HTTPConnxData.hpp"
-#include "HTTPServer.hpp" // For poll updates, SERVER_PORT, connections map etc.
+#include "HTTPServer.hpp" 
 #include "debug.h"
-#include <sys/stat.h>   // For stat()
-#include <fcntl.h>      // For open()
-#include <unistd.h>     // For close(), fstat()
-#include <sys/socket.h> // For recv()
-#include <string>       // Make sure std::string is included
+#include <sys/stat.h>  
+#include <fcntl.h> 
+#include <unistd.h>
+#include <sys/socket.h>
+#include <string>       
 #include "SimpleResponse.hpp"
 #include "Config.hpp" // For Config::getConfigByPort()
+#include "Constants.hpp"
+
+using std::string;
 
 namespace URLMatcher
 {
@@ -23,7 +26,7 @@ namespace URLMatcher
   void validateRequest(HTTPConnxData &conn)
   {
     // ================================================================
-    // 1. Receive Request & Parse Headers (Keep your existing logic)
+    // 1. Receive Request & Parse Headers
     //    This assumes conn.data.request is populated and headers are
     //    parsed, setting conn.data.headers_received = true, and
     //    populating conn.data.method, conn.data.target etc.
@@ -92,23 +95,39 @@ namespace URLMatcher
         return;
       }
 
+      //check for location
+      
+  
+
+      //check for redirect
+
+      //test text response
+      // SimpleResponse::addHTTPHeader(conn, Constants::mimeTypes["text"], "Hello World", 200);
+      // HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      // return;
+     
+      //test simpleStatus response
+      // SimpleResponse::addHTTPHeader(conn, "text/plain", "Hello World", 200);
+      // HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      // return;
+
       // build the full path to the target
-      std::string target = conn.data.target;
+      string target = conn.data.target;
       if (!target.empty() && target[0] == '/')
       {
         target = target.substr(1);
       }
       // Basic directory traversal check, to block attack method like ../../../etc/passwd
-      if (target.find("..") != std::string::npos)
+      if (target.find("..") != string::npos)
       {
         debuglog(RED, "URLMatcher: Directory traversal attempt detected: %s", conn.data.target.c_str());
         SimpleResponse::htmlErrorResponse(conn, 400); // Bad Request
         HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
-      std::string full_path = config->root + "/" + target;
+      string full_path = config->root + "/" + target;
       // path_for_stat is adjusted for reliable stat() calls (removes trailing slash usually)
-      std::string path_for_stat = full_path;
+      string path_for_stat = full_path;
 
       // Adjust path_for_stat (C++98 compliant): remove trailing slash unless it's just the root path itself
       if (path_for_stat.length() > config->root.length() + 1 && path_for_stat[path_for_stat.length() - 1] == '/')
@@ -165,7 +184,7 @@ namespace URLMatcher
         debuglog(YELLOW, "URLMatcher: Target is a directory '%s'", full_path.c_str()); // Use original path for context
 
         // --- Check for index file FIRST ---
-        std::string index_file_path = full_path;
+        string index_file_path = full_path;
         // Ensure directory path ends with '/' before appending index name for consistency
         if (index_file_path.empty() || index_file_path[index_file_path.length() - 1] != '/')
         {
