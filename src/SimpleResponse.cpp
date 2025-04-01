@@ -56,6 +56,5 @@ namespace SimpleResponse {
         htmlCode += "</html>\n";
        // connection.data.statusCode = statusCode;
         addHTTPHeader(connection, TEXT_HTML, htmlCode, statusCode); 
-
     }
 }

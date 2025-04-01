@@ -12,10 +12,6 @@
 #include "SimpleResponse.hpp"
 #include "Config.hpp" // For Config::getConfigByPort()
 
-#ifndef BUFFER_SIZE
-#define BUFFER_SIZE 4096 // Define if not globally available
-#endif
-
 namespace URLMatcher
 {
 
@@ -35,9 +31,10 @@ namespace URLMatcher
     // Example placeholder for receiving/parsing if not done earlier:
     if (conn.data.request.empty() || !conn.data.headers_received)
     {
-      char buffer[BUFFER_SIZE];
+      char buffer[BUFFER_SIZE + 1];
+	  
       // Ensure BUFFER_SIZE > 0 for recv
-      int bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE > 0 ? BUFFER_SIZE - 1 : 0, 0);
+      int bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
 
       if (bytes_read <= 0)
       {
