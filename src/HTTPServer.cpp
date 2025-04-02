@@ -504,6 +504,8 @@ int run() {
         continue;
       }
     }
+	// after every loop i check for idle connections
+	SocketUtils::checkForIdleConnections();
   }
   // Cleanup
   // TODO
