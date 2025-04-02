@@ -13,4 +13,7 @@ namespace Utils {
         return oss.str();
     }
 
+	char *binToHex(const unsigned char *input, size_t len) ;
+	string trim(const string &str);
+
 } // UTILS_HPP
