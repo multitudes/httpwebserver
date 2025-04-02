@@ -46,7 +46,7 @@ void add_to_poll(int fd, short events) {
   
   // Update events for an existing fd
   // Returns true if found and updated, false otherwise
-  bool update_poll_events(int fd, short events) {
+  bool SocketUtils::update_poll_events(int fd, short events) {
 	for (HTTPServer::PollfdsVector::iterator it = HTTPServer::pollfds.begin(); it != HTTPServer::pollfds.end();
 		 ++it) {
 	  if (it->fd == fd) {
@@ -363,7 +363,7 @@ void checkForIdleConnections() {
         debuglog(YELLOW, "Closing client socket %d", fd);
         close(fd);
         // TODO send a 408 Request Timeout response to the client before closing
-        HTTPServer::remove_from_poll(fd);
+        remove_from_poll(fd);
         break;
       }
     }

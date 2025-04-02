@@ -35,7 +35,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     } else {
       perror("URLMatcher: recv failed");
     }
-    HTTPServer::remove_from_poll(conn.client_fd);
+    SocketUtils::remove_from_poll(conn.client_fd);
     close(conn.client_fd);
     conn.reset();
     HTTPServer::connections.erase(conn.client_fd);
@@ -60,7 +60,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     return false;
   case PARSE_ERROR:
     debuglog(RED, "Error parsing headers");
-    HTTPServer::remove_from_poll(conn.client_fd);
+    SocketUtils::remove_from_poll(conn.client_fd);
     conn.reset();
     conn.state = CONN_SIMPLE_RESPONSE;
     debuglog(RED, "Error parsing headers");
@@ -84,7 +84,7 @@ bool constructTargetPath(HTTPConnxData &conn) {
     debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
     SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
     conn.state = CONN_SIMPLE_RESPONSE;
-    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
     return false;
   }
 
@@ -99,7 +99,7 @@ bool constructTargetPath(HTTPConnxData &conn) {
              conn.data.target.c_str());
     SimpleResponse::htmlErrorResponse(conn, 400); // Bad Request
     conn.state = CONN_SIMPLE_RESPONSE;
-    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
     return false;
   }
 
@@ -182,7 +182,7 @@ bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat,
     SimpleResponse::htmlErrorResponse(conn,
                                       403); // Forbidden is a common reason
     conn.state = CONN_SIMPLE_RESPONSE;
-    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
     return false;
   }
 
@@ -195,7 +195,7 @@ bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat,
   debuglog(GREEN,
            "URLMatcher: Set state to CONN_FILE_REQUEST for fd %d, size %ld",
            conn.client_fd, conn.file_size);
-  HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+  SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
   return true;
 }
 
@@ -216,7 +216,7 @@ bool handleIndexFile(HTTPConnxData &conn, const string &index_file_path,
     perror("URLMatcher: Failed to open existing index file");
     SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
     conn.state = CONN_SIMPLE_RESPONSE;
-    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
     return false;
   }
 
@@ -233,7 +233,7 @@ bool handleIndexFile(HTTPConnxData &conn, const string &index_file_path,
       GREEN,
       "URLMatcher: Set state to CONN_FILE_REQUEST for index fd %d, size %ld",
       conn.client_fd, conn.file_size);
-  HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+  SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
   return true;
 }
 
@@ -247,7 +247,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
     debuglog(RED, "URLMatcher: Autoindex is disabled.");
     SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden to list directory
     conn.state = CONN_SIMPLE_RESPONSE;
-    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
     return false;
   }
 
@@ -259,7 +259,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
     debuglog(GREEN,
              "URLMatcher: getDIRListing prepared listing response for fd %d.",
              conn.client_fd);
-    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
     return true;
   } else {
     debuglog(RED,
@@ -268,7 +268,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
              conn.client_fd);
     SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
     conn.state = CONN_SIMPLE_RESPONSE;
-    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
     return false;
   }
 }
@@ -301,7 +301,7 @@ void validateRequest(HTTPConnxData &conn) {
       // conn.path_for_stat.c_str());
       conn.state = CONN_SIMPLE_RESPONSE;
       SimpleResponse::htmlErrorResponse(conn, 404); // Not Found
-      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return;
     }
 
@@ -348,7 +348,7 @@ void validateRequest(HTTPConnxData &conn) {
       SimpleResponse::htmlErrorResponse(
           conn, 403); // Forbidden - don't serve unusual file types
       conn.state = CONN_SIMPLE_RESPONSE;
-      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
     }
   }
 } // end of validateRequest

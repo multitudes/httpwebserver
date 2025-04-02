@@ -136,7 +136,7 @@ int run() {
         throw std::runtime_error("Error listening on socket");
       }
       serverSockets.push_back(server_fd);
-      add_to_poll(server_fd, POLLIN);
+      SocketUtils::add_to_poll(server_fd, POLLIN);
       //   int port = configs_[i].ports[j];
       debuglog(GREEN, "Server listening on port %d", configs_[i].ports[j]);
     }
@@ -176,14 +176,14 @@ int run() {
                    strerror(error));
         }
         connections[pollfds[i].fd].reset();
-        remove_from_poll(pollfds[i].fd);
+        SocketUtils::remove_from_poll(pollfds[i].fd);
         continue;
       }
 
       if (pollfds[i].revents & POLLHUP) {
         debuglog(RED, "Connection closed by client on fd %d ", pollfds[i].fd);
         connections[pollfds[i].fd].reset();
-        remove_from_poll(pollfds[i].fd);
+        SocketUtils::remove_from_poll(pollfds[i].fd);
         continue;
       }
 
@@ -223,7 +223,7 @@ int run() {
 
           HTTPConnxData &conn = connections[client_fd];
           conn.client_fd = client_fd;
-          add_to_poll(client_fd, POLLIN);
+          SocketUtils::add_to_poll(client_fd, POLLIN);
           conn.state = CONN_INCOMING;
 
 		  // Store client IP address
@@ -274,13 +274,13 @@ int run() {
                             conn.data.response.size(), 0);
         if (sent < 0) {
           perror("Failed to send simple response");
-          remove_from_poll(conn.client_fd);
+          SocketUtils::remove_from_poll(conn.client_fd);
           conn.reset();
         }
         conn.data.headers_received = false;
         conn.data = HTTPConnxData::ConnectionData();
         conn.state = CONN_INCOMING;
-        update_poll_events(current_fd, POLLIN);
+        SocketUtils::update_poll_events(current_fd, POLLIN);
         debuglog(YELLOW, "Switched connection %d fd back to POLLIN",
                  conn.client_fd);
         continue;
@@ -312,7 +312,7 @@ int run() {
               conn.reset();
 
               // Switch back to POLLIN for the next request
-              update_poll_events(current_fd, POLLIN);
+              SocketUtils::update_poll_events(current_fd, POLLIN);
               conn.state = CONN_INCOMING;
 
               debuglog(YELLOW, "Switched connection %d fd back to POLLIN",
@@ -353,7 +353,7 @@ int run() {
                        bytes_written, conn.filename, conn.bytes_received);
               conn.upload_completed = true;
               close(conn.file_fd);
-              update_poll_events(current_fd, POLLOUT);
+              SocketUtils::update_poll_events(current_fd, POLLOUT);
               conn.reset();
             } else {
               continue;
@@ -388,7 +388,7 @@ int run() {
               debuglog(YELLOW, "Written %ld bytes to %s (total: %zu)\n",
                        bytes_written, conn.filename, conn.bytes_received);
               conn.upload_completed = true;
-              update_poll_events(current_fd, POLLOUT);
+              SocketUtils::update_poll_events(current_fd, POLLOUT);
             } else {
               continue;
             }
@@ -434,8 +434,8 @@ int run() {
             close(conn.child_stdin_pipe[1]);
             conn.is_sending = 0;
             conn.is_receiving = 1;
-            update_poll_events(conn.child_stdin_pipe[1], 0); // Remove POLLOUT
-            update_poll_events(conn.child_stdout_pipe[0], POLLIN);
+            SocketUtils::update_poll_events(conn.child_stdin_pipe[1], 0); // Remove POLLOUT
+            SocketUtils::update_poll_events(conn.child_stdout_pipe[0], POLLIN);
           }
         }
         // Handle data from CGI process (ready to write to client from cgi)

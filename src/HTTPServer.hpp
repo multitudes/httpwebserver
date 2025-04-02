@@ -52,17 +52,6 @@ extern std::vector<int> serverSockets;
 extern std::map<int, HTTPConnxData> connections;
 extern std::map<int, std::time_t> lastActivityTime;
 
-// Add a file descriptor to the poll array
-void add_to_poll(int fd, short events);
-
-// Remove a fd by swapping with last element (O(1))
-void remove_from_poll(int fd);
-
-// Update events for an existing fd
-bool update_poll_events(int fd, short events);
-// void extract_filename(const char *request, char *filename);
-
-
 int run();
 
 
