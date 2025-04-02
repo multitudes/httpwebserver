@@ -5,6 +5,7 @@
 #include <stdlib.h> // for strtoul
 #include <string>
 #include <unistd.h>
+#include <cstring>
 
 using std::map;
 using std::string;
