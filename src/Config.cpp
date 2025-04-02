@@ -7,7 +7,6 @@
 #include <string>
 #include <cstdlib>
 #include "HTTPServer.hpp"
-#include "Constants.hpp"
 
 /** Initialize the static variables */
 std::vector<ServerData> Config::servers;
@@ -48,7 +47,7 @@ void Config::parseGlobalSettings(const std::string& httpContent, BaseConf &baseC
 {
     std::istringstream iss(httpContent);
     std::string line;
-    
+
     while (std::getline(iss, line)) {
         // Trim whitespace
         size_t start = line.find_first_not_of(" \t\n\r");
@@ -72,19 +71,6 @@ void Config::parseGlobalSettings(const std::string& httpContent, BaseConf &baseC
                     baseConfig.maxBodySize = maxBodySize;
                     debuglog(GREEN, "maxBodySize: %lu", baseConfig.maxBodySize);
                 }
-            }
-        }
-        else if (trimmedLine.find("autoindex") == 0)
-        {
-            std::string autoindexValue = trimmedLine.substr(10);
-            if (autoindexValue == "on") {
-                baseConfig.autoindex = true;
-                debuglog(GREEN, "autoindex: on");
-            } else if (autoindexValue == "off") {
-                baseConfig.autoindex = false;
-                debuglog(GREEN, "autoindex: off");
-            } else {
-                debuglog(YELLOW, "Warning: Invalid autoindex value: %s", autoindexValue.c_str());
             }
         }
         else if (trimmedLine.find("maxConnections") == 0) {
@@ -115,7 +101,36 @@ void Config::parseGlobalSettings(const std::string& httpContent, BaseConf &baseC
             debuglog(GREEN, "keepalive_timeout: %d", baseConfig.keepalive_timeout);
         }
         }
-        // Add more global settings as needed
+        else if (trimmedLine.find("autoindex") == 0 && !baseConfig.parsedindex)
+        {
+            baseConfig.parsedindex = true;
+            size_t valueStart = trimmedLine.find_first_not_of(" \t", 9); // Skip "autoindex"
+            size_t valueEnd = trimmedLine.find(';', valueStart);
+
+            int counts = 0;
+            debuglog(GREEN, "autoindex: %s , time: %d", trimmedLine.c_str(), ++counts);
+            
+            std::string autoindexValue;
+            if (valueEnd != std::string::npos) {
+                autoindexValue = trimmedLine.substr(valueStart, valueEnd - valueStart);
+            } else {
+                autoindexValue = trimmedLine.substr(valueStart);
+            }
+            
+            // Trim trailing whitespace
+            autoindexValue = autoindexValue.substr(0, autoindexValue.find_last_not_of(" \t") + 1);
+            
+            if (autoindexValue == "on") {
+                baseConfig.autoindex = true;
+                debuglog(GREEN, "autoindex: on");
+            } else if (autoindexValue == "off") {
+                baseConfig.autoindex = false;
+                debuglog(GREEN, "autoindex: off");
+            } else {
+                debuglog(YELLOW, "Warning: Invalid autoindex value: %s", autoindexValue.c_str());
+            }
+        }
+      
         else if (trimmedLine.find("error_page") == 0 && trimmedLine.find("{") != std::string::npos) {
           // Handle error_page block
           size_t blockStart = trimmedLine.find("{");
@@ -133,6 +148,7 @@ void Config::parseGlobalSettings(const std::string& httpContent, BaseConf &baseC
           }
       }
     }
+    debuglog(GREEN, "Parsed global settings\n\n");
 }
 
 
@@ -192,6 +208,7 @@ void Config::parseServerBlocks(const std::string& httpContent, HttpConfig& httpC
     // Look for server blocks in the content
     size_t pos = 0;
     int serverBlockCount = 0;
+
     
     while (true) {
         // Find the next server block
@@ -243,20 +260,24 @@ void Config::parseServerBlocks(const std::string& httpContent, HttpConfig& httpC
         // Parse this server block (create a new ServerData)
 
 
-        ServerData serverData;
+        ServerData ServerData;
      
         // Copy base settings first
-        static_cast<BaseConf&>(serverData) = baseConfig;    
+        static_cast<BaseConf&>(ServerData) = baseConfig;   
+        //ServerData.upload_dir = baseConfig.upload_dir;
+        ServerData.acceptedMethods = baseConfig.acceptedMethods; 
+        //debuglog(GREEN, "ServerData initialized with base settings, before server parsing\n\n\n");
+        //debugprintServerData(ServerData);
  
         // Copy global settings to server data
-        // static_cast<BaseConf&>(serverData) = baseConfig;
+        // static_cast<BaseConf&>(ServerData) = baseConfig;
         // Parse the server block content
-        parseServerBlock(serverBlockContent, serverData);
+        parseServerBlock(serverBlockContent, ServerData);
          
         // Add the parsed server to the config
-        httpConfig.servers.push_back(serverData);
+        httpConfig.servers.push_back(ServerData);
 
-        debugprintServerData(serverData);
+        //debugprintServerData(ServerData);
         
         // Move past this server block for the next iteration
         pos = blockEnd + 1;
@@ -266,7 +287,7 @@ void Config::parseServerBlocks(const std::string& httpContent, HttpConfig& httpC
 }
 
 
-void Config::parseServerBlock(const std::string& serverBlockContent, ServerData& serverData)
+void Config::parseServerBlock(const std::string& serverBlockContent, ServerData& ServerData)
 {
     std::istringstream iss(serverBlockContent);
     std::string line;
@@ -289,7 +310,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
           
           if (valueEnd != std::string::npos) {
               std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
-              serverData.serverListenAddress = value;
+              ServerData.serverListenAddress = value;
           }
       }
       else if (trimmedLine.find("root") == 0) {
@@ -298,10 +319,10 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
         
         if (valueEnd != std::string::npos) {
             std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
-            serverData.root = value;
-            serverData.upload_dir = value + "uploads";
-            debuglog(GREEN, "Server root: %s", serverData.root.c_str());
-            debuglog(GREEN, "Server upload_dir: %s", serverData.upload_dir.c_str());
+            ServerData.root = value;
+            ServerData.upload_dir = value + "uploads";
+            debuglog(GREEN, "Server root: %s", ServerData.root.c_str());
+            debuglog(GREEN, "Server upload_dir: %s", ServerData.upload_dir.c_str());
         }
     }
         else if (trimmedLine.find("listen") == 0) {
@@ -312,7 +333,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
                 uint16_t port = static_cast<uint16_t>(atoi(portStr.c_str()));
                 
                 if (port > 0 && port <= 65535) {
-                    serverData.ports.push_back(port);
+                    ServerData.ports.push_back(port);
                     debuglog(GREEN, "Server listening on port: %u", port);
                 } else {
                     debuglog(RED, "Invalid port number: %s", portStr.c_str());
@@ -333,7 +354,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
                 
                 // Read each name separated by whitespace
                 while (nameStream >> name) {
-                    serverData.server_names.push_back(name);
+                    ServerData.server_names.push_back(name);
                     debuglog(GREEN, "Server name: %s", name.c_str());
                 }
             }
@@ -345,7 +366,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
             if (valueEnd != std::string::npos) {
                 std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
                 if (value == "on") {
-                    serverData.autoindex = true;
+                    ServerData.autoindex = true;
                     debuglog(GREEN, "Server autoindex: on");
                 }
             }
@@ -366,7 +387,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
                 // Parse allowed methods
                 while (methodStream >> method) {
                     if (method != "{") {
-                        serverData.limit_except.push_back(method);
+                        ServerData.acceptedMethods.push_back(method);
                         debuglog(GREEN, "Server accepted method: %s", method.c_str());
                     }
                 }
@@ -379,7 +400,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
                 
                 // Parse allowed methods
                 while (methodStream >> method) {
-                    serverData.limit_except.push_back(method);
+                    ServerData.acceptedMethods.push_back(method);
                     debuglog(GREEN, "Server accepted method: %s", method.c_str());
                 }
             }
@@ -387,7 +408,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
 
         // Check for location blocks
         else if (trimmedLine.find("location") == 0) {
-         serverData.has_locations = true;
+         ServerData.has_locations = true;
             // Find the path (between "location" and "{")
             size_t pathStart = trimmedLine.find_first_not_of(" \t", 8); // Skip "location"
             if (pathStart != std::string::npos) {
@@ -418,10 +439,10 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
                             Location location;
                             
                             // Parse location directives
-                            parseLocationBlock(locationContent, location, serverData);
+                            parseLocationBlock(locationContent, location, ServerData);
                             
                             // Add this location to the server data
-                            serverData.location_blocks[path] = location;
+                            ServerData.location_blocks[path] = location;
                         }
                     }
                 }
@@ -429,7 +450,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
         } 
         else if (trimmedLine.find("cgi") == 0) {
             size_t openBrace = trimmedLine.find("{");
-            serverData.cgi_exists = true;
+            ServerData.cgi_exists = true;
                 
             if (openBrace != std::string::npos) {
                  // Find CGI block content
@@ -445,7 +466,7 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
                         blockStart, blockEnd - blockStart);
                                 
                         // Parse CGI directives
-                        parseCgiBlock(cgiContent, serverData.cgiData);
+                        parseCgiBlock(cgiContent, ServerData.cgiData);
                         }
                     }
                 }
@@ -453,12 +474,14 @@ void Config::parseServerBlock(const std::string& serverBlockContent, ServerData&
     }
   }
 
-void Config::parseLocationBlock(const std::string& locationContent, Location& location, ServerData& serverData)
+void Config::parseLocationBlock(const std::string& locationContent, Location& location, ServerData& ServerData)
 {
     std::istringstream iss(locationContent);
     std::string line;
 
-    location.upload_dir = serverData.upload_dir;
+    location.upload_dir = ServerData.upload_dir;
+    location.acceptedMethods = ServerData.acceptedMethods;
+
 
     
     while (std::getline(iss, line)) {
@@ -485,52 +508,65 @@ void Config::parseLocationBlock(const std::string& locationContent, Location& lo
                 }
             }
         }
-        else if (trimmedLine.find("index") == 0) {
-            // Note: Your Location struct doesn't have an index field,
-            // you might want to add one or handle it differently
-            size_t valueStart = trimmedLine.find_first_not_of(" \t", 5);
-            size_t valueEnd = trimmedLine.find(';', valueStart);
+        // else if (trimmedLine.find("index") == 0) {
+        //     int indexcount = 0;
+
+        //     debuglog(GREEN, "Location index: %s , time: %d", trimmedLine.c_str(), ++indexcount);
+        //     // Note: Your Location struct doesn't have an index field,
+        //     // you might want to add one or handle it differently
+        //     size_t valueStart = trimmedLine.find_first_not_of(" \t", 5);
+        //     size_t valueEnd = trimmedLine.find(';', valueStart);
             
-            if (valueEnd != std::string::npos) {
-                std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
-                location.index = value; // Uncomment if you add index field
-                debuglog(GREEN, "Location index: %s", value.c_str());
-            }
-        }
-        else if (trimmedLine.find("alias") == 0) {
-            size_t valueStart = trimmedLine.find_first_not_of(" \t", 5);
-            size_t valueEnd = trimmedLine.find(';', valueStart);
+        //     if (valueEnd != std::string::npos) {
+        //         std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
+        //         location.index = value; // Uncomment if you add index field
+        //         debuglog(GREEN, "Location index: %s", location.index.c_str());
+        //     }
+        // }
+        // else if (trimmedLine.find("alias") == 0) {
+        //     size_t valueStart = trimmedLine.find_first_not_of(" \t", 5);
+        //     size_t valueEnd = trimmedLine.find(';', valueStart);
             
-            if (valueEnd != std::string::npos) {
-                std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
-                location.alias = value;
-                debuglog(GREEN, "Location alias: %s", value.c_str());
-            }
-        }
+        //     if (valueEnd != std::string::npos) {
+        //         std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
+        //         location.alias = value;
+        //         debuglog(GREEN, "Location alias: %s", value.c_str());
+        //     }
+        // }
         else if (trimmedLine.find("internal") == 0) {
             // Set the internal flag to true
             location.internal = true;
             debuglog(GREEN, "Location internal: true");
         }
-        else if (trimmedLine.find("return") == 0) {
-            size_t valueStart = trimmedLine.find_first_not_of(" \t", 6);
-            size_t valueEnd = trimmedLine.find(';', valueStart);
+        // else if (trimmedLine.find("return") == 0) {
+        //     size_t valueStart = trimmedLine.find_first_not_of(" \t", 6);
+        //     size_t valueEnd = trimmedLine.find(';', valueStart);
             
+        //     if (valueEnd != std::string::npos) {
+        //         std::string redirectStr = trimmedLine.substr(valueStart, valueEnd - valueStart);
+        //         std::istringstream redirectStream(redirectStr);
+                
+        //         int code;
+        //         std::string url;
+        //         redirectStream >> code;
+                
+        //         // Get the rest as URL (may contain spaces)
+        //         std::getline(redirectStream, url);
+        //         url = url.substr(url.find_first_not_of(" \t"));
+                
+        //         location.return_directive = std::make_pair(code, url);
+        //         debuglog(GREEN, "Location return: %d %s", code, url.c_str());
+        //     }
+        // }
+        else if (trimmedLine.find("redirect") == 0) {
+            size_t valueStart = trimmedLine.find_first_not_of(" \t", 8);
+            size_t valueEnd = trimmedLine.find(';', valueStart);
             if (valueEnd != std::string::npos) {
-                std::string redirectStr = trimmedLine.substr(valueStart, valueEnd - valueStart);
-                std::istringstream redirectStream(redirectStr);
-                
-                int code;
-                std::string url;
-                redirectStream >> code;
-                
-                // Get the rest as URL (may contain spaces)
-                std::getline(redirectStream, url);
-                url = url.substr(url.find_first_not_of(" \t"));
-                
-                location.return_directive = std::make_pair(code, url);
-                debuglog(GREEN, "Location return: %d %s", code, url.c_str());
+                std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
+                location.redirect = value;
+                debuglog(GREEN, "Location redirect: %s", value.c_str());
             }
+            
         }
 
         else if (trimmedLine.find("file_upload") == 0) {
@@ -571,23 +607,25 @@ void Config::parseLocationBlock(const std::string& locationContent, Location& lo
                 debuglog(GREEN, "Location error_page: %d %s", code, path.c_str());
             }
         }
-        else if (trimmedLine.find("limit_except") == 0 || trimmedLine.find("accepted_methods") == 0) {
-            size_t methodsStart = trimmedLine.find_first_not_of(" \t", trimmedLine.find("limit_except") == 0 ? 12 : 16);
+        else if (trimmedLine.find("acceptedMethods") == 0 || trimmedLine.find("accepted_methods") == 0) {
+            size_t methodsStart = trimmedLine.find_first_not_of(" \t", trimmedLine.find("acceptedMethods") == 0 ? 15 : 16);
             size_t openBrace = trimmedLine.find("{");
             size_t semiColon = trimmedLine.find(";");
             
-            // Check for the "limit_except METHOD1 METHOD2 { ... }" format
+            // Check for the "acceptedMethods METHOD1 METHOD2 { ... }" format
             if (methodsStart != std::string::npos && openBrace != std::string::npos) {
                 std::string methods = trimmedLine.substr(methodsStart, openBrace - methodsStart);
                 std::istringstream methodStream(methods);
                 std::string method;
                 
                 // Parse allowed methods
-                while (methodStream >> method) {
-                    if (method != "{") {
-                        location.acceptedMethods.push_back(method);
-                        debuglog(GREEN, "Location accepted method: %s", method.c_str());
-                    }
+            if(location.acceptedMethods.size() > 0)
+                location.acceptedMethods.clear();
+            while (methodStream >> method) {
+                if (method != "{") {
+                    location.acceptedMethods.push_back(method);
+                    debuglog(GREEN, "Location accepted method: %s", method.c_str());
+                }
                 }
             }
         // Check for the "accepted_methods METHOD1 METHOD2 METHOD3;" format
@@ -681,16 +719,16 @@ void Config::parseCgiBlock(const std::string& cgiContent, CGIData& cgiConfig)
             std::string ext;
             
             while (extStream >> ext) {
-                cgiConfig.file_extensions.push_back(ext);
+                cgiConfig.cgi_extensions.push_back(ext);
                 debuglog(GREEN, "CGI file extension: %s", ext.c_str());
             }
         }
-        else if (trimmedLine.find("limit_except") == 0) {
-            size_t methodsStart = trimmedLine.find_first_not_of(" \t", 12); // Skip "limit_except"
+        else if (trimmedLine.find("acceptedMethods") == 0) {
+            size_t methodsStart = trimmedLine.find_first_not_of(" \t", 15); // Skip "acceptedMethods"
             size_t openBrace = trimmedLine.find("{");
             
             if (methodsStart != std::string::npos) {
-                // Extract the part between "limit_except" and "{"
+                // Extract the part between "acceptedMethods" and "{"
                 std::string methodsStr;
                 if (openBrace != std::string::npos) {
                     methodsStr = trimmedLine.substr(methodsStart, openBrace - methodsStart);
@@ -710,53 +748,21 @@ void Config::parseCgiBlock(const std::string& cgiContent, CGIData& cgiConfig)
                 std::string method;
                 
                 // Clear existing methods
-                cgiConfig.limit_except.clear();
+                if(cgiConfig.acceptedMethods.size() > 0)
+                    cgiConfig.acceptedMethods.clear();
                 
                 // Add each method to the vector
                 while (methodStream >> method) {
                     // Make sure it's not a brace
                     if (method != "{" && method != "}") {
-                        cgiConfig.limit_except.push_back(method);
-                        debuglog(GREEN, "CGI limit_except method: %s", method.c_str());
+                        cgiConfig.acceptedMethods.push_back(method);
+                        debuglog(GREEN, "CGI acceptedMethods method: %s", method.c_str());
                     }
                 }
                 
-                // Now check for "deny all" inside the braces
-                if (openBrace != std::string::npos) {
-                    // Find the matching closing brace
-                    size_t linePos = cgiContent.find(trimmedLine);
-                    if (linePos != std::string::npos) {
-                        size_t blockStart = cgiContent.find("{", linePos) + 1;
-                        size_t blockEnd = findClosingBrace(cgiContent, blockStart);
                         
-                        if (blockEnd != std::string::npos) {
-                            // Extract the content between braces
-                            std::string limitContent = cgiContent.substr(blockStart, blockEnd - blockStart);
-                            
-                            // Look for "deny all" in the content
-                            std::istringstream limitStream(limitContent);
-                            std::string limitLine;
-                            
-                            while (std::getline(limitStream, limitLine)) {
-                                // Trim whitespace
-                                size_t limitStart = limitLine.find_first_not_of(" \t\n\r");
-                                if (limitStart != std::string::npos) {
-                                    std::string trimmedLimitLine = limitLine.substr(limitStart);
-                                    
-                                    // Check for deny all (with or without semicolon)
-                                    if (trimmedLimitLine.find("deny all") == 0) {
-                                        cgiConfig.deny_all = true;
-                                        debuglog(GREEN, "CGI deny all: true");
-                                        
-                                        // Mark this line as processed so we don't process it again
-                                        // Store the position in a set or mark it in some way
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                    
+                
             }
         }
     }
@@ -823,7 +829,7 @@ void Config::parseCgiBlock(const std::string& cgiContent, CGIData& cgiConfig)
 
      configValidate();
      
-     debugprintConfigs();
+     //debugprintConfigs();
 
      debuglog(GREEN, "Config initialized with %zu servers", servers.size());
  }
@@ -905,7 +911,7 @@ Config::Config(std::string filename) {
   (void)filename;
 
   // First server configuration
-  ConfigData server1;
+  ServerData server1;
   server1.keepalive_timeout = 5;
   server1.autoindex = true;
   Location location;
@@ -929,99 +935,48 @@ Config::Config(std::string filename) {
    * http://localhost:4245/ or nc localhost 4244 and GET / HTTP/1.1 Host:
    * myWebserver
    */
+  /*
   server1.server_names.push_back("myWebserver");
   server1.server_names.push_back("someWebserver");
   server1.root = "html/www1";
   server1.index = "index.html";
   server1.error_pages.insert(
-	  std::make_pair(400, server1.root + "/error_pages/400.html"));
+      std::make_pair(400, server1.root + "/error_pages/400.html"));
   server1.error_pages.insert(
-	  std::make_pair(403, server1.root + "/error_pages/403.html"));
+      std::make_pair(403, server1.root + "/error_pages/403.html"));
   server1.error_pages.insert(
-	  std::make_pair(404, server1.root + "/error_pages/404.html"));
+      std::make_pair(404, server1.root + "/error_pages/404.html"));
   server1.error_pages.insert(
-	  std::make_pair(405, server1.root + "/error_pages/405.html"));
+      std::make_pair(405, server1.root + "/error_pages/405.html"));
   server1.error_pages.insert(
-	  std::make_pair(418, server1.root + "/error_pages/418.html"));
+      std::make_pair(418, server1.root + "/error_pages/418.html"));
   server1.error_pages.insert(
-	  std::make_pair(500, server1.root + "/error_pages/500.html"));
+      std::make_pair(500, server1.root + "/error_pages/500.html"));
   server1.error_pages.insert(
-	  std::make_pair(502, server1.root + "/error_pages/502.html")); 
+      std::make_pair(502, server1.root + "/error_pages/502.html"));
 
-	  // common to the first block server locations
-	server1.ports.push_back(4244);
-	server1.ports.push_back(4245);
-	server1.server_names.push_back("myWebserver");
-	server1.server_names.push_back("someWebserver");
-	server1.root = "html/www1";
-	server1.index = "index.html";
-	server1.upload_dir = "html/www1/uploads";
-
-  // first server block location
-  Location location;
-  location.index = "index.html";
-  location.autoindex = false;
-  location.file_upload = false;
-  location.return_directive = std::make_pair(200, "OK");
-  location.internal = false;
-  location.alias = server1.root; 
-  server1.location_blocks["/some/directory/"] = location;
-
-  location = Location();
-  location.return_directive = std::make_pair(301, "http://42berlin.de/");
-  server1.location_blocks["/42"] = location;
-
-  location = Location();
-  location.autoindex = true;
-  location.file_upload = false;
-  location.internal = false;
-  location.alias = "html/www2/";
-  server1.location_blocks["/43"] = location;
-
-  location = Location();
-  location.return_directive = std::make_pair(301, "/here/index.html");
-  server1.location_blocks["/go"] = location;
-
-  location = Location();
-  location.file_upload = true;
-  location.autoindex = false;
-  location.internal = false;
-  location.alias = "html/www1/";
-  location.file_upload = true;
-  location.upload_dir = "uploads/";
-  server1.location_blocks["/uploads"] = location;
-
+  server1.upload_dir = "http/www1/uploads";
+  server1.maxBodySize = 100000000;
+  server1.acceptedMethods.push_back("GET");
+  server1.acceptedMethods.push_back("POST");
+  server1.acceptedMethods.push_back("DELETE");
+  server1.acceptedMethods.push_back("PUT");
+  server1.cgiData.cgi_path_alias = std::make_pair("/cgi-bin", "/cgi-bin");
   server1.cgiData.upload_dir = "www/uploads";
-  server1.cgiData.cgi_path_alias = std::make_pair("/cgi", "/cgi-bin");
-  server1.cgiData.cgi_extensions.push_back("cgi");
-  server1.cgiData.cgi_extensions.push_back("py");
-
-location = Location();
-  location.autoindex = false;
-  location.internal = false;
-  location.file_upload = true;
-  location.upload_dir = "/tmp/uploads";
-  location.acceptedMethods.push_back("POST");
-  location.acceptedMethods.push_back("PUT");
-  location.acceptedMethods.push_back("DELETE");
-  location.acceptedMethods.push_back("GET");
-  server1.location_blocks["/mypictures"] = location;
-
+  // server1.cgiData = data;
   // Second server configuration
-  ConfigData server2;
+  ServerData server2;
   server2.ports.push_back(4246);
-  server2.server_names.push_back("myWebserver2");
-  server2.server_names.push_back("someWebserver2");
-  server2.index = "index.html";
-  server2.root = "html/www2";
+  server2.server_names.push_back("myWebserver");
+  server2.server_names.push_back("someWebserver");
+  server2.root = "http/www2/";
 
   // Third server configuration
-  ConfigData server3;
+  ServerData server3;
   server3.ports.push_back(4247);
   server3.server_names.push_back("myWebserver");
   server3.server_names.push_back("someWebserver");
-  server3.root = "html/www3";
-  server3.index = "index.html";
+  server3.root = "http/www3/";
 
   // Add all servers to servers
   servers.push_back(server1);
@@ -1033,55 +988,311 @@ location = Location();
       port_map_[servers[i].ports[j]] = &servers[i];
     }
   }
-  debuglog(YELLOW, "Config initialized with %zu servers", configs_.size());
-}
+  debuglog(YELLOW, "Config initialized with %zu servers", servers.size());
+}*/
+/**
+ * @brief Prints all server configurations in the servers vector
+ * 
+ * This function prints detailed information about all server configurations
+ * including ports, server names, locations, CGI settings, etc.
+//  */
+// void Config::debugprintConfigs() {
+//     debuglog(BLUE, "==== Configuration Summary ====");
+//     debuglog(BLUE, "Total servers: %zu", servers.size());
+    
+    
+//     for (size_t i = 0; i < servers.size(); ++i) {
+//         const ServerData& server = servers[i];
+        
+//         debuglog(BLUE, "\n----- Server %zu -----", i + 1);
+        
+//         // Print ports
+//         if (!server.ports.empty()) {
+//             std::string portList;
+//             for (size_t j = 0; j < server.ports.size(); ++j) {
+//                 if (j > 0) portList += ", ";
+//                 char portStr[8];
+//                 snprintf(portStr, sizeof(portStr), "%hu", server.ports[j]);
+//                 portList += portStr;
+//             }
+//             debuglog(BLUE, "Ports: %s", portList.c_str());
+//         } else {
+//             debuglog(BLUE, "Ports: None defined");
+//         }
+        
+//         // Print server names
+//         if (!server.server_names.empty()) {
+//             std::string nameList;
+//             for (size_t j = 0; j < server.server_names.size(); ++j) {
+//                 if (j > 0) nameList += ", ";
+//                 nameList += server.server_names[j];
+//             }
+//             debuglog(BLUE, "Server Names: %s", nameList.c_str());
+//         } else {
+//             debuglog(BLUE, "Server Names: None defined");
+//         }
+        
+//         // Print basic server settings
+//         debuglog(BLUE, "Root: %s", server.root.c_str());
+//         debuglog(BLUE, "Index: %s", server.index.c_str());
+//         debuglog(BLUE, "Max Body Size: %lu bytes", server.maxBodySize);
+//         debuglog(BLUE, "Request Timeout: %d seconds", server.requestTimeout);
+//         debuglog(BLUE, "Response Timeout: %d seconds", server.responseTimeout);
+//         debuglog(BLUE, "Keepalive Timeout: %d seconds", server.keepalive_timeout);
+//         debuglog(BLUE, "Autoindex: %s", server.autoindex ? "on" : "off");
+//         debuglog(BLUE, "File Server: %s", server.file_server ? "on" : "off");
+//         debuglog(BLUE, "Upload Directory: %s", server.upload_dir.c_str());
+        
+//         // Print error pages
+//         if (!server.error_pages.empty()) {
+//             debuglog(BLUE, "Error Pages:");
+//             std::map<int, std::string>::const_iterator it;
+//             for (it = server.error_pages.begin(); it != server.error_pages.end(); ++it) {
+//                 debuglog(BLUE, "  %d: %s", it->first, it->second.c_str());
+//             }
+//         }
+        
+//         // Print location blocks
+//         if (server.has_locations && !server.location_blocks.empty()) {
+//             debuglog(BLUE, "Location Blocks (%zu):", server.location_blocks.size());
+//             std::map<std::string, Location>::const_iterator it;
+//             for (it = server.location_blocks.begin(); it != server.location_blocks.end(); ++it) {
+//                 const std::string& path = it->first;
+//                 const Location& loc = it->second;
+                
+//                 debuglog(BLUE, "  Location: %s", path.c_str());
+                
+//                 // Only print non-default values for clarity
+//                 if (loc.autoindex) debuglog(BLUE, "    Autoindex: on");
+//                 if (loc.file_upload) debuglog(BLUE, "    File Upload: on");
+//                 if (loc.upload_dir != "/www/uploads") {
+//                     debuglog(BLUE, "    Upload Dir: %s", loc.upload_dir.c_str());
+//                 }
+//                // if (!loc.alias.empty()) debuglog(BLUE, "    Alias: %s", loc.alias.c_str());
+//                 if (loc.internal) debuglog(BLUE, "    Internal: true");
+                
+//                 // if (loc.return_directive.first != 0) {
+//                 //     debuglog(BLUE, "    Return: %d %s", 
+//                 //           loc.return_directive.first, 
+//                 //           loc.return_directive.second.c_str());
+//                 // }
 
-Config::Config(const Config &) {}
-Config &Config::operator=(const Config &) { return *this; }
-Config::~Config() {}
+//                 if (loc.redirect.empty() == false) {
+//                     debuglog(BLUE, "    Redirect: %s", loc.redirect.c_str());
+                    
+//                 }
+                
+//                 if (!loc.acceptedMethods.empty()) {
+//                     std::string methods;
+//                     for (size_t j = 0; j < loc.acceptedMethods.size(); ++j) {
+//                         if (j > 0) methods += " ";
+//                         methods += loc.acceptedMethods[j];
+//                     }
+//                     debuglog(BLUE, "    Accepted Methods: %s", methods.c_str());
+//                 }
+//                 //if(!loc.index.empty()) {
+//                    // debuglog(BLUE, "    Index: %s", loc.index.c_str());
+//                // }
+//             }
+//         }
+        
+//         // Print CGI settings
+//         if (server.cgi_exists) {
+//             debuglog(BLUE, "CGI Settings:");
+//             debuglog(BLUE, "  Path Alias: %s -> %s", 
+//                   server.cgiData.cgi_path_alias.first.c_str(), 
+//                   server.cgiData.cgi_path_alias.second.c_str());
+//             debuglog(BLUE, "  Upload Dir: %s", server.cgiData.upload_dir.c_str());
+            
+//             if (!server.cgiData.cgi_extensions.empty()) {
+//                 std::string exts;
+//                 for (size_t j = 0; j < server.cgiData.cgi_extensions.size(); ++j) {
+//                     if (j > 0) exts += " ";
+//                     exts += server.cgiData.cgi_extensions[j];
+//                 }
+//                 debuglog(BLUE, "  File Extensions: %s", exts.c_str());
+//             }
+            
+//             if (!server.cgiData.acceptedMethods.empty()) {
+//                 std::string methods;
+//                 for (size_t j = 0; j < server.cgiData.acceptedMethods.size(); ++j) {
+//                     if (j > 0) methods += " ";
+//                     methods += server.cgiData.acceptedMethods[j];
+//                 }
+//                 debuglog(BLUE, "  Limited HTTP Methods: %s", methods.c_str());
+    
+//             }
+//         }
+//     }
 
-void Config::cleanup() {
-  delete instance_;
-  instance_ = NULL;
-  debuglog(YELLOW, "Server config data destroyed");
-}
+//      // Print port mapping
+//      debuglog(BLUE, "\nPort Mapping:");
 
-void Config::initialize(std::string &config_file) {
-  if (instance_ == NULL) {
-    instance_ = new Config(config_file);
-  }
-}
+//      debuglog(BLUE, "\nPort Mapping:");
+//      std::map<uint16_t, ServerData*>::const_iterator it;
+//      for (it = port_map_.begin(); it != port_map_.end(); ++it) {
+//          size_t serverIndex = it->second - &servers[0];  // Calculate server index
+//          debuglog(BLUE, "  Port %hu: Server %zu", it->first, serverIndex);
+//      }
+   
+//     debuglog(BLUE, "\n==== End of Configuration Summary ====");
+// }
 
-std::vector<ConfigData> &Config::getConfigData(char *config_file) {
-  if (instance_ == NULL) {
-    instance_ = new Config(Config::_filename);
-  }
-  return Config::configs_;
-}
+// /**
+//  * @brief Prints detailed information about a single ServerData structure
+//  * 
+//  * @param ServerData The ServerData structure to print
+//  */
+// void Config::debugprintServerData(const ServerData& ServerData)
+// {
+//     debuglog(YELLOW, "======= Server Configuration Details =======");
+    
+//     // Print basic server configuration
+//     debuglog(YELLOW, "Server base configuration:");
+//     debuglog(YELLOW, "  maxBodySize: %lu", ServerData.maxBodySize);
+//     debuglog(YELLOW, "  maxConnections: %lu", ServerData.maxConnections);
+//     debuglog(YELLOW, "  requestTimeout: %d", ServerData.requestTimeout);
+//     debuglog(YELLOW, "  responseTimeout: %d", ServerData.responseTimeout);
+//     debuglog(YELLOW, "  keepalive_timeout: %d", ServerData.keepalive_timeout);
+//     debuglog(YELLOW, "  autoindex: %s", ServerData.autoindex ? "true" : "false");
+//     debuglog(YELLOW, "  file_server: %s", ServerData.file_server ? "true" : "false");
+//     debuglog(YELLOW, "  upload_dir: %s", ServerData.upload_dir.c_str());
+//     debuglog(YELLOW, "  serverListenAddress: %s", ServerData.serverListenAddress.c_str());
+//     debuglog(YELLOW, "  root: %s", ServerData.root.c_str());
+//     debuglog(YELLOW, "  index: %s", ServerData.index.c_str());
+    
+//     // Print ports
+//     if (!ServerData.ports.empty()) {
+//         debuglog(YELLOW, "Server ports (%zu):", ServerData.ports.size());
+//         for (size_t i = 0; i < ServerData.ports.size(); ++i) {
+//             debuglog(YELLOW, "  %zu: %hu", i + 1, ServerData.ports[i]);
+//         }
+//     } else {
+//         debuglog(YELLOW, "No server ports defined");
+//     }
 
-const ConfigData *Config::getConfigByPort(uint16_t port) {
-  if (instance_ == NULL) {
-    instance_ = new Config(Config::_filename);
-    if (!validate()) {
-      cleanup();
-      debuglog(RED, "Configuration validation failed");
-      throw std::runtime_error("Invalid configuration");
-    }
-  }
-  std::map<uint16_t, ConfigData *>::const_iterator it = port_map_.find(port);
-  return (it != port_map_.end()) ? it->second : NULL;
-}
+//     // Print server names
+//     if (!ServerData.server_names.empty()) {
+//         debuglog(YELLOW, "Server names (%zu):", ServerData.server_names.size());
+//         for (size_t i = 0; i < ServerData.server_names.size(); ++i) {
+//             debuglog(YELLOW, "  %zu: %s", i + 1, ServerData.server_names[i].c_str());
+//         }
+//     } else {
+//         debuglog(YELLOW, "No server names defined");
+//     }
+    
+//     // Print accepted methods
+//     if (!ServerData.acceptedMethods.empty()) {
+//         debuglog(YELLOW, "Server accepted methods (%zu):", ServerData.acceptedMethods.size());
+//         for (size_t i = 0; i < ServerData.acceptedMethods.size(); ++i) {
+//             debuglog(YELLOW, "  %zu: %s", i + 1, ServerData.acceptedMethods[i].c_str());
+//         }
+//     } else {
+//         debuglog(YELLOW, "No server accepted methods defined");
+//     }
+    
+//     // Print error pages
+//     if (!ServerData.error_pages.empty()) {
+//         debuglog(YELLOW, "Server error pages (%zu):", ServerData.error_pages.size());
+//         std::map<int, std::string>::const_iterator it;
+//         for (it = ServerData.error_pages.begin(); it != ServerData.error_pages.end(); ++it) {
+//             debuglog(YELLOW, "  %d: %s", it->first, it->second.c_str());
+//         }
+//     } else {
+//         debuglog(YELLOW, "No server error pages defined");
+//     }
+    
+//     // Print CGI configuration
+//     debuglog(YELLOW, "Server cgi_exists: %s", ServerData.cgi_exists ? "true" : "false");
+    
+//     if (ServerData.cgi_exists) {
+//         debuglog(YELLOW, "CGI Configuration:");
+//         debuglog(YELLOW, "  cgi_path_alias: %s -> %s", 
+//                 ServerData.cgiData.cgi_path_alias.first.c_str(),
+//                 ServerData.cgiData.cgi_path_alias.second.c_str());
+//         debuglog(YELLOW, "  upload_dir: %s", ServerData.cgiData.upload_dir.c_str());
+        
+//         // Print file extensions
+//         if (!ServerData.cgiData.cgi_extensions.empty()) {
+//             debuglog(YELLOW, "  cgi_extensions (%zu):", ServerData.cgiData.cgi_extensions.size());
+//             for (size_t i = 0; i < ServerData.cgiData.cgi_extensions.size(); ++i) {
+//                 debuglog(YELLOW, "    %zu: %s", i + 1, ServerData.cgiData.cgi_extensions[i].c_str());
+//             }
+//         } else {
+//             debuglog(YELLOW, "  No file extensions defined");
+//         }
+        
+//         // Print acceptedMethods methods
+//         if (!ServerData.cgiData.acceptedMethods.empty()) {
+//             debuglog(YELLOW, "  acceptedMethods methods (%zu):", ServerData.cgiData.acceptedMethods.size());
+//             for (size_t i = 0; i < ServerData.cgiData.acceptedMethods.size(); ++i) {
+//                 debuglog(YELLOW, "    %zu: %s", i + 1, ServerData.cgiData.acceptedMethods[i].c_str());
+//             }
+//         } else {
+//             debuglog(YELLOW, "  No acceptedMethods methods defined");
+//         }
 
-bool Config::validate() {
-  for (size_t i = 0; i < configs_.size(); ++i) {
-    if (configs_[i].ports.empty()) {
-      debuglog(RED, "Configuration error: No ports specified");
-      return false;
-    }
-    if (configs_[i].root.empty()) {
-      debuglog(RED, "Configuration error: Empty root directory");
-      return false;
-    }
-  }
-  return true;
-}
+       
+//     }
+    
+//     // Print location blocks
+//     debuglog(YELLOW, "Server has_locations: %s", ServerData.has_locations ? "true" : "false");
+    
+//     if (ServerData.has_locations && !ServerData.location_blocks.empty()) {
+//         debuglog(YELLOW, "Location Blocks (%zu):", ServerData.location_blocks.size());
+        
+//         std::map<std::string, Location>::const_iterator it;
+//         for (it = ServerData.location_blocks.begin(); it != ServerData.location_blocks.end(); ++it) {
+//             const std::string& path = it->first;
+//             const Location& loc = it->second;
+            
+//             debuglog(YELLOW, "  Location path: %s", path.c_str());
+//             debuglog(YELLOW, "    autoindex: %s", loc.autoindex ? "true" : "false");
+//             debuglog(YELLOW, "    file_upload: %s", loc.file_upload ? "true" : "false");
+//             debuglog(YELLOW, "    upload_dir: %s", loc.upload_dir.c_str());
+            
+//            // if (!loc.alias.empty()) {
+//                // debuglog(YELLOW, "    alias: %s", loc.alias.c_str());
+//             //}
+            
+//             //if (!loc.index.empty()) {
+//                 //debuglog(YELLOW, "    index: %s", loc.index.c_str());
+//            // }
+
+//             debuglog(YELLOW, "    internal: %s", loc.internal ? "true" : "false");
+            
+//             // if (loc.return_directive.first != 0) {
+//             //     debuglog(YELLOW, "    return: %d %s", 
+//             //           loc.return_directive.first, 
+//             //           loc.return_directive.second.c_str());
+//             // }
+
+//             if(!loc.redirect.empty()) {
+//                 debuglog(YELLOW, "    redirect: %s", loc.redirect.c_str());
+//             }
+            
+//             // Print location's accepted methods
+//             if (!loc.acceptedMethods.empty()) {
+//                 debuglog(YELLOW, "    accepted methods (%zu):", loc.acceptedMethods.size());
+//                 for (size_t i = 0; i < loc.acceptedMethods.size(); ++i) {
+//                     debuglog(YELLOW, "      %zu: %s", i + 1, loc.acceptedMethods[i].c_str());
+//                 }
+//             } else {
+//                 debuglog(YELLOW, "    No accepted methods defined");
+//             }
+            
+//             // Print location's error pages
+//             if (!loc.error_pages.empty()) {
+//                 debuglog(YELLOW, "    error pages (%zu):", loc.error_pages.size());
+//                 std::map<int, std::string>::const_iterator ep;
+//                 for (ep = loc.error_pages.begin(); ep != loc.error_pages.end(); ++ep) {
+//                     debuglog(YELLOW, "      %d: %s", ep->first, ep->second.c_str());
+//                 }
+//             }
+//         }
+//     } else {
+//         debuglog(YELLOW, "No location blocks defined");
+//     }
+    
+//     debuglog(YELLOW, "========== End of Server Data ==========\n");
+// }

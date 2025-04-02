@@ -125,7 +125,7 @@ namespace URLMatcher
         HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
-      string full_path = config->root + "/" + target;
+      string full_path = config->root + target;
       // path_for_stat is adjusted for reliable stat() calls (removes trailing slash usually)
       string path_for_stat = full_path;
 

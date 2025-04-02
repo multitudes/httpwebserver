@@ -1,3 +1,4 @@
+
 #include "HTTPServer.hpp"
 #include "Constants.hpp"
 #include "DirectoryListing.hpp"
@@ -141,7 +142,7 @@ int run() {
   Constants::initStatusMessageMap();
   Constants::initMimeTypes();
 
-  vector<ConfigData> configs_ = Config::getConfigData(NULL);
+  vector<ServerData> configs_ = Config::getServerData(NULL);
   vector<int> serverSockets;
   serverSockets.reserve(10);
 
@@ -169,11 +170,13 @@ for (size_t i = 0; i < configs_.size(); i++) {
 	}
   }
 
+  struct sockaddr_in server_addr;
  
-  debug("Server listening on port %d", SERVER_PORT);
+//   debug("Server listening on port %d", SERVER_PORT);
   // Add server socket to poll
-  add_to_poll(server_fd, POLLIN);
  
+  bool skip_to_next_iteration = false;
+
   // Main polling loop
   while (1) {
     int poll_result =

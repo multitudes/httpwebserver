@@ -44,7 +44,7 @@ class ServerData {
   + acceptedMethods: std::vector<std::string>
   + location_blocks: std::map<std::string, Directive>
   + cgiData: CGIData
-  + limit_except: std::vector<std::string>
+  + acceptedMethods: std::vector<std::string>
   + error_pages: std::map<int, std::string>
   + ServerData()
   + hasCGI() : bool

@@ -30,12 +30,12 @@ public:
   void parseGlobalSettings(const std::string& httpContent, BaseConf& baseConfig);
   void parseErrorPageBlock(const std::string& blockContent, BaseConf& baseConfig);
   void parseServerBlocks(const std::string& serverContent, HttpConfig& httpConfig, BaseConf& baseConfig);
-  void parseServerBlock(const std::string& serverBlockContent, ServerData& serverData);
-  void parseLocationBlock(const std::string& locationContent, Location& location, ServerData& serverData);
+  void parseServerBlock(const std::string& serverBlockContent, ServerData& ServerData);
+  void parseLocationBlock(const std::string& locationContent, Location& location, ServerData& ServerData);
   void parseCgiBlock(const std::string& cgiContent, CGIData& cgiConfig);
   void configValidate();
-  void debugprintServerData(const ServerData& serverData);
-  void debugprintConfigs();
+  //void debugprintServerData(const ServerData& ServerData);
+  //void debugprintConfigs();
   
 
   private:
