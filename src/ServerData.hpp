@@ -9,33 +9,35 @@
 struct CGIData {
   std::pair<std::string, std::string> cgi_path_alias;
   std::string upload_dir;
-  std::vector<std::string> file_extensions;  // Added for .cgi .py
-  std::vector<std::string> limit_except;     // Added for GET POST DELETE PUT
-  bool deny_all;                            // Added for "deny all"
+  std::vector<std::string> cgi_extensions;
 
-  CGIData() : 
-    cgi_path_alias(), 
-    upload_dir(),
-    deny_all(false) {}
+  CGIData() : cgi_path_alias(), upload_dir() {}
 };
 
 struct Location {
+	std::string index;
+	std::string alias;
+	std::string upload_dir;
+	bool autoindex;
+	bool file_upload;
+	bool internal;
   std::vector<std::string> acceptedMethods;
   bool autoindex;
   bool file_upload;
   std::string upload_dir;
   std::string alias;
   bool internal;
-  std::string index;
   std::pair<int, std::string> return_directive;
   std::map<int, std::string> error_pages;
 
   Location() : 
+    index("index.html"),
+    alias(""), 
+    upload_dir("/www/uploads"),
     autoindex(false), 
     file_upload(false),
-    upload_dir("/www/uploads"),
-    alias(""), 
-    internal(false), 
+    internal(false),
+	acceptedMethods(),
     return_directive(), 
     error_pages() {}
 };
@@ -81,7 +83,7 @@ struct ServerData : public BaseConf {
   std::string root;
   std::map<std::string, Location> location_blocks;
   CGIData cgiData;
-  std::vector<std::string> limit_except;
+  std::vector<std::string> acceptedMethods;
   bool cgi_exists;
   bool has_locations;
 

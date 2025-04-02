@@ -5,6 +5,7 @@
 namespace Constants {
 	std::map<int, std::string> statusMessages;
     std::map<std::string, std::string> mimeTypes;
+	const char* default_config_file = "config/default.conf";
 
     void initStatusMessageMap() {
 		debuglog(YELLOW, "Initializing status code to status text mapping");
@@ -78,41 +79,41 @@ namespace Constants {
 		debuglog(YELLOW, "Initializing extension to MIME type mapping");
 	
 		// Web 
-		mimeTypes["html"] = "text/html";
-		mimeTypes["htm"] = "text/html";
-		mimeTypes["css"] = "text/css";
-		mimeTypes["js"] = "application/javascript";
-		mimeTypes["xml"] = "application/xml";
-		mimeTypes["json"] = "application/json";
+		mimeTypes[".html"] = "text/html";
+		mimeTypes[".htm"] = "text/html";
+		mimeTypes[".css"] = "text/css";
+		mimeTypes[".js"] = "application/javascript";
+		mimeTypes[".xml"] = "application/xml";
+		mimeTypes[".json"] = "application/json";
 	
 		// Text 
-		mimeTypes["txt"] = "text/plain";
-		mimeTypes["csv"] = "text/csv";
-		mimeTypes["md"] = "text/markdown";
-		mimeTypes["sh"] = "text/x-shellscript";
+		mimeTypes[".txt"] = "text/plain";
+		mimeTypes[".csv"] = "text/csv";
+		mimeTypes[".md"] = "text/markdown";
+		mimeTypes[".sh"] = "text/x-shellscript";
 	
 		// Images
-		mimeTypes["jpg"] = "image/jpeg";
-		mimeTypes["jpeg"] = "image/jpeg";
-		mimeTypes["png"] = "image/png";
-		mimeTypes["gif"] = "image/gif";
-		mimeTypes["svg"] = "image/svg+xml";
-		mimeTypes["ico"] = "image/x-icon";
-		mimeTypes["webp"] = "image/webp";
+		mimeTypes[".jpg"] = "image/jpeg";
+		mimeTypes[".jpeg"] = "image/jpeg";
+		mimeTypes[".png"] = "image/png";
+		mimeTypes[".gif"] = "image/gif";
+		mimeTypes[".bmp"] = "image/bmp";
+		mimeTypes[".svg"] = "image/svg+xml";
+		mimeTypes[".ico"] = "image/x-icon";
+		mimeTypes[".webp"] = "image/webp";
 	
 		// Documents
-		mimeTypes["pdf"] = "application/pdf";
-		mimeTypes["doc"] = "application/msword";
-		mimeTypes["docx"] = "application/msword";
-		mimeTypes["xls"] = "application/vnd.ms-excel";
-		mimeTypes["xlsx"] = "application/vnd.ms-excel";
-		mimeTypes["zip"] = "application/zip";
+		mimeTypes[".pdf"] = "application/pdf";
+		mimeTypes[".doc"] = "application/msword";
+		mimeTypes[".docx"] = "application/msword";
+		mimeTypes[".xls"] = "application/vnd.ms-excel";
+		mimeTypes[".xlsx"] = "application/vnd.ms-excel";
+		mimeTypes[".zip"] = "application/zip";
 	
 		// Multimedia
-		mimeTypes["mp3"] = "audio/mpeg";
-		mimeTypes["mp4"] = "video/mp4";
-		mimeTypes["webm"] = "video/webm";
-	
+		mimeTypes[".mp3"] = "audio/mpeg";
+		mimeTypes[".mp4"] = "video/mp4";
+		mimeTypes[".webm"] = "video/webm";
 	}
 
 

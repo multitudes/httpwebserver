@@ -2,10 +2,12 @@
 #include "HTTPServer.hpp"
 #include <iostream>
 #include <string>
+#include "Constants.hpp"
+#include "debug.h"
 
 int main(int argc, char *argv[]) {
     try {
-        std::string configFile = "config/default.conf"; // Default config path
+        std::string configFile = Constants::default_config_file; // Default config path
         if (argc > 2) {
             std::cerr << "Usage: " << argv[0] << " [config_file]" << std::endl;
             return 1;

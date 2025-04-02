@@ -9,11 +9,14 @@ enum CONTENT_TYPE {
     TEXT_HTML = 1
 };
 
+using std::string;
 
 namespace SimpleResponse {
 
-    void addHTTPHeader(HTTPConnxData &connections, int content_type, std::string response, int statusCode);
+    void addHTTPHeader(HTTPConnxData &connections, string contentType, std::string response, int statusCode);
 
     void htmlErrorResponse(HTTPConnxData &connections, int statusCode);  
+
+    void simpleStatusResponse(HTTPConnxData &connections, int statusCode);
 
 } // namespace DirectoryListing
