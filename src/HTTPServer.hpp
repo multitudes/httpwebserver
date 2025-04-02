@@ -29,7 +29,6 @@ using std::map;
 
 namespace HTTPServer {
 
-
 /**
  * testing: use the following command to test the server
  *

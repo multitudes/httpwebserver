@@ -10,7 +10,6 @@
 
 
 namespace SocketUtils {
-	// std::vector<ServerData> serverConfs;
 	void initialize();
 	void setSignalHandlers();
 	void handleSignal(int signal);
@@ -22,6 +21,9 @@ namespace SocketUtils {
 	// void shutdownServer();
 	int createBindSocket(uint16_t port);
 	bool listenSocket(int server_socket);
+	bool setSendRecTimeout(int clientfd);
+	const char *custom_inet_ntop(int af, const void *src, char *dst,
+		socklen_t size);
 }
 
 /**

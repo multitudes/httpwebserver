@@ -1,5 +1,7 @@
 #include "SocketUtils.hpp"
 #include "Config.hpp"
+#include "Constants.hpp"
+#include "HTTPServer.hpp"
 #include "ServerData.hpp"
 #include "debug.h"
 #include <csignal>
@@ -84,20 +86,20 @@ void initialize() {
 }
 
 void setSignalHandlers() {
-	signal(SIGINT, handleSignal);
-	signal(SIGQUIT, handleSignal);
-	signal(SIGTERM, handleSignal);
-	signal(SIGHUP, handleHangup);
-	signal(SIGPIPE, handlePipe);
-	struct sigaction sa;
-	sa.sa_handler = handleChild;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;  // Critical flags
-	
-	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-		perror("sigaction");
-		exit(EXIT_FAILURE);
-	}
+  signal(SIGINT, handleSignal);
+  signal(SIGQUIT, handleSignal);
+  signal(SIGTERM, handleSignal);
+  signal(SIGHUP, handleHangup);
+  signal(SIGPIPE, handlePipe);
+  struct sigaction sa;
+  sa.sa_handler = handleChild;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; // Critical flags
+
+  if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+    perror("sigaction");
+    exit(EXIT_FAILURE);
+  }
 }
 
 /**
@@ -107,7 +109,7 @@ void handleSignal(int signal) {
   if (signal == SIGINT || signal == SIGQUIT || signal == SIGTERM) {
     debuglog(YELLOW, "Caught signal %d - Shutting down the server", signal);
     //   shutdownServer();
-	Config::cleanup();
+    Config::cleanup();
     std::exit(0);
   }
 }
@@ -121,9 +123,7 @@ void handleSignal(int signal) {
  * child has exited
  */
 void handleChild(int signal) {
-  debuglog(YELLOW,
-           "Received SIGCHLD signal %d, reaping child ...",
-           signal);
+  debuglog(YELLOW, "Received SIGCHLD signal %d, reaping child ...", signal);
   int savedErrno;
 
   savedErrno = errno;
@@ -294,125 +294,112 @@ bool listenSocket(int server_socket) {
   debug("Listening on localhost server fd %d\n", server_socket);
   return true;
 }
+
+/**
+ * @brief Set the send and receive timeouts for a client socket
+ *
+ * @param conf The server configuration
+ * @param clientfd The client socket file descriptor
+ *
+ * I use the values in the server configuration to set the send and receive
+ * timeouts for the client socket. This is useful for handling slow or
+ * unresponsive clients.
+ */
+bool setSendRecTimeout(int clientfd) {
+  // connections timeout rcvd
+  struct timeval tv;
+  tv.tv_sec = Constants::requestTimeout;
+  tv.tv_usec = 0;
+  if (setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+    debuglog(RED, "setsockopt SO_RCVTIMEO failed");
+    return false;
+  }
+
+  // Set send timeout
+  tv.tv_sec = Constants::responseTimeout;
+  if (setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+    debuglog(RED, "setsockopt SO_SNDTIMEO failed"); // will not work in cgi
+    return false;
+  }
+  debuglog(YELLOW, "Set send/receive timeout for client socket %d", clientfd);
+  return true;
+}
+
+/**
+ * @brief Check for idle connections
+ *
+ * This function checks for idle connections by iterating through the
+ * lastActivityTime map
+ * TODO send a 408 Request Timeout response to the client before closing
+ */
+void checkForIdleConnections() {
+  std::time_t now = std::time(NULL);
+  std::vector<int> idleConnections;
+  idleConnections.reserve(100);
+  // lastActivityTime is a map client_fd to the last time active
+  // so i get tthe serverConf for the client and check
+  for (std::map<int, time_t>::iterator it =
+           HTTPServer::lastActivityTime.begin();
+       it != HTTPServer::lastActivityTime.end(); ++it) {
+
+    if (now - it->second > Constants::keepalive_timeout) {
+      debuglog(YELLOW,
+               "[Server] Detected idle connection %d for a keep-alive timeout "
+               "of % d ",
+               it->first, Constants::keepalive_timeout);
+      idleConnections.push_back(it->first);
+    }
+  }
+
+  for (size_t i = 0; i < idleConnections.size(); ++i) {
+    int fd = idleConnections[i];
+    for (size_t j = 0; j < HTTPServer::pollfds.size(); ++j) {
+      if (HTTPServer::pollfds[j].fd == fd) {
+        debuglog(YELLOW, "Closing client socket %d", fd);
+        close(fd);
+        // TODO send a 408 Request Timeout response to the client before closing
+        HTTPServer::remove_from_poll(fd);
+        break;
+      }
+    }
+    HTTPServer::lastActivityTime.erase(fd);
+  }
+  idleConnections.clear();
+}
+
+/**
+ * @brief Custom inet_ntop implementation for IPv4 addresses
+ *
+ * @param af The address family
+ * @param src The source address
+ * @param dst The destination buffer
+ * @param size The size of the buffer
+ * @return const char* The string representation of the address
+ *
+ * This function is a custom implementation of inet_ntop for IPv4 addresses.
+ * It takes an address family, a source address, a destination buffer, and
+ the
+ * size of the buffer. It returns the string representation of the address.
+ * The reason for this custom implementation is that inet_ntop is allowed in
+ the
+ * subject for webserv and it is a simple function to implement. Also
+ * considering that we develop for linux and macos only.
+ */
+const char *custom_inet_ntop(int af, const void *src, char *dst,
+                             socklen_t size) {
+  if (af == AF_INET) {
+    const struct in_addr *addr = static_cast<const struct in_addr *>(src);
+    unsigned char *bytes = (unsigned char *)&addr->s_addr;
+    snprintf(dst, size, "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2], bytes[3]);
+    return dst;
+  }
+  errno = EAFNOSUPPORT;
+  return NULL;
+}
+
+
+
 } // namespace SocketUtils
-
-// /**
-//  * @brief Set the send and receive timeouts for a client socket
-//  *
-//  * @param conf The server configuration
-//  * @param clientfd The client socket file descriptor
-//  *
-//  * I use the values in the server configuration to set the send and receive
-//  * timeouts for the client socket. This is useful for handling slow or
-//  * unresponsive clients.
-//  */
-// void NetUtils::setSendRecTimeout(ServerConf conf, int clientfd) {
-//   // connections timeout rcvd
-//   struct timeval tv;
-//   tv.tv_sec = conf.requestTimeout;
-//   tv.tv_usec = 0;
-//   if (setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-//     debug("setsockopt SO_RCVTIMEO failed");
-//     NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
-//     close(clientfd);
-//   }
-
-//   // Set send timeout
-//   tv.tv_sec = conf.responseTimeout;
-//   if (setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
-//     debug("setsockopt SO_SNDTIMEO failed"); // todo check if this works in
-//     cgi NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
-//     close(clientfd);
-//   }
-// }
-
-// /**
-//  * @brief Check for idle connections
-//  *
-//  * This function checks for idle connections by iterating through the
-//  * lastActivityTime map
-//  */
-// void NetUtils::checkForIdleConnections() {
-//   std::time_t now = std::time(NULL);
-//   std::vector<int> idleConnections;
-//   idleConnections.reserve(100);
-//   // lastActivityTime is a map client_fd to the last time active
-//   // so i get tthe serverConf for the client and check
-//   for (std::map<int, time_t>::iterator it =
-//   Networker::lastActivityTime.begin();
-//        it != Networker::lastActivityTime.end(); ++it) {
-//     size_t serveridx = Networker::socketToServerConf[it->first];
-//     if (now - it->second >
-//         Networker::serverConfs[serveridx].keepalive_timeout) {
-//       debug(
-//           "[Server] Detected idle connection %d for a keep-alive timeout of
-//           %d", it->first,
-//           Networker::serverConfs[serveridx].keepalive_timeout);
-//       idleConnections.push_back(it->first);
-//     }
-//   }
-
-//   for (size_t i = 0; i < idleConnections.size(); ++i) {
-//     int fd = idleConnections[i];
-//     for (size_t j = 0; j < Networker::pollfds.size(); ++j) {
-//       if (Networker::pollfds[j].fd == fd) {
-//         debug("[Server] Closing client socket %d", fd);
-//         close(fd);
-//         Networker::deleteFromPollfds(fd);
-//         break;
-//       }
-//     }
-//     Networker::lastActivityTime.erase(fd);
-//     Networker::connectionStates.erase(fd);
-//   }
-//   idleConnections.clear();
-// }
-
-// /**
-//  * @brief Max connection check
-//  *
-//  * @param clientfd The client socket file descriptor
-//  *
-//  * In the server conf we have the max connections allowed for each server if
-//  * specified or a default value. We dont allow new connections in the poll
-//  loop
-//  * if the max connections are reached.
-//  */
-// bool NetUtils::maxConnectionsCheck(int clientfd) {
-//   size_t serveridx = Networker::socketToServerConf[clientfd];
-//   if (Networker::pollfds.size() >=
-//       Networker::serverConfs[serveridx].maxConnections) {
-//     debug("Maximum connections reached, rejecting new connection");
-//     NetUtils::sendErrorResponse(clientfd, 503, "Service Unavailable");
-//     return false;
-//   }
-//   return true;
-// }
-
-// /**
-//  * @brief Print the local address of the client
-//  *
-//  * @param clientfd The client socket file descriptor
-//  * @return bool True if the address was printed successfully, false otherwise
-//  *
-//  * The local address refers to the IP address and port number assigned to the
-//  * server's socket on the local machine. This is the address that the server
-//  * uses to listen for incoming connections from clients.
-//  */
-// bool NetUtils::printLocalAddress(int clientfd) {
-//   struct sockaddr_in local_addr;
-//   socklen_t addr_len = sizeof(local_addr);
-//   if (getsockname(clientfd, (struct sockaddr *)&local_addr, &addr_len) == -1)
-//   {
-//     debug("[Server] getsockname error: %s\n", strerror(errno));
-//     NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
-//     return false;
-//   }
-//   uint16_t local_port = ntohs(local_addr.sin_port);
-//   debug("[Server] Accepted new connection on client socket %d, port %d",
-//         clientfd, local_port);
-//   return true;
-// }
 
 // /**
 //  * @brief Get the client IP address
@@ -423,36 +410,6 @@ bool listenSocket(int server_socket) {
 // std::string NetUtils::getclient_ip(int clientfd) {
 //   debugcolor(RED, "Getting client IP address for client socket %d",
 //   clientfd); return Networker::remoteAddresses[clientfd];
-// }
-
-// /**
-//  * @brief Custom inet_ntop implementation for IPv4 addresses
-//  *
-//  * @param af The address family
-//  * @param src The source address
-//  * @param dst The destination buffer
-//  * @param size The size of the buffer
-//  * @return const char* The string representation of the address
-//  *
-//  * This function is a custom implementation of inet_ntop for IPv4 addresses.
-//  * It takes an address family, a source address, a destination buffer, and
-//  the
-//  * size of the buffer. It returns the string representation of the address.
-//  * The reason for this custom implementation is that inet_ntop is allowed in
-//  the
-//  * subject for webserv and it is a simple function to implement. Also
-//  * considering that we develop for linux and macos only.
-//  */
-// const char *NetUtils::custom_inet_ntop(int af, const void *src, char *dst,
-//                                        socklen_t size) {
-//   if (af == AF_INET) {
-//     const struct in_addr *addr = static_cast<const struct in_addr *>(src);
-//     unsigned char *bytes = (unsigned char *)&addr->s_addr;
-//     snprintf(dst, size, "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2],
-//     bytes[3]); return dst;
-//   }
-//   errno = EAFNOSUPPORT;
-//   return NULL;
 // }
 
 // /**
