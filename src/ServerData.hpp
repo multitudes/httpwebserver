@@ -10,30 +10,34 @@ struct CGIData {
   std::pair<std::string, std::string> cgi_path_alias;
   std::string upload_dir;
   std::vector<std::string> cgi_extensions;
+  std::vector<std::string> acceptedMethods;
 
-  CGIData() : cgi_path_alias(), upload_dir(), cgi_extensions() {}
+  CGIData() : cgi_path_alias(), upload_dir() 
+  {
+      acceptedMethods.push_back("GET");
+      acceptedMethods.push_back("POST");
+      acceptedMethods.push_back("DELETE");
+      acceptedMethods.push_back("PUT");
+  }
 };
 
 struct Location {
-	std::string index;
-	std::string alias;
 	std::string upload_dir;
 	bool autoindex;
 	bool file_upload;
 	bool internal;
   std::vector<std::string> acceptedMethods;
-  std::pair<int, std::string> return_directive;
+  //std::pair<int, std::string> return_directive;
+  std::string redirect;
   std::map<int, std::string> error_pages;
 
-  Location() : 
-    index("index.html"),
-    alias(""), 
+  Location() :
     upload_dir("/www/uploads"),
     autoindex(false), 
     file_upload(false),
     internal(false),
-	acceptedMethods(),
-    return_directive(), 
+	  acceptedMethods(),
+    //return_directive(), 
     error_pages() {}
 };
 
@@ -45,10 +49,12 @@ struct BaseConf {
   int keepalive_timeout;
   std::map<std::string, std::string> defaultheaders;
   bool autoindex;
+  bool parsedindex;
   bool file_server;
   std::vector<std::string> acceptedMethods;
   std::map<int, std::string> error_pages;
   std::string upload_dir;
+  
 
   BaseConf() :
     maxConnections(100),
@@ -58,14 +64,20 @@ struct BaseConf {
     maxBodySize(10000000),
     autoindex(false),
     file_server(true),
-    upload_dir("./www/uploads") {
+    upload_dir("./www/uploads"),
+    parsedindex(false)
+    {
       defaultheaders["Content-Type"] = "text/html";
       defaultheaders["Server"] = "webserv/1.0";
       defaultheaders["Connection"] = "keep-alive";
+      acceptedMethods.push_back("GET");
+      acceptedMethods.push_back("POST");
+      acceptedMethods.push_back("DELETE");
+      acceptedMethods.push_back("PUT");
     }
 };
 
-struct ConfigData : public BaseConf {
+struct ServerData : public BaseConf {
   std::string serverListenAddress;
   std::vector<uint16_t> ports;
   std::vector<std::string> server_names;
@@ -75,22 +87,22 @@ struct ConfigData : public BaseConf {
   CGIData cgiData;
   std::vector<std::string> acceptedMethods;
   bool cgi_exists;
-  bool has_directives;
+  bool has_locations;
 
-  ConfigData() :
-    BaseConf(),
+  ServerData() :
     serverListenAddress("localhost"),
     index("index.html"),
     root("www"),
     cgi_exists(false),
-    has_directives(false) {}
+    has_locations(false)
+    {};
 
   bool hasCGI() const { return cgi_exists; }
-  bool hasDirectives() const { return has_directives; }
+  bool hasDirectives() const { return has_locations; }
 };
 
 struct HttpConfig {
-  std::vector<ConfigData> servers;
+  std::vector<ServerData> servers;
 
   HttpConfig() {}
 };

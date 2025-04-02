@@ -106,7 +106,7 @@ namespace URLMatcher
       return false;
     }
     
-    conn.full_path = conn.config->root + "/" + target;
+    conn.full_path = conn.config->root  + target;
     conn.path_for_stat = conn.full_path;
 
     // Adjust path_for_stat: remove trailing slash unless it's just the root path
@@ -290,7 +290,7 @@ namespace URLMatcher
       if (stat(conn.path_for_stat.c_str(), &path_stat) != 0)
       {
         perror("URLMatcher: stat failed");
-        debuglog(RED, "URLMatcher: Path not found or inaccessible '%s'", conn.path_for_stat.c_str());
+        //debuglog(RED, "URLMatcher: Path not found or inaccessible '%s'", conn.path_for_stat.c_str());
         conn.state = CONN_SIMPLE_RESPONSE;
         SimpleResponse::htmlErrorResponse(conn, 404); // Not Found
         HTTPServer::update_poll_events(conn.client_fd, POLLOUT);

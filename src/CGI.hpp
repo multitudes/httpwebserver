@@ -1,7 +1,7 @@
 # pragma once
 
 #include "HTTPConnxData.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include "debug.h"
 
 namespace CGI {

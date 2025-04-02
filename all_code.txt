@@ -58,7 +58,7 @@ int prepareCGI(HTTPConnxData& conn) {
 } // namespace CGI# pragma once
 
 #include "HTTPConnxData.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include "debug.h"
 
 namespace CGI {
@@ -68,15 +68,15 @@ int prepareCGI(HTTPConnxData& connx);
 
 } // namespace CGI#include <stdexcept>
 #include "Config.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include "debug.h"
 #include "HTTPServer.hpp"
 
 /** Initialize the static variables */
-std::vector<ConfigData> Config::configs_;
+std::vector<ServerData> Config::configs_;
 Config *Config::instance_ = NULL;
 std::string Config::_filename = "config/default.conf"; // Default filename
-std::map<uint16_t, ConfigData *> Config::port_map_;
+std::map<uint16_t, ServerData *> Config::port_map_;
 
 /**
  * @brief Constructor for the Config class
@@ -91,7 +91,7 @@ Config::Config(std::string filename) {
   (void)filename;
 
   // First server configuration
-  ConfigData server1;
+  ServerData server1;
   server1.keepalive_timeout = 5;
   Location location;
   location.return_directive = std::make_pair(301, "http://42berlin.de/");
@@ -143,14 +143,14 @@ Config::Config(std::string filename) {
   server1.cgiData.upload_dir = "www/uploads";
   // server1.cgiData = data;
   // Second server configuration
-  ConfigData server2;
+  ServerData server2;
   server2.ports.push_back(4246);
   server2.server_names.push_back("myWebserver");
   server2.server_names.push_back("someWebserver");
   server2.root = "http/www2/";
 
   // Third server configuration
-  ConfigData server3;
+  ServerData server3;
   server3.ports.push_back(4247);
   server3.server_names.push_back("myWebserver");
   server3.server_names.push_back("someWebserver");
@@ -185,14 +185,14 @@ void Config::initialize(std::string &config_file) {
   }
 }
 
-std::vector<ConfigData> &Config::getConfigData(char *config_file) {
+std::vector<ServerData> &Config::getServerData(char *config_file) {
   if (instance_ == NULL) {
     instance_ = new Config(Config::_filename);
   }
   return Config::configs_;
 }
 
-const ConfigData *Config::getConfigByPort(uint16_t port) {
+const ServerData *Config::getConfigByPort(uint16_t port) {
   if (instance_ == NULL) {
     instance_ = new Config(Config::_filename);
     if (!validate()) {
@@ -201,7 +201,7 @@ const ConfigData *Config::getConfigByPort(uint16_t port) {
       throw std::runtime_error("Invalid configuration");
     }
   }
-  std::map<uint16_t, ConfigData *>::const_iterator it = port_map_.find(port);
+  std::map<uint16_t, ServerData *>::const_iterator it = port_map_.find(port);
   return (it != port_map_.end()) ? it->second : NULL;
 }
 
@@ -281,7 +281,7 @@ struct BaseConf {
     }
 };
 
-struct ConfigData : public BaseConf {
+struct ServerData : public BaseConf {
   std::string serverListenAddress;
   std::vector<uint16_t> ports;
   std::vector<std::string> server_names;
@@ -289,11 +289,11 @@ struct ConfigData : public BaseConf {
   std::string root;
   std::map<std::string, Location> location_blocks;
   CGIData cgiData;
-  std::vector<std::string> limit_except;
+  std::vector<std::string> acceptedMethods;
   bool cgi_exists;
   bool has_directives;
 
-  ConfigData() :
+  ServerData() :
     BaseConf(),
     serverListenAddress("localhost"),
     index("index.html"),
@@ -306,7 +306,7 @@ struct ConfigData : public BaseConf {
 };
 
 struct HttpConfig {
-  std::vector<ConfigData> servers;
+  std::vector<ServerData> servers;
 
   HttpConfig() {}
 };
@@ -316,7 +316,7 @@ struct HttpConfig {
 #include <netdb.h>
 #include <pthread.h>
 #include <stdint.h> // C-style header because stdint is C++11>
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include <map>
 #include <string>
 #include <vector>
@@ -325,7 +325,7 @@ struct HttpConfig {
  * @brief Server configuration provider
  *
  * This class will be responsible for reading the configuration
- * file and creating an array of ConfigData structs
+ * file and creating an array of ServerData structs
  * to be used by the server. The implementation is to make it a
  * singleton class. It will be initialized once at the beginning of the program
  * and never changed in our implementation. we could add a update method
@@ -335,8 +335,8 @@ struct HttpConfig {
 class Config {
 public:
   static void initialize(std::string& config_file);
-  static std::vector<ConfigData>& getConfigData(char *config_file);
-  static const ConfigData* getConfigByPort(uint16_t port); 
+  static std::vector<ServerData>& getServerData(char *config_file);
+  static const ServerData* getConfigByPort(uint16_t port); 
   static void cleanup();
 
   private:
@@ -349,9 +349,9 @@ public:
   // better and clearer to have a func to validate acc to a set of rules
   static bool validate();
 
-  static std::map<uint16_t, ConfigData*> port_map_;
+  static std::map<uint16_t, ServerData*> port_map_;
   static Config *instance_;
-  static std::vector<ConfigData> configs_;
+  static std::vector<ServerData> configs_;
   static std::string _filename;
 };
 #include "Constants.hpp"
@@ -1387,7 +1387,7 @@ int run() {
 #include "HTTPConnxData.hpp"
 #include "SocketUtils.hpp"
 #include "Config.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include "CGI.hpp"
 #include "debug.h"
 
@@ -1536,7 +1536,7 @@ namespace SimpleResponse {
 
 } // namespace DirectoryListing#include "SocketUtils.hpp"
 #include "Config.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include "debug.h"
 #include <csignal>
 #include <cstring>
@@ -1566,7 +1566,7 @@ namespace SocketUtils {
  * socket could not be bound to the port or could not be set to listening mode.
  */
 void initialize() {
-  //   serverConfs = Config::getConfigData();
+  //   serverConfs = Config::getServerData();
   setSignalHandlers();
 
   // create the pollfd array empty but reserved
@@ -2066,11 +2066,11 @@ bool listenSocket(int server_socket) {
 #include "sys/socket.h"
 #include <csignal>
 #include "Config.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 
 
 namespace SocketUtils {
-	// std::vector<ConfigData> serverConfs;
+	// std::vector<ServerData> serverConfs;
 	void initialize();
 	void setSignalHandlers();
 	void handleSignal(int signal);

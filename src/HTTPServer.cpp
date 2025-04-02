@@ -1,3 +1,4 @@
+
 #include "HTTPServer.hpp"
 #include "Constants.hpp"
 #include "DirectoryListing.hpp"
@@ -141,7 +142,7 @@ int run() {
   Constants::initStatusMessageMap();
   Constants::initMimeTypes();
 
-  vector<ConfigData> configs_ = Config::getConfigData(NULL);
+  vector<ServerData> configs_ = Config::getServerData(NULL);
   vector<int> serverSockets;
   serverSockets.reserve(10);
 
