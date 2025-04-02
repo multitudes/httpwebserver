@@ -179,7 +179,7 @@ for (size_t i = 0; i < configs_.size(); i++) {
   // Main polling loop
   while (1) {
     int poll_result =
-        poll(&pollfds[0], pollfds.size(), 10000); // Wait indefinitely
+        poll(&pollfds[0], static_cast<nfds_t>(pollfds.size()), 10000); // Wait indefinitely
     
     if (poll_result < 0) {
       if (errno != EINTR) { // Interrupted by signal
@@ -353,7 +353,7 @@ for (size_t i = 0; i < configs_.size(); i++) {
               conn.reset();
               continue;
             }
-            conn.bytes_received += bytes_written;
+            conn.bytes_received += static_cast<size_t>(bytes_written);
             // if we have received all data, close the connection
             if (conn.bytes_received >= conn.data.content_length) {
               debuglog(YELLOW, "Upload complete first write");
@@ -369,7 +369,7 @@ for (size_t i = 0; i < configs_.size(); i++) {
           } else {
             // read again
             char buffer[BUFFER_SIZE];
-            int bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+            ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
             if (bytes_read <= 0) {
               if (bytes_read == 0) {
                 debug("Client disconnected");
@@ -379,16 +379,16 @@ for (size_t i = 0; i < configs_.size(); i++) {
               conn.reset();
               continue;
             }
-            printf("Received %d bytes from client\n", bytes_read);
+            debuglog(YELLOW, "Received %ld bytes from client\n", bytes_read);
             // write to file
-            ssize_t bytes_written = write(conn.file_fd, buffer, bytes_read);
+            ssize_t bytes_written = write(conn.file_fd, buffer, static_cast<size_t>(bytes_read));
             if (bytes_written < 0) {
               perror("Failed to write to file");
               close(conn.file_fd);
               conn.reset();
               continue;
             }
-            conn.bytes_received += bytes_written;
+            conn.bytes_received += static_cast<size_t>(bytes_written);
             // if we have received all data, close the connection
             if (conn.bytes_received >= conn.data.content_length) {
               debuglog(YELLOW, "Upload complete");
@@ -425,8 +425,8 @@ for (size_t i = 0; i < configs_.size(); i++) {
             }
             printf("Received %ld bytes from client\n", bytes_read);
           } else {
-            bytes_read = conn.data.request.size();
-            memcpy(buffer, conn.data.request.c_str(), conn.data.request.size());
+			  memcpy(buffer, conn.data.request.c_str(), conn.data.request.size());
+			  bytes_read = static_cast<ssize_t>(conn.data.request.size());
           }
           // Forward data to CGI process
           ssize_t bytes_written =

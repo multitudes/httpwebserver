@@ -11,5 +11,10 @@ namespace Constants {
 	void initStatusMessageMap();
 	void initMimeTypes();
 
+	extern int maxConnections;
+    extern int requestTimeout;
+    extern int responseTimeout;
+    extern int keepalive_timeout;
+
 
 } // namespace Constants
