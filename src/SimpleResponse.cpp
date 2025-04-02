@@ -33,7 +33,9 @@ namespace SimpleResponse {
     {
         string htmlCode;
         string statusText = Constants::statusMessages[statusCode];
-        string contentType = Constants::mimeTypes["html"];
+        
+        // Set content type directly in the connection
+        connection.content_type = Constants::mimeTypes[".html"];
 
         htmlCode = "<!DOCTYPE html>\n";
         htmlCode += "<html lang = \"en\">\n";
@@ -55,7 +57,7 @@ namespace SimpleResponse {
         htmlCode += "</body>\n";
         htmlCode += "</html>\n";
        
-        addHTTPHeader(connection, contentType, htmlCode, statusCode); 
+        addHTTPHeader(connection, connection.content_type, htmlCode, statusCode); 
     }
 
     // generate a simple text response
@@ -63,11 +65,49 @@ namespace SimpleResponse {
     {
         string response;
         string statusText = Constants::statusMessages[statusCode];
-        string contentType = Constants::mimeTypes["text"];
+        
+        // Set content type directly in the connection
+        connection.content_type = Constants::mimeTypes[".txt"];
 
         response = Utils::to_string(statusCode) + statusText;
-        addHTTPHeader(connection, contentType, response, statusCode); 
+        addHTTPHeader(connection, connection.content_type, response, statusCode); 
     }
 
+    // New function to prepare headers for file responses
+    void prepareFileResponse(HTTPConnxData &conn, string contentType, long fileSize)
+    {
+        // Store the content type in the connection for future reference
+        conn.content_type = contentType;
+        
+        string header = "HTTP/1.1 200 OK\r\n";
+        header += "Content-Type: " + contentType + "\r\n";
+        header += "Content-Length: " + Utils::to_string(fileSize) + "\r\n";
+        header += "Connection: close\r\n";
+        header += "\r\n";
+        
+        conn.data.response = header;
+        conn.headers_sent = false;
+        conn.data.bytes_sent = 0;
+        
+        debuglog(GREEN, "File response headers prepared: \n%s", conn.data.response.c_str());
+    }
+
+    // Overloaded version that uses the content_type already stored in the connection
+    void prepareFileResponse(HTTPConnxData &conn, long fileSize)
+    {
+        // Use the content type already stored in the connection
+        string header = "HTTP/1.1 200 OK\r\n";
+        header += "Content-Type: " + conn.content_type + "\r\n";
+        header += "Content-Length: " + Utils::to_string(fileSize) + "\r\n";
+        header += "Connection: close\r\n";
+        header += "\r\n";
+        
+        conn.data.response = header;
+        conn.headers_sent = false;
+        conn.data.bytes_sent = 0;
+        
+        debuglog(GREEN, "File response headers prepared using stored content type: %s\n%s", 
+                 conn.content_type.c_str(), conn.data.response.c_str());
+    }
 
 }

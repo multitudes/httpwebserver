@@ -17,6 +17,251 @@ using std::string;
 
 namespace URLMatcher
 {
+  /**
+   * @brief Receives and processes initial request data
+   * @param conn The connection data structure
+   * @return true if processing should continue, false if request handling is complete
+   */
+  bool receiveAndParseRequest(HTTPConnxData &conn)
+  {
+    char buffer[BUFFER_SIZE + 1];
+
+    // Ensure BUFFER_SIZE > 0 for recv
+    ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+
+    if (bytes_read <= 0)
+    {
+      if (bytes_read == 0)
+      {
+        debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.", conn.client_fd);
+      }
+      else
+      {
+        perror("URLMatcher: recv failed");
+      }
+      HTTPServer::remove_from_poll(conn.client_fd);
+      close(conn.client_fd);
+      conn.reset();
+      HTTPServer::connections.erase(conn.client_fd);
+      return false;
+    }
+    
+    // Null-terminate buffer safely
+    buffer[bytes_read] = '\0';
+    conn.data.request.append(buffer, static_cast<std::string::size_type>(bytes_read));
+    debuglog(YELLOW, "URLMatcher: Received %lu bytes for fd %d", bytes_read, conn.client_fd);
+
+    switch (conn.parseHeaders(conn))
+    {
+    case PARSE_SUCCESS:
+      debuglog(YELLOW, "Headers parsed successfully");
+      break;
+    case PARSE_INCOMPLETE:
+      debuglog(YELLOW, "Headers incomplete");
+      conn.state = CONN_PARSING_HEADER;
+      return false;
+    case PARSE_ERROR:
+      debuglog(RED, "Error parsing headers");
+      HTTPServer::remove_from_poll(conn.client_fd);
+      conn.reset();
+      conn.state = CONN_SIMPLE_RESPONSE;
+      debuglog(RED, "Error parsing headers");
+      return false;
+    }
+
+    debuglog(MAGENTA, "Parsed connection data: %s", conn.formatConnectionDataLong(conn.data).c_str());
+    return true;
+  }
+
+  /**
+   * @brief Gets configuration and constructs the target path
+   * @param conn The connection data structure
+   * @return true if processing should continue, false if request handling is complete
+   */
+  bool constructTargetPath(HTTPConnxData &conn)
+  {
+    conn.config = Config::getConfigByPort(conn.data.port);
+    if (!conn.config)
+    {
+      debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
+      SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
+      conn.state = CONN_SIMPLE_RESPONSE;
+      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      return false;
+    }
+
+    string target = conn.data.target;
+    if (!target.empty() && target[0] == '/')
+    {
+      target = target.substr(1);
+    }
+    
+    // Basic directory traversal check
+    if (target.find("..") != string::npos)
+    {
+      debuglog(RED, "URLMatcher: Directory traversal attempt detected: %s", conn.data.target.c_str());
+      SimpleResponse::htmlErrorResponse(conn, 400); // Bad Request
+      conn.state = CONN_SIMPLE_RESPONSE;
+      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      return false;
+    }
+    
+    conn.full_path = conn.config->root + "/" + target;
+    conn.path_for_stat = conn.full_path;
+
+    // Adjust path_for_stat: remove trailing slash unless it's just the root path
+    if (conn.path_for_stat.length() > conn.config->root.length() + 1 && 
+        conn.path_for_stat[conn.path_for_stat.length() - 1] == '/')
+    {
+      conn.path_for_stat.erase(conn.path_for_stat.length() - 1, 1);
+    }
+
+    debuglog(YELLOW, "URLMatcher: Constructed path for stat: '%s'", conn.path_for_stat.c_str());
+    debuglog(YELLOW, "URLMatcher: Original full path for dir checks: '%s'", conn.full_path.c_str());
+    
+    return true;
+  }
+
+  /**
+   * @brief Determines content type based on file extension and stores it in the connection
+   * @param conn The connection data structure
+   * @param path The file path to analyze
+   */
+  void determineContentType(HTTPConnxData &conn, const string &path)
+  {
+    // Default to generic binary type
+    conn.content_type = "application/octet-stream";
+    
+    string file_extension = "";
+    size_t dot_position = path.rfind('.');
+    
+    if (dot_position != string::npos) {
+      file_extension = path.substr(dot_position);
+      // Convert to lowercase for case-insensitive comparison
+      for (size_t i = 0; i < file_extension.length(); i++) {
+        file_extension[i] = static_cast<char>(std::tolower(file_extension[i]));
+      }
+      
+      debuglog(GREEN, "URLMatcher: Looking up MIME type for extension: '%s'", file_extension.c_str());
+      
+      // Check if we have a MIME type mapping for this extension
+      if (Constants::mimeTypes.find(file_extension) != Constants::mimeTypes.end()) {
+        conn.content_type = Constants::mimeTypes[file_extension];
+        debuglog(GREEN, "URLMatcher: Found MIME type: %s", conn.content_type.c_str());
+      } else {
+        debuglog(YELLOW, "URLMatcher: No MIME type found for extension: %s, using default", 
+                 file_extension.c_str());
+      }
+    }
+  }
+
+  /**
+   * @brief Handles serving a regular file
+   * @param conn The connection data structure
+   * @param path_for_stat The path to the file
+   * @param path_stat The stat structure with file info
+   * @return true if file was opened and prepared for sending
+   */
+  bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat, const struct stat &path_stat)
+  {
+    debuglog(GREEN, "URLMatcher: Target is a regular file. Serving '%s'", path_for_stat.c_str());
+    
+    // Set the content type in the connection
+    determineContentType(conn, path_for_stat);
+    
+    debuglog(YELLOW, "URLMatcher: File '%s' using MIME type '%s'", 
+             path_for_stat.c_str(), conn.content_type.c_str());
+
+    conn.file_fd = open(path_for_stat.c_str(), O_RDONLY);
+    if (conn.file_fd < 0)
+    {
+      perror("URLMatcher: Failed to open file");
+      SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden is a common reason
+      conn.state = CONN_SIMPLE_RESPONSE;
+      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      return false;
+    }
+    
+    conn.file_size = path_stat.st_size;
+    conn.state = CONN_FILE_REQUEST;
+    
+    // Use the overloaded version that doesn't need the content type parameter
+    SimpleResponse::prepareFileResponse(conn, conn.file_size);
+    
+    debuglog(GREEN, "URLMatcher: Set state to CONN_FILE_REQUEST for fd %d, size %ld", conn.client_fd, conn.file_size);
+    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    return true;
+  }
+
+  /**
+   * @brief Handles serving an index file from a directory
+   * @param conn The connection data structure
+   * @param index_file_path The path to the index file
+   * @param index_stat The stat structure with file info
+   * @return true if index file was opened and prepared for sending
+   */
+  bool handleIndexFile(HTTPConnxData &conn, const string &index_file_path, const struct stat &index_stat)
+  {
+    debuglog(GREEN, "URLMatcher: Index file found. Serving '%s'", index_file_path.c_str());
+    
+    conn.file_fd = open(index_file_path.c_str(), O_RDONLY);
+    if (conn.file_fd < 0)
+    {
+      perror("URLMatcher: Failed to open existing index file");
+      SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
+      conn.state = CONN_SIMPLE_RESPONSE;
+      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      return false;
+    }
+    
+    // Set the content type in the connection
+    determineContentType(conn, index_file_path);
+    
+    conn.file_size = index_stat.st_size;
+    conn.state = CONN_FILE_REQUEST;
+    
+    // Use the overloaded version that doesn't need the content type parameter
+    SimpleResponse::prepareFileResponse(conn, conn.file_size);
+    
+    debuglog(GREEN, "URLMatcher: Set state to CONN_FILE_REQUEST for index fd %d, size %ld", 
+             conn.client_fd, conn.file_size);
+    HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+    return true;
+  }
+
+  /**
+   * @brief Handles directory listing when autoindex is enabled
+   * @param conn The connection data structure
+   * @return true if directory was successfully processed
+   */
+  bool handleDirectoryListing(HTTPConnxData &conn)
+  {
+    if (!conn.config->autoindex)
+    {
+      debuglog(RED, "URLMatcher: Autoindex is disabled.");
+      SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden to list directory
+      conn.state = CONN_SIMPLE_RESPONSE;
+      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      return false;
+    }
+    
+    debuglog(YELLOW, "URLMatcher: Autoindex is enabled. Calling getDIRListing for '%s'.", conn.full_path.c_str());
+    
+    if (DirectoryListing::getDIRListing(conn, conn.full_path))
+    {
+      debuglog(GREEN, "URLMatcher: getDIRListing prepared listing response for fd %d.", conn.client_fd);
+      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      return true;
+    }
+    else
+    {
+      debuglog(RED, "URLMatcher: getDIRListing returned false for fd %d (likely opendir error).", conn.client_fd);
+      SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
+      conn.state = CONN_SIMPLE_RESPONSE;
+      HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
+      return false;
+    }
+  }
 
   /**
    * @brief Validates incoming request, handles file/directory serving.
@@ -25,321 +270,76 @@ namespace URLMatcher
    */
   void validateRequest(HTTPConnxData &conn)
   {
-    // ================================================================
-    // 1. Receive Request & Parse Headers
-    //    This assumes conn.data.request is populated and headers are
-    //    parsed, setting conn.data.headers_received = true, and
-    //    populating conn.data.method, conn.data.target etc.
-    // ================================================================
-    // Example placeholder for receiving/parsing if not done earlier:
+    // Only process if we don't have headers yet
     if (conn.data.request.empty() || !conn.data.headers_received)
     {
-      char buffer[BUFFER_SIZE + 1];
-
-      // Ensure BUFFER_SIZE > 0 for recv
-      ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
-
-      if (bytes_read <= 0)
+      // Step 1: Receive and parse the HTTP request
+      if (!receiveAndParseRequest(conn))
       {
-        if (bytes_read == 0)
-        {
-          debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.", conn.client_fd);
-        }
-        else
-        {
-          perror("URLMatcher: recv failed");
-        }
-        HTTPServer::remove_from_poll(conn.client_fd);
-        close(conn.client_fd);
-        conn.reset();
-        HTTPServer::connections.erase(conn.client_fd); // Assuming map exists and is accessible
-        return;
+        return; // Request handling complete or failed
       }
-      // Null-terminate buffer safely
-      buffer[bytes_read] = '\0';
-      conn.data.request.append(buffer, static_cast<std::string::size_type>(bytes_read));
-      debuglog(YELLOW, "URLMatcher: Received %lu bytes for fd %d", bytes_read, conn.client_fd);
-
-    //   conn.data.request.append(buffer, bytes_read);
-      switch (conn.parseHeaders(conn))
+      
+      // Step 2: Get configuration and construct the target path
+      if (!constructTargetPath(conn))
       {
-      case PARSE_SUCCESS:
-        debuglog(YELLOW, "Headers parsed successfully");
-        break;
-      case PARSE_INCOMPLETE:
-        debuglog(YELLOW, "Headers incomplete");
-        conn.state = CONN_PARSING_HEADER;
-        return;
-      case PARSE_ERROR:
-        debuglog(RED, "Error parsing headers");
-        HTTPServer::remove_from_poll(conn.client_fd);
-        conn.reset();
-        conn.state = CONN_SIMPLE_RESPONSE;
-        debuglog(RED, "Error parsing headers");
+        return; // Request handling complete or failed
       }
-
-	//   formatConnectionData
-	    debuglog(MAGENTA, "Parsed connection data: %s", conn.formatConnectionDataLong(conn.data).c_str());
-      // TODO prepare error response
-      //   SimpleResponse::htmlErrorResponse(conn, 400);
-      // --- End Placeholder ---
-
-      // ================================================================
-      // 2. Get Configuration & Construct Path
-      // ================================================================
-
-      const ServerData *config = Config::getConfigByPort(conn.data.port);
-      if (!config)
-      {
-        debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
-        SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
-        HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
-        return;
-      }
-
-      //TODO check for location 
-  
-      //TODO check for redirect
-
-      //test text response
-      // SimpleResponse::addHTTPHeader(conn, Constants::mimeTypes["text"], "Hello World", 200);
-      // HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
-      // return;
-     
-      //test simpleStatus response
-      // SimpleResponse::addHTTPHeader(conn, "text/plain", "Hello World", 200);
-      // HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
-      // return;
-
-      // build the full path to the target
-      string target = conn.data.target;
-      if (!target.empty() && target[0] == '/')
-      {
-        target = target.substr(1);
-      }
-      // Basic directory traversal check, to block attack method like ../../../etc/passwd
-      if (target.find("..") != string::npos)
-      {
-        debuglog(RED, "URLMatcher: Directory traversal attempt detected: %s", conn.data.target.c_str());
-        SimpleResponse::htmlErrorResponse(conn, 400); // Bad Request
-        HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
-        return;
-      }
-      string full_path = config->root + target;
-      // path_for_stat is adjusted for reliable stat() calls (removes trailing slash usually)
-      string path_for_stat = full_path;
-
-      // Adjust path_for_stat (C++98 compliant): remove trailing slash unless it's just the root path itself
-      if (path_for_stat.length() > config->root.length() + 1 && path_for_stat[path_for_stat.length() - 1] == '/')
-      {
-        path_for_stat.erase(path_for_stat.length() - 1, 1);
-      }
-
-      debuglog(YELLOW, "URLMatcher: Constructed path for stat: '%s'", path_for_stat.c_str());
-      debuglog(YELLOW, "URLMatcher: Original full path for dir checks: '%s'", full_path.c_str());
-
-      // ================================================================
-      // 3. Stat the path to check existence and type
-      // ================================================================
+      
+      // Step 3: Check if the path exists
       struct stat path_stat;
-      if (stat(path_for_stat.c_str(), &path_stat) != 0)
+      if (stat(conn.path_for_stat.c_str(), &path_stat) != 0)
       {
-        // File/Dir does not exist or stat failed (e.g., permissions on parent dir)
         perror("URLMatcher: stat failed");
-        debuglog(RED, "URLMatcher: Path not found or inaccessible '%s'", path_for_stat.c_str());
-        //set state to CONN_SIMPLE_RESPONSE
+        debuglog(RED, "URLMatcher: Path not found or inaccessible '%s'", conn.path_for_stat.c_str());
         conn.state = CONN_SIMPLE_RESPONSE;
         SimpleResponse::htmlErrorResponse(conn, 404); // Not Found
         HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
-
-      // ================================================================
-      // 4. Handle based on path type
-      // ================================================================
-
-      // --- 4a. Handle Regular File ---
-      if (S_ISREG(path_stat.st_mode))
+      
+      // Step 4: Handle based on path type
+      // Handle regular file
+      if (S_ISREG(path_stat.st_mode)) 
       {
-        debuglog(GREEN, "URLMatcher: Target is a regular file. Serving '%s'", path_for_stat.c_str());
-
-        // Extract file extension to determine content type
-        string content_type = "application/octet-stream"; // Default MIME type
-        string file_extension = "";
-        size_t dot_position = path_for_stat.rfind('.');
-        if (dot_position != string::npos) {
-          file_extension = path_for_stat.substr(dot_position);
-          // Convert to lowercase for case-insensitive comparison
-          for (size_t i = 0; i < file_extension.length(); i++) {
-            file_extension[i] = static_cast<char>(std::tolower(file_extension[i]));
-          }
-          
-          debuglog(GREEN, "URLMatcher: Looking up MIME type for extension: '%s'", file_extension.c_str());
-          
-          // Check if we have a MIME type mapping for this extension
-          if (Constants::mimeTypes.find(file_extension) != Constants::mimeTypes.end()) {
-            content_type = Constants::mimeTypes[file_extension];
-            debuglog(GREEN, "URLMatcher: Found MIME type: %s", content_type.c_str());
-          } else {
-            debuglog(YELLOW, "URLMatcher: No MIME type found for extension: %s, using default", file_extension.c_str());
-          }
-        }
-
-        debuglog(YELLOW, "URLMatcher: File '%s' has extension '%s', using MIME type '%s'", 
-                 path_for_stat.c_str(), file_extension.c_str(), content_type.c_str());
-
-        conn.file_fd = open(path_for_stat.c_str(), O_RDONLY); // Use path_for_stat
-        if (conn.file_fd < 0)
-        {
-          perror("URLMatcher: Failed to open file");
-          // Check errno? EACCES -> 403, ENOENT (less likely here) -> 404
-          SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden is a common reason
-          HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
-        }
-        else
-        {
-          conn.file_size = path_stat.st_size; // Get size from initial stat
-          conn.state = CONN_FILE_REQUEST;     // Set state for file sending logic
-          
-          // Prepare HTTP headers for the file response with proper content type
-          std::stringstream headers;
-          headers << "HTTP/1.1 200 OK\r\n";
-          headers << "Content-Type: " << content_type << "\r\n";
-          headers << "Content-Length: " << conn.file_size << "\r\n";
-          headers << "Connection: close\r\n";
-          headers << "\r\n"; // Empty line to separate headers from body
-          
-          // Store headers in conn.data.response for sending
-          conn.data.response = headers.str();
-          conn.headers_sent = false;          // Reset flags for sending this file
-          conn.data.bytes_sent = 0;
-          
-          debuglog(GREEN, "URLMatcher: Set state to CONN_FILE_REQUEST for fd %d, size %ld", conn.client_fd, conn.file_size);
-          debuglog(YELLOW, "URLMatcher: Prepared response headers with content-type: %s", content_type.c_str());
-          HTTPServer::update_poll_events(conn.client_fd, POLLOUT); // Signal ready to send
-        }
+        handleRegularFile(conn, conn.path_for_stat, path_stat);
       }
-      // --- 4b. Handle Directory ---
+      // Handle directory
       else if (S_ISDIR(path_stat.st_mode))
       {
-        debuglog(YELLOW, "URLMatcher: Target is a directory '%s'", full_path.c_str()); // Use original path for context
-
-        // --- Check for index file FIRST ---
-        string index_file_path = full_path;
-        // Ensure directory path ends with '/' before appending index name for consistency
+        debuglog(YELLOW, "URLMatcher: Target is a directory '%s'", conn.full_path.c_str());
+        
+        // First check for an index file
+        string index_file_path = conn.full_path;
         if (index_file_path.empty() || index_file_path[index_file_path.length() - 1] != '/')
         {
           index_file_path += '/';
         }
-        index_file_path += config->index; // index name from config (e.g., "index.html")
-
+        index_file_path += conn.config->index;
+        
         struct stat index_stat;
         debuglog(YELLOW, "URLMatcher: Checking for index file at '%s'", index_file_path.c_str());
-
-        // Attempt to stat the index file
+        
+        // If index file exists, serve it
         if (stat(index_file_path.c_str(), &index_stat) == 0 && S_ISREG(index_stat.st_mode))
         {
-          // --- Index file FOUND and is a regular file ---
-          debuglog(GREEN, "URLMatcher: Index file found. Serving '%s'", index_file_path.c_str());
-          conn.file_fd = open(index_file_path.c_str(), O_RDONLY);
-          if (conn.file_fd < 0)
-          {
-            // This is unexpected if stat succeeded, likely permissions issue on index itself
-            perror("URLMatcher: Failed to open existing index file");
-            SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
-            HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
-          }
-          else
-          {
-            // Extract file extension to determine content type for index file
-            string content_type = "text/html"; // Default for index files is HTML
-            string file_extension = "";
-            size_t dot_position = index_file_path.rfind('.');
-            if (dot_position != string::npos) {
-              file_extension = index_file_path.substr(dot_position);
-              // Convert to lowercase for case-insensitive comparison
-              for (size_t i = 0; i < file_extension.length(); i++) {
-                file_extension[i] = static_cast<char>(std::tolower(file_extension[i]));
-              }
-              
-              // Check for file extension in mime types map
-              if (Constants::mimeTypes.find(file_extension) != Constants::mimeTypes.end()) {
-                content_type = Constants::mimeTypes[file_extension];
-              }
-            }
-
-            conn.file_size = index_stat.st_size; // Size from index_stat
-            conn.state = CONN_FILE_REQUEST;      // Set state to serve the index file
-            
-            // Prepare HTTP headers for the file response with proper content type
-            std::stringstream headers;
-            headers << "HTTP/1.1 200 OK\r\n";
-            headers << "Content-Type: " << content_type << "\r\n";
-            headers << "Content-Length: " << conn.file_size << "\r\n";
-            headers << "Connection: close\r\n";
-            headers << "\r\n"; // Empty line to separate headers from body
-            
-            // Store headers in conn.data.response for sending
-            conn.data.response = headers.str();
-            conn.headers_sent = false;
-            conn.data.bytes_sent = 0;
-            
-            debuglog(GREEN, "URLMatcher: Set state to CONN_FILE_REQUEST for index fd %d, size %ld", conn.client_fd, conn.file_size);
-            debuglog(YELLOW, "URLMatcher: Prepared response headers with content-type: %s", content_type.c_str());
-            HTTPServer::update_poll_events(conn.client_fd, POLLOUT); // Ready to send index file
-          }
+          handleIndexFile(conn, index_file_path, index_stat);
         }
+        // Otherwise, try directory listing
         else
         {
-          // --- Index file NOT FOUND or not a regular file ---
-          debuglog(YELLOW, "URLMatcher: Index file '%s' not found or not regular. Checking autoindex.", config->index.c_str());
-
-          // *** Check AUTOINDEX configuration ***
-          if (!config->autoindex)
-          {
-            // Autoindex is disabled for this server/location
-            debuglog(RED, "URLMatcher: Autoindex is disabled.");
-            SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden to list directory
-            HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
-          }
-          else
-          {
-            // *** Autoindex is ENABLED: Try to list the directory ***
-            debuglog(YELLOW, "URLMatcher: Autoindex is enabled. Calling getDIRListing for '%s'.", full_path.c_str());
-
-            // *** Call your ORIGINAL getDIRListing ***
-            // Pass the original directory path (full_path)
-            if (DirectoryListing::getDIRListing(conn, full_path))
-            {
-              // --- Listing Prepared by getDIRListing ---
-              // getDIRListing already set state to CONN_SIMPLE_RESPONSE and prepared response data
-              debuglog(GREEN, "URLMatcher: getDIRListing prepared listing response for fd %d.", conn.client_fd);
-              HTTPServer::update_poll_events(conn.client_fd, POLLOUT); // Ready to send listing
-            }
-            else
-            {
-              // --- getDIRListing Returned False ---
-              // This likely means opendir() failed inside getDIRListing (permissions?)
-              // because the autoindex check passed here.
-              debuglog(RED, "URLMatcher: getDIRListing returned false for fd %d (likely opendir error).", conn.client_fd);
-              SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error (more specific than 403 now)
-              HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
-            }
-          }
-        } // End of 'else' block for index not found
-      } // End of 'else if (S_ISDIR(...))' block
-
-      // --- 4c. Handle Other File Types (symlinks to non-files, sockets, etc.) ---
+          debuglog(YELLOW, "URLMatcher: Index file '%s' not found or not regular. Checking autoindex.", 
+                   conn.config->index.c_str());
+          handleDirectoryListing(conn);
+        }
+      }
+      // Handle other file types
       else
       {
-        debuglog(RED, "URLMatcher: Path '%s' is not a regular file or directory.", path_for_stat.c_str());
+        debuglog(RED, "URLMatcher: Path '%s' is not a regular file or directory.", conn.path_for_stat.c_str());
         SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden - don't serve unusual file types
+        conn.state = CONN_SIMPLE_RESPONSE;
         HTTPServer::update_poll_events(conn.client_fd, POLLOUT);
       }
-
-      // If we reach here without setting POLLOUT, it might indicate an unhandled case
-      // or waiting for more request body data (if applicable for non-GET requests).
-
-    } // end of validateRequest
-  }
+    }
+  } // end of validateRequest
 } // end of namespace URLMatcher

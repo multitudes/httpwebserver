@@ -31,30 +31,47 @@ namespace DirectoryListing
         std::string dirString;
         // Read directory contents
         struct dirent *entry;
+        
+        // Ensure target path ends with a slash for proper URL construction
+        std::string target_path = connection.data.target;
+        if (target_path.length() > 1 && target_path[target_path.length() - 1] != '/') {
+            target_path += '/';
+        }
+        
+        debuglog(YELLOW, "Directory Listing using URL base: %s", target_path.c_str());
+        
         while ((entry = readdir(dir)) != NULL)
         {
             dirString += "<li><a href=\"";
-            dirString += connection.data.target;
-            dirString += entry->d_name;
+            dirString += target_path;
+            // Skip adding target path if we're at root and it's already "/"
+            if (target_path != "/" || entry->d_name[0] != '\0') {
+                dirString += entry->d_name;
+            }
             dirString += "\">";
             dirString += entry->d_name;
             dirString += "</a></li>\n";
         }
         closedir(dir);
+        
         std::string htmlCode;
         // add html code to the directory string
         htmlCode = "<html><head><title>Directory Listing</title>";
         htmlCode += "<style>";
         htmlCode += "body {background-color: black; color: white;} a {color: lightblue;}";
         htmlCode += "</style>";
-        htmlCode += "</head><body><h1>Index of " + full_path + "</h1><ul>" + dirString + "</ul></body></html>";
-       // htmlCode += "</head><body><h1>" + connection.data.target + "</h1><ul>" + dirString + "</ul></body></html>";
+        htmlCode += "</head><body><h1>Index of " + connection.data.target + "</h1><ul>" + dirString + "</ul></body></html>";
+        
         debuglog(GREEN, "Directory contents: \n%s", dirString.c_str());
-        // update connection state and data
+        
+        // Set content type directly in the connection
+        connection.content_type = Constants::mimeTypes[".html"];
+        
+        // update connection state
         connection.state = CONN_SIMPLE_RESPONSE;
-        // generate HTTP header and include html payload
-        string contentType = Constants::mimeTypes["html"];
-        SimpleResponse::addHTTPHeader(connection, contentType, htmlCode, 200);
+        
+        // generate HTTP header and include html payload using the stored content type
+        SimpleResponse::addHTTPHeader(connection, connection.content_type, htmlCode, 200);
 
         debuglog(BLUE, "Directory simple response: \n%s", connection.data.response.c_str());
 
