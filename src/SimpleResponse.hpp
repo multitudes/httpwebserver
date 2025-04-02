@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "HTTPConnxData.hpp"
@@ -14,6 +13,10 @@ using std::string;
 namespace SimpleResponse {
 
     void addHTTPHeader(HTTPConnxData &connections, string contentType, std::string response, int statusCode);
+
+    // Functions for file responses
+    void prepareFileResponse(HTTPConnxData &conn, string contentType, long fileSize);
+    void prepareFileResponse(HTTPConnxData &conn, long fileSize); // Overloaded version that uses conn.content_type
 
     void htmlErrorResponse(HTTPConnxData &connections, int statusCode);  
 
