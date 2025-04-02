@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <vector>
 #include "Config.hpp"
+#include <cstring>
 
 using std::map;
 using std::string;
