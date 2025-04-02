@@ -264,7 +264,7 @@ int run() {
 		  uint16_t client_port = ntohs(client_addr.sin_port);
 		  
 		  // add the timeout for the client
-		  lastActivityTime[client_fd] = std::time(nullptr);
+		  lastActivityTime[client_fd] = std::time(NULL);
 
 		  debuglog(YELLOW,"Client connected from %s:%d", conn.data.client_ip, client_port);
 
