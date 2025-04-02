@@ -60,7 +60,7 @@ void remove_from_poll(int fd);
 
 // Update events for an existing fd
 bool update_poll_events(int fd, short events);
-void extract_filename(const char *request, char *filename);
+// void extract_filename(const char *request, char *filename);
 
 
 int run();

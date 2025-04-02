@@ -18,33 +18,12 @@ namespace SocketUtils {
 	void handlePipe(int signal);
 	void handleAlarm(int signal);
 
-	// void shutdownServer();
 	int createBindSocket(uint16_t port);
 	bool listenSocket(int server_socket);
 	bool setSendRecTimeout(int clientfd);
 	void checkForIdleConnections();
+	void add_to_poll(int fd, short events);
+	void remove_from_poll(int fd);
+	bool update_poll_events(int fd, short events);
+	void shutdownServer();
 }
-
-/**
- * @brief Network Utilities class
- *
- * Used to refactor and group network related functions
- * like creating a socket, listening on it, sending error responses
- */
-// class NetUtils {
-//  public:
-// //   static void initialize();
-//   static int createSocket(uint16_t port);
-//   static bool listenSocket(int server_socket);
-//   static std::string getclient_ip(int clientfd);
-//   static void setSendRecTimeout(ServerConf conf, int clientfd);
-//   static void checkForIdleConnections();
-//   static bool maxConnectionsCheck(int clientfd);
-//   static bool printLocalAddress(int clientfd);
-//   static void shutdownServer();
-//   static void sendErrorResponse(int clientfd, int status_code,
-//                                 const char* status_message);
-//   static char* binToHex(const unsigned char* input, size_t len);
-//   static std::string trim(const std::string& str);
-
-// };

@@ -22,6 +22,42 @@ using std::signal;
 
 namespace SocketUtils {
 
+
+// Add a file descriptor to the poll array
+void add_to_poll(int fd, short events) {
+	struct pollfd pfd;
+	memset(&pfd, 0, sizeof(pfd));
+	pfd.fd = fd;
+	pfd.events = events;
+	HTTPServer::pollfds.push_back(pfd);
+  }
+  
+  // Remove a fd by swapping with last element (O(1))
+  void remove_from_poll(int fd) {
+	for (HTTPServer::PollfdsVector::iterator it = HTTPServer::pollfds.begin(); it != HTTPServer::pollfds.end();
+		 ++it) {
+	  if (it->fd == fd) {
+		*it = HTTPServer::pollfds.back();
+		HTTPServer::pollfds.pop_back();
+		return;
+	  }
+	}
+  }
+  
+  // Update events for an existing fd
+  // Returns true if found and updated, false otherwise
+  bool update_poll_events(int fd, short events) {
+	for (HTTPServer::PollfdsVector::iterator it = HTTPServer::pollfds.begin(); it != HTTPServer::pollfds.end();
+		 ++it) {
+	  if (it->fd == fd) {
+		it->events = events;
+		return true; // Found and updated
+	  }
+	}
+	return false; // FD not found
+  }
+  
+
 /**
  * @brief Initialize the webserver
  *
@@ -48,6 +84,8 @@ void setSignalHandlers() {
 
   if (sigaction(SIGCHLD, &sa, NULL) == -1) {
     perror("sigaction");
+	shutdownServer();
+	debuglog(RED, "Error setting up SIGCHLD handler");
     exit(EXIT_FAILURE);
   }
 }
@@ -58,7 +96,7 @@ void setSignalHandlers() {
 void handleSignal(int signal) {
   if (signal == SIGINT || signal == SIGQUIT || signal == SIGTERM) {
     debuglog(YELLOW, "Caught signal %d - Shutting down the server", signal);
-    //   shutdownServer();
+    shutdownServer();
     Config::cleanup();
     std::exit(0);
   }

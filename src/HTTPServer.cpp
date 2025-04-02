@@ -39,41 +39,8 @@ vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
 
-// Add a file descriptor to the poll array
-void add_to_poll(int fd, short events) {
-  struct pollfd pfd;
-  memset(&pfd, 0, sizeof(pfd));
-  pfd.fd = fd;
-  pfd.events = events;
-  pollfds.push_back(pfd);
-}
-
-// Remove a fd by swapping with last element (O(1))
-void remove_from_poll(int fd) {
-  for (PollfdsVector::iterator it = pollfds.begin(); it != pollfds.end();
-       ++it) {
-    if (it->fd == fd) {
-      *it = pollfds.back();
-      pollfds.pop_back();
-      return;
-    }
-  }
-}
-
-// Update events for an existing fd
-// Returns true if found and updated, false otherwise
-bool update_poll_events(int fd, short events) {
-  for (PollfdsVector::iterator it = pollfds.begin(); it != pollfds.end();
-       ++it) {
-    if (it->fd == fd) {
-      it->events = events;
-      return true; // Found and updated
-    }
-  }
-  return false; // FD not found
-}
-
 // Send HTTP response headers
+// maybe it should be somewhere else?
 int send_headers(HTTPConnxData &conn) {
   if (!conn.data.response.empty()) {
     if (send(conn.client_fd, conn.data.response.c_str(),
@@ -117,25 +84,26 @@ int send_file(HTTPConnxData &conn) {
   return 1; // More data to send
 }
 
-void extract_filename(const char *request, char *filename) {
-  // Simple extraction - look for first line with path
-  const char *start = strstr(request, " /");
-  if (!start)
-    return;
+// not used? 
+// void extract_filename(const char *request, char *filename) {
+//   // Simple extraction - look for first line with path
+//   const char *start = strstr(request, " /");
+//   if (!start)
+//     return;
 
-  start += 2; // Skip the space and slash
-  const char *end = strchr(start, ' ');
-  if (!end)
-    return;
+//   start += 2; // Skip the space and slash
+//   const char *end = strchr(start, ' ');
+//   if (!end)
+//     return;
 
-  size_t len = static_cast<size_t>(end - start);
-  if (len >= sizeof(connections[0].filename)) {
-    len = sizeof(connections[0].filename) - 1;
-  }
+//   size_t len = static_cast<size_t>(end - start);
+//   if (len >= sizeof(connections[0].filename)) {
+//     len = sizeof(connections[0].filename) - 1;
+//   }
 
-  strncpy(filename, start, len);
-  filename[len] = '\0';
-}
+//   strncpy(filename, start, len);
+//   filename[len] = '\0';
+// }
 
 int run() {
   SocketUtils::setSignalHandlers();
