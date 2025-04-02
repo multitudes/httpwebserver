@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <vector>
+#include "Config.hpp"
 
 using std::map;
 using std::string;
@@ -124,12 +125,19 @@ struct HTTPConnxData {
   bool upload_completed;
   size_t bytes_received;
 
+  // New fields for paths, config, and content type
+  const ConfigData* config;      // Pointer to server configuration for this connection
+  string full_path;              // Full path to the requested resource
+  string path_for_stat;          // Path adjusted for stat() calls
+  string content_type;           // Content type (MIME type) for the response
+
   HTTPConnxData()
       : state(CONN_INCOMING), data(), client_fd(-1), indexServerConf(-1),
         is_sending(0), is_receiving(0), headers_sent(false), poll_stdin_idx(-1),
         poll_stdout_idx(-1), child_pid(-1), cgi_processing(false), file_fd(-1),
         file_size(0), file_offset(0), writeto_fd(-1), upload_completed(false),
-        bytes_received(0) {
+        bytes_received(0), config(NULL), full_path(""), path_for_stat(""), 
+        content_type("") {
 
     filename[0] = '\0';
   }

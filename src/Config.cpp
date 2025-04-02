@@ -40,7 +40,7 @@ Config::Config(std::string filename) {
   server1.responseTimeout = 60;
   server1.maxConnections = 100;
   server1.maxBodySize = 10000000;
-  server1.autoindex = false;
+  server1.autoindex = true;
 
   server1.acceptedMethods.push_back("GET");
   server1.acceptedMethods.push_back("POST");

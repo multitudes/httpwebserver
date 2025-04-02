@@ -1,0 +1,58 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv 418 I'm a teapot</title>
+    <link rel="icon" href="../favicon/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" type="text/css" href="../css/style.css">
+    <style>
+        body {
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        h1 {
+            color: #333;
+        }
+        .teapot {
+            width: 200px;
+            height: 200px;
+            background-image: url('../images/teapot.png');
+            background-size: cover;
+            margin: 0 auto;
+        }
+        .message {
+            font-size: 24px;
+            color: #555;
+        }
+        .error-code {
+            font-size: 48px;
+            color: #d9534f;
+        }
+        .description {
+            font-size: 18px;
+            color: #777;
+        }
+        .back-link {
+            margin-top: 20px;
+            display: inline-block;
+            text-decoration: none;
+            color: #007bff;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<!-- show teapot image -->
+<body>
+    <div class="teapot">
+        <!-- Teapot image will be displayed here -->
+         <img src="/images/teapot-emoji.png" alt="Teapot" style="width: 100%; height: 100%;">
+    </div>
+    <h1 class="error-code">418 I'm a teapot</h1>
+    <p class="message">I'm a teapot on server 2!!!!</p>
+    <p class="description">The server refuses to brew coffee because it is a teapot.</p>
+    <a href="../index.html" class="back-link">Go back to the main page</a>
+</html>
