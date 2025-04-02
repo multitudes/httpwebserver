@@ -38,7 +38,7 @@ Yes, exactly! In the approach I described, **only the client socket (`client_fd`
    - Detect `POLLIN` on `client_fd` → read HTTP request → open file.  
    - Store `file_fd` in a `client_to_file` map:  
      ```c
-     std::unordered_map<int, int> client_to_file;  // client_fd → file_fd
+     std::map<int, int> client_to_file;  // client_fd → file_fd
      int file_fd = open("file.txt", O_RDONLY | O_NONBLOCK);
      client_to_file[client_fd] = file_fd;
      ```

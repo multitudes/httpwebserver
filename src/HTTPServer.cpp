@@ -10,7 +10,6 @@
 #include <unistd.h>
 
 using std::map;
-using std::unordered_map;
 using std::string;
 using std::vector;
 
@@ -38,7 +37,7 @@ typedef std::vector<struct pollfd> PollfdsVector;
 PollfdsVector pollfds;
 vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
-unordered_map<int, std::time_t> lastActivityTime;
+map<int, std::time_t> lastActivityTime;
 
 // Add a file descriptor to the poll array
 void add_to_poll(int fd, short events) {

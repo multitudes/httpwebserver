@@ -288,7 +288,7 @@ void checkForIdleConnections() {
   idleConnections.reserve(100);
   // lastActivityTime is a map client_fd to the last time active
   // so i get tthe serverConf for the client and check
-  for (std::unordered_map<int, time_t>::iterator it =
+  for (std::map<int, time_t>::iterator it =
            HTTPServer::lastActivityTime.begin();
        it != HTTPServer::lastActivityTime.end(); ++it) {
 
