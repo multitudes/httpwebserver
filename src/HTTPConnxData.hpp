@@ -126,7 +126,7 @@ struct HTTPConnxData {
   size_t bytes_received;
 
   // New fields for paths, config, and content type
-  const ConfigData* config;      // Pointer to server configuration for this connection
+  const ServerData* config;      // Pointer to server configuration for this connection
   string full_path;              // Full path to the requested resource
   string path_for_stat;          // Path adjusted for stat() calls
   string content_type;           // Content type (MIME type) for the response

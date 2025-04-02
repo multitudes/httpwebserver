@@ -16,7 +16,7 @@
 #include "HTTPConnxData.hpp"
 #include "SocketUtils.hpp"
 #include "Config.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include "CGI.hpp"
 #include "debug.h"
 

@@ -1,6 +1,6 @@
 #include "SocketUtils.hpp"
 #include "Config.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 #include "debug.h"
 #include <csignal>
 #include <cstring>
@@ -30,7 +30,7 @@ namespace SocketUtils {
  * socket could not be bound to the port or could not be set to listening mode.
  */
 void initialize() {
-  //   serverConfs = Config::getConfigData();
+  //   serverConfs = Config::getServerData();
   setSignalHandlers();
 
   // create the pollfd array empty but reserved
@@ -38,7 +38,7 @@ void initialize() {
   // 	Networker::pollfdsIOConnx.reserve(100);
   //     if (Networker::serverConfs.empty()) {
   //       debug("Error: config with empty servers\n");
-  //       throw std::runtime_error("Error: config with empty servers");
+  //       servers std::runtime_error("Error: config with empty servers");
   //     }
   //     // I start the sockets, bind and listen here
   //     for (size_t i = 0; i < Networker::serverConfs.size(); ++i) {

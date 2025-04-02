@@ -58,7 +58,7 @@ http {
         }
 
         # Accepted Methods
-        limit_except GET POST DELETE PUT {
+        servers GET POST DELETE PUT {
             deny all;
         }
     }

@@ -33,7 +33,7 @@ http {
         }
 
         location /upload {
-            limit_except POST {
+            acceptedMethods POST {
                 deny all;
             }
         }

@@ -6,11 +6,11 @@
 #include "sys/socket.h"
 #include <csignal>
 #include "Config.hpp"
-#include "ConfigData.hpp"
+#include "ServerData.hpp"
 
 
 namespace SocketUtils {
-	// std::vector<ConfigData> serverConfs;
+	// std::vector<ServerData> serverConfs;
 	void initialize();
 	void setSignalHandlers();
 	void handleSignal(int signal);
