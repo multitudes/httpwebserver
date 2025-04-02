@@ -45,10 +45,12 @@ namespace HTTPServer {
  * http://localhost:4244
  */
 
-extern vector<struct pollfd> pollfds;
-extern vector<int> serverSockets;
-extern map<int, HTTPConnxData> connections;
-extern map<int, std::time_t> lastActivityTime;
+typedef std::vector<struct pollfd> PollfdsVector;
+
+extern PollfdsVector pollfds;
+extern std::vector<int> serverSockets;
+extern std::map<int, HTTPConnxData> connections;
+extern std::map<int, std::time_t> lastActivityTime;
 
 // Add a file descriptor to the poll array
 void add_to_poll(int fd, short events);

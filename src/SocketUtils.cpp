@@ -119,30 +119,47 @@ void handleAlarm(int signal) {
  * This function shuts down the server by closing all server sockets and client
  * sockets.
  */
-// void shutdownServer() {
-// 	int maxServerFd = *std::max_element(Networker::serverSockets.begin(),
-// 										Networker::serverSockets.end());
-// 	if (!Networker::serverSockets.empty()) {
-// 	  for (std::vector<struct pollfd>::const_iterator it =
-// 			   Networker::pollfds.begin();
-// 		   it != Networker::pollfds.end(); ++it) {
-// 		int fd = it->fd;
-// 		if (fd <= maxServerFd) {
-// 		  debug("Closing server socket %d\n", fd);
-// 		  close(fd);
-// 		} else {
-// 		  if (it->revents & POLLOUT) {
-// 			debug("Sending 503 Service Unavailable\n");
-// 			// TODO
-// 			// NetUtils::sendErrorResponse(fd, 503, "Service
-// Unavailable");
-// 		  }
-// 		  debug("Closing client socket %d\n", fd);
-// 		  close(fd);
-// 		}
-// 	  }
-// 	}
-//   }
+void shutdownServer() {
+    // Close all client connections first
+    for (HTTPServer::PollfdsVector::const_iterator it = HTTPServer::pollfds.begin(); it != HTTPServer::pollfds.end(); ++it) {
+        int fd = it->fd;
+        
+        // Skip server sockets (they'll be closed separately)
+        if (std::find(HTTPServer::serverSockets.begin(), HTTPServer::serverSockets.end(), fd) != HTTPServer::serverSockets.end()) {
+            continue;
+        }
+
+        debuglog(YELLOW, "Closing client socket %d\n", fd);
+        
+        close(fd);
+        
+        // Clean up associated resources
+        if (HTTPServer::connections.find(fd) != HTTPServer::connections.end()) {
+            HTTPConnxData& conn = HTTPServer::connections[fd];
+            if (conn.file_fd != -1) {
+                close(conn.file_fd);
+            }
+            if (conn.child_pid > 0) {
+                kill(conn.child_pid, SIGTERM);
+            }
+            HTTPServer::connections.erase(fd);
+        }
+    }
+
+    // Close all server sockets
+    for (std::vector<int>::const_iterator it = HTTPServer::serverSockets.begin();
+         it != HTTPServer::serverSockets.end(); ++it) {
+        debuglog(YELLOW, "Closing server socket %d\n", *it);
+        shutdown(*it, SHUT_RDWR);
+        close(*it);
+    }
+
+    // Clear all data structures
+    HTTPServer::pollfds.clear();
+    HTTPServer::serverSockets.clear();
+    HTTPServer::connections.clear();
+    HTTPServer::lastActivityTime.clear();
+}
 
 /**
  * @brief Create a socket and bind it to a port
