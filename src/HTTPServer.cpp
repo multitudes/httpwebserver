@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 using std::map;
+using std::unordered_map;
 using std::string;
 using std::vector;
 
@@ -37,7 +38,7 @@ typedef std::vector<struct pollfd> PollfdsVector;
 PollfdsVector pollfds;
 vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
-map<int, std::time_t> lastActivityTime;
+unordered_map<int, std::time_t> lastActivityTime;
 
 // Add a file descriptor to the poll array
 void add_to_poll(int fd, short events) {
@@ -258,15 +259,16 @@ int run() {
           add_to_poll(client_fd, POLLIN);
           conn.state = CONN_INCOMING;
 
-		  
+		  // Store client IP address
 		  inet_ntop(AF_INET, &client_addr.sin_addr, conn.data.client_ip, sizeof(conn.data.client_ip));
 		  uint16_t client_port = ntohs(client_addr.sin_port);
 		  
-		  debuglog(YELLOW,"Client connected from %s:%d", conn.data.client_ip, client_port);
-		  
-		  // For CGI environment: TODO done need the port
+		  // add the timeout for the client
+		  lastActivityTime[client_fd] = std::time(nullptr);
 
-          debug("Connection data initialized in state INCOMING for client %d",
+		  debuglog(YELLOW,"Client connected from %s:%d", conn.data.client_ip, client_port);
+
+          debuglog(YELLOW,"Connection data initialized in state INCOMING for client %d",
                 client_fd);
           skip_to_next_iteration = true;
         }

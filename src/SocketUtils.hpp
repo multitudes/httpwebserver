@@ -22,8 +22,7 @@ namespace SocketUtils {
 	int createBindSocket(uint16_t port);
 	bool listenSocket(int server_socket);
 	bool setSendRecTimeout(int clientfd);
-	const char *custom_inet_ntop(int af, const void *src, char *dst,
-		socklen_t size);
+	void checkForIdleConnections();
 }
 
 /**
@@ -37,7 +36,6 @@ namespace SocketUtils {
 // //   static void initialize();
 //   static int createSocket(uint16_t port);
 //   static bool listenSocket(int server_socket);
-//   static const char* custom_inet_ntop(int af, const void* src, char* dst, socklen_t size);
 //   static std::string getclient_ip(int clientfd);
 //   static void setSendRecTimeout(ServerConf conf, int clientfd);
 //   static void checkForIdleConnections();

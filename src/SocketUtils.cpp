@@ -32,57 +32,7 @@ namespace SocketUtils {
  * socket could not be bound to the port or could not be set to listening mode.
  */
 void initialize() {
-  //   serverConfs = Config::getServerData();
   setSignalHandlers();
-
-  // create the pollfd array empty but reserved
-  //     Networker::pollfds.reserve(100);
-  // 	Networker::pollfdsIOConnx.reserve(100);
-  //     if (Networker::serverConfs.empty()) {
-  //       debug("Error: config with empty servers\n");
-  //       servers std::runtime_error("Error: config with empty servers");
-  //     }
-  //     // I start the sockets, bind and listen here
-  //     for (size_t i = 0; i < Networker::serverConfs.size(); ++i) {
-  //       const ServerConf& conf = Networker::serverConfs[i];
-
-  //       if (conf.ports.empty()) {
-  //         debug("Error: config with empty ports\n");
-  //         throw std::runtime_error("Error: config with empty ports");
-  //       }
-  //       for (size_t j = 0; j < conf.ports.size(); ++j) {
-  //         uint16_t port = conf.ports[j];
-
-  //         int server_socket = NetUtils::createSocket(port);
-  //         if (server_socket == -1) {
-  //           debug("Error creating server socket\n");
-  //           throw std::runtime_error("Error creating server socket");
-  //         }
-
-  //         if (!NetUtils::listenSocket(server_socket)) {
-  //           debug("Error creating with listening socket\n");
-  //           throw std::runtime_error("Error with listening server socket");
-  //         }
-  //         // add the listening socket to the pollfd array
-  //         // we want to monitor these sockets for read events
-  //         // TODO extract this push_back to utilities?
-  //         struct pollfd server_pollfd;
-  //         server_pollfd.fd = server_socket;
-  //         server_pollfd.events = POLLIN | POLLOUT;
-  //         Networker::pollfds.push_back(server_pollfd);
-  //         Networker::serverSockets.push_back(server_socket);
-  //         // the logic, each fd is mapped to the index where found in the
-  //         server
-  //         // configuration array - so if conf[0] has port 4243 and i create a
-  //         // socket with that port, the index will be 0. every client socket
-  //         // created from that server socket will be mapped to the index 0
-  //         later
-  //         // so i associate the conf to the client connection
-  //         Networker::socketToServerConf[server_socket] = i;
-  //         debug("Added server socket to pollfds and server sockets
-  //         arrays\n");
-  // 	  }
-  //   }
 }
 
 void setSignalHandlers() {
@@ -366,38 +316,6 @@ void checkForIdleConnections() {
   }
   idleConnections.clear();
 }
-
-/**
- * @brief Custom inet_ntop implementation for IPv4 addresses
- *
- * @param af The address family
- * @param src The source address
- * @param dst The destination buffer
- * @param size The size of the buffer
- * @return const char* The string representation of the address
- *
- * This function is a custom implementation of inet_ntop for IPv4 addresses.
- * It takes an address family, a source address, a destination buffer, and
- the
- * size of the buffer. It returns the string representation of the address.
- * The reason for this custom implementation is that inet_ntop is allowed in
- the
- * subject for webserv and it is a simple function to implement. Also
- * considering that we develop for linux and macos only.
- */
-const char *custom_inet_ntop(int af, const void *src, char *dst,
-                             socklen_t size) {
-  if (af == AF_INET) {
-    const struct in_addr *addr = static_cast<const struct in_addr *>(src);
-    unsigned char *bytes = (unsigned char *)&addr->s_addr;
-    snprintf(dst, size, "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2], bytes[3]);
-    return dst;
-  }
-  errno = EAFNOSUPPORT;
-  return NULL;
-}
-
-
 
 } // namespace SocketUtils
 
