@@ -26,6 +26,7 @@
 using std::string;
 using std::vector;
 using std::map;
+using std::unordered_map;
 
 namespace HTTPServer {
 
@@ -47,7 +48,7 @@ namespace HTTPServer {
 extern vector<struct pollfd> pollfds;
 extern vector<int> serverSockets;
 extern map<int, HTTPConnxData> connections;
-extern map<int, std::time_t> lastActivityTime;
+extern unordered_map<int, std::time_t> lastActivityTime;
 
 // Add a file descriptor to the poll array
 void add_to_poll(int fd, short events);
