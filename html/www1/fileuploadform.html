@@ -19,6 +19,17 @@
         </form>
         <p>Supported file types: .jpg, .png, .pdf, .txt</p>
     </div>
+    <div class="box">
+        <form action="/uploads" method="POST" enctype="multipart/form-data">
+
+                <label for="fileUpload">Select a file to upload:</label>
+                <input type="file" id="fileUpload" name="fileUpload" >
+                <p class="note">Maximum file size: 10MB</p>
+                <div id="file-info"></div>
+         
+            <button type="submit" class="btn-upload">Upload File</button>
+        </form>
+    </div>    
 
    <div class="file-list">
         <h2>Uploaded Files</h2>
