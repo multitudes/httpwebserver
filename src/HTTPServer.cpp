@@ -8,6 +8,7 @@
 #include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "SimpleResponse.hpp"
 
 using std::map;
 using std::string;
@@ -30,6 +31,10 @@ namespace HTTPServer {
  * http://localhost:4244
  */
 
+/*
+curl -X POST --data-binary @uploadtest.txt http://localhost:4244/upload/test.txt
+
+*/
 // pollfd is an array of pollfd which contain
 // the file descriptors to poll and the events we want to monitor
 
@@ -190,7 +195,6 @@ int run() {
       int current_fd = pollfds[i].fd;
 
       // Handle new connections on server socket
-
       for (size_t j = 0; j < serverSockets.size(); j++) {
         int server_fd = serverSockets[j];
         if (current_fd == server_fd && (pollfds[i].revents & POLLIN)) {
@@ -200,6 +204,7 @@ int run() {
               accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
           if (client_fd < 0) {
             perror("Accept failed");
+			// TODO send error response
             skip_to_next_iteration = true;
             break;
           }
@@ -207,6 +212,7 @@ int run() {
           if (!SocketUtils::setSendRecTimeout(client_fd)) {
             perror("Failed to set send/receive timeout");
             close(client_fd);
+			// TODO send error response
             skip_to_next_iteration = true;
             break;
           }
@@ -240,7 +246,7 @@ int run() {
           skip_to_next_iteration = true;
         }
       }
-
+	  // go back to the while loop if we had an error - TODO remove it when i get the URLMatcher func
       if (skip_to_next_iteration) {
         skip_to_next_iteration = false;
         continue;
@@ -254,7 +260,8 @@ int run() {
 
       if (conn.state == CONN_INCOMING) {
         URLMatcher::validateRequest(conn);
-        continue;
+		debuglog(YELLOW, "Connection fd %d new state %d", conn.client_fd, conn.state);
+        // continue;
       }
 
       if (conn.state == CONN_PARSING_HEADER) {
@@ -331,70 +338,72 @@ int run() {
           debuglog(YELLOW, "Handling upload event for connection %d",
                    conn.client_fd);
           // because the previous header parsing consumed data and we stored it
-          if (!conn.data.request.empty()) {
-            debuglog(YELLOW, "first writing content of request");
+          if (!conn.data.response.empty()) {
+            debuglog(YELLOW, "first writing content of payload");
             ssize_t bytes_written =
-                write(conn.file_fd, conn.data.request.c_str(),
-                      conn.data.request.size());
+                write(conn.file_fd, conn.data.response.c_str(),
+                      conn.data.response.size());
             if (bytes_written < 0) {
               perror("Failed to write to file");
               conn.reset();
+			  // TODO send error response?
               continue;
             } else if (bytes_written == 0) {
               debug("No data written to file");
               conn.reset();
               continue;
             }
-            conn.bytes_received += static_cast<size_t>(bytes_written);
-            // if we have received all data, close the connection
-            if (conn.bytes_received >= conn.data.content_length) {
-              debuglog(YELLOW, "Upload complete first write");
-              debuglog(YELLOW, "Written %ld bytes to %s (total: %zu)\n",
-                       bytes_written, conn.filename, conn.bytes_received);
-              conn.upload_completed = true;
-              close(conn.file_fd);
-              SocketUtils::update_poll_events(current_fd, POLLOUT);
-              conn.reset();
-            } else {
-              continue;
-            }
-          } else {
-            // read again
-            char buffer[BUFFER_SIZE];
-            ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
-            if (bytes_read <= 0) {
-              if (bytes_read == 0) {
-                debug("Client disconnected");
-              } else {
-                perror("recv failed");
-              }
-              conn.reset();
-              continue;
-            }
-            debuglog(YELLOW, "Received %ld bytes from client\n", bytes_read);
-            // write to file
-            ssize_t bytes_written =
-                write(conn.file_fd, buffer, static_cast<size_t>(bytes_read));
-            if (bytes_written < 0) {
-              perror("Failed to write to file");
-              close(conn.file_fd);
-              conn.reset();
-              continue;
-            }
-            conn.bytes_received += static_cast<size_t>(bytes_written);
+            conn.data.bytes_sent += static_cast<size_t>(bytes_written);
+			if (conn.data.bytes_sent >= conn.data.content_length) {
+			  debuglog(YELLOW, "Upload complete first write");
+			  debuglog(YELLOW, "Written %ld bytes to %s (total: %zu)\n",
+					   bytes_written, conn.filename, conn.data.bytes_sent);
+			  conn.upload_completed = true;
+			  close(conn.file_fd);
+			  SocketUtils::update_poll_events(current_fd, POLLOUT);
+			//   conn.reset();
+			  lastActivityTime[current_fd] = std::time(NULL);
+			  SimpleResponse::createResponse(conn, "text/plain", "File uploaded successfully.", 201);
+		      conn.state = CONN_SIMPLE_RESPONSE;
+			  continue;
+			}
+		  }
+			// read again
+			char buffer[BUFFER_SIZE];
+			ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+			if (bytes_read <= 0) {
+			  if (bytes_read == 0) {
+				debug("Client disconnected");
+			  } else {
+				perror("recv failed");
+			  }
+			  conn.reset();
+			  continue;
+			}
+			debuglog(YELLOW, "Received %ld bytes from client\n", bytes_read);
+			// write to file
+			ssize_t bytes_written =
+				write(conn.file_fd, buffer, static_cast<size_t>(bytes_read));
+			if (bytes_written < 0) {
+			  perror("Failed to write to file");
+			  close(conn.file_fd);
+			  conn.reset();
+			  continue;
+			}
+			conn.data.bytes_sent += static_cast<size_t>(bytes_written);
             // if we have received all data, close the connection
             if (conn.bytes_received >= conn.data.content_length) {
               debuglog(YELLOW, "Upload complete");
               debuglog(YELLOW, "Written %ld bytes to %s (total: %zu)\n",
-                       bytes_written, conn.filename, conn.bytes_received);
+                       bytes_written, conn.filename, conn.data.bytes_sent);
               conn.upload_completed = true;
+              close(conn.file_fd);
               SocketUtils::update_poll_events(current_fd, POLLOUT);
-            } else {
+              conn.reset();
               continue;
-            }
+            } 
           }
-        }
-        continue;
+ 
       } else if (conn.state == CONN_CGI) {
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
         // check if the cgi is ready to be sent

@@ -12,7 +12,7 @@ using std::string;
 
 namespace SimpleResponse {
 
-    void addHTTPHeader(HTTPConnxData &connections, string contentType, std::string response, int statusCode);
+    void createResponse(HTTPConnxData &connections, string contentType, std::string response, int statusCode);
 
     // Functions for file responses
     void prepareFileResponse(HTTPConnxData &conn, string contentType, long fileSize);

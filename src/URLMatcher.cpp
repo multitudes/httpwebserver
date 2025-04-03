@@ -290,8 +290,29 @@ void validateRequest(HTTPConnxData &conn) {
 
     // Step 2: Get configuration and construct the target path
     if (!constructTargetPath(conn)) {
-      return; // Request handling complete or failed
+		return; // Request handling complete or failed
     }
+	// check if the request is upload. 
+	if (conn.data.method == "POST" && conn.data.content_length > 0) {
+		debuglog(YELLOW, "URLMatcher: Upload request detected.");
+		conn.file_fd = open(conn.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (conn.file_fd < 0) {
+			perror("URLMatcher: Failed to open file for upload");
+			SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
+			conn.state = CONN_SIMPLE_RESPONSE;
+			SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+			return;
+		}
+		
+		std::string payload = conn.data.request.substr(conn.data.headers_end);
+		if (!payload.empty()) {
+			conn.data.response = payload;
+			conn.data.bytes_sent = 0;
+		}
+		conn.state = CONN_UPLOAD;
+			
+		return;
+	}
 
     // Step 3: Check if the path exists
     struct stat path_stat;

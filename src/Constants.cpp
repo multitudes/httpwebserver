@@ -7,10 +7,10 @@ namespace Constants {
     std::map<std::string, std::string> mimeTypes;
 	const char* default_config_file = "config/default.conf";
 
-	int maxConnections = 100;
+	int maxConnections = 200;
     int requestTimeout = 60;
     int responseTimeout = 60;
-    int keepalive_timeout = 60;
+    int keepalive_timeout = 30;
 
     void initStatusMessageMap() {
 		debuglog(YELLOW, "Initializing status code to status text mapping");
