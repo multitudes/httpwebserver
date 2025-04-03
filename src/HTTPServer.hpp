@@ -29,32 +29,35 @@ using std::map;
 using std::map;
 
 namespace HTTPServer {
-void cleanup_upload(HTTPConnxData& conn);
-void finish_upload(HTTPConnxData& conn);
-/**
- * testing: use the following command to test the server
- *
- * nc localhost 4244
- * curl -X POST --data-raw "This is a test" localhost:4244
- * wget -v --post-data="hello world"  http://localhost:4244
- * telnet localhost 4244
- * curl "http://localhost:4244/?sss='this%20is'"
- * curl -H "Content-Type: application/json"
- * "http://localhost:4244/?data=This%20is%20a%20test" curl -X POST -H
- * "Content-Type: application/json" --data-raw '{"message": "This is a test"}'
- * localhost:4244 curl -I -H "Content-Type: application/json"
- * http://localhost:4244
- */
+	/**
+	 * testing: use the following command to test the server
+	 *
+	 * nc localhost 4244
+	 * curl -X POST --data-raw "This is a test" localhost:4244
+	 * wget -v --post-data="hello world"  http://localhost:4244
+	 * telnet localhost 4244
+	 * curl "http://localhost:4244/?sss='this%20is'"
+	 * curl -H "Content-Type: application/json"
+	 * "http://localhost:4244/?data=This%20is%20a%20test" curl -X POST -H
+	 * "Content-Type: application/json" --data-raw '{"message": "This is a test"}'
+	 * localhost:4244 curl -I -H "Content-Type: application/json"
+	 * http://localhost:4244
+	 */
+	
+	typedef std::vector<struct pollfd> PollfdsVector;
+	
+	extern PollfdsVector pollfds;
+	extern std::vector<int> serverSockets;
+	extern std::map<int, HTTPConnxData> connections;
+	extern std::map<int, std::time_t> lastActivityTime;
+	
+	int run();
+	void cleanup_upload(HTTPConnxData& conn);
+	void finish_upload(HTTPConnxData& conn);
+	int send_file(HTTPConnxData &conn);
+	int send_headers(HTTPConnxData &conn);
 
-typedef std::vector<struct pollfd> PollfdsVector;
-
-extern PollfdsVector pollfds;
-extern std::vector<int> serverSockets;
-extern std::map<int, HTTPConnxData> connections;
-extern std::map<int, std::time_t> lastActivityTime;
-
-int run();
-
+	
 
 } // namespace HTTPServer
 

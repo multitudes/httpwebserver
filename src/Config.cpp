@@ -872,11 +872,11 @@ void Config::removeDuplicatePorts()
                     {
                         //remove ports[l] from servers[k]
                         servers[k].ports.erase(servers[k].ports.begin() + l);
-                        debuglog(RED, "remove duplicate port %d from server[%d] %s", servers[i].ports[j], k +1,servers[k].server_names[0].c_str());
+                        debuglog(RED, "remove duplicate port %ld from server[%d] %s", servers[i].ports[j], k +1,servers[k].server_names[0].c_str());
                     }
                     if (servers[k].ports.size() == 0)
                     {
-                        debuglog(RED, "remove server[%d] %s because no port left",k + 1, servers[k].server_names[0].c_str());
+                        debuglog(RED, "remove server[%ld] %s because no port left",k + 1, servers[k].server_names[0].c_str());
                         servers.erase(servers.begin() + k);
                         --k;
                         break;
