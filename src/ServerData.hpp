@@ -26,9 +26,9 @@ struct Location {
 	bool autoindex;
 	bool file_upload;
 	bool internal;
+  std::string root;
   std::vector<std::string> acceptedMethods;
-  //std::pair<int, std::string> return_directive;
-  std::string redirect;
+  std::pair<int, std::string> return_directive;
   std::map<int, std::string> error_pages;
 
   Location() :
@@ -37,7 +37,8 @@ struct Location {
     file_upload(false),
     internal(false),
 	  acceptedMethods(),
-    //return_directive(), 
+    return_directive(), 
+    root("www"),
     error_pages() {}
 };
 
@@ -83,6 +84,7 @@ struct ServerData : public BaseConf {
   std::vector<std::string> server_names;
   std::string index;
   std::string root;
+  bool parsedroot;
   std::map<std::string, Location> location_blocks;
   CGIData cgiData;
   std::vector<std::string> acceptedMethods;
@@ -93,6 +95,7 @@ struct ServerData : public BaseConf {
     serverListenAddress("localhost"),
     index("index.html"),
     root("www"),
+    parsedroot(false),
     cgi_exists(false),
     has_locations(false)
     {};
