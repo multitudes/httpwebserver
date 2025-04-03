@@ -79,8 +79,8 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
  * complete
  */
 bool constructTargetPath(HTTPConnxData &conn) {
-  conn.config = Config::getConfigByPort(conn.data.port);
-  if (!conn.config) {
+  conn.urlMatcherData.config = Config::getConfigByPort(conn.data.port);
+  if (!conn.urlMatcherData.config) {
     debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
     SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
     conn.state = CONN_SIMPLE_RESPONSE;
@@ -103,19 +103,20 @@ bool constructTargetPath(HTTPConnxData &conn) {
     return false;
   }
 
-  conn.full_path = conn.config->root + target;
-  conn.path_for_stat = conn.full_path;
+  conn.urlMatcherData.full_path = conn.urlMatcherData.config->root + target;
+  conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
+  conn.urlMatcherData.autoindex = conn.urlMatcherData.config->autoindex;
 
   // Adjust path_for_stat: remove trailing slash unless it's just the root path
-  if (conn.path_for_stat.length() > conn.config->root.length() + 1 &&
-      conn.path_for_stat[conn.path_for_stat.length() - 1] == '/') {
-    conn.path_for_stat.erase(conn.path_for_stat.length() - 1, 1);
+  if (conn.urlMatcherData.path_for_stat.length() > conn.urlMatcherData.config->root.length() + 1 &&
+      conn.urlMatcherData.path_for_stat[conn.urlMatcherData.path_for_stat.length() - 1] == '/') {
+    conn.urlMatcherData.path_for_stat.erase(conn.urlMatcherData.path_for_stat.length() - 1, 1);
   }
 
   debuglog(YELLOW, "URLMatcher: Constructed path for stat: '%s'",
-           conn.path_for_stat.c_str());
+           conn.urlMatcherData.path_for_stat.c_str());
   debuglog(YELLOW, "URLMatcher: Original full path for dir checks: '%s'",
-           conn.full_path.c_str());
+           conn.urlMatcherData.full_path.c_str());
 
   return true;
 }
@@ -128,7 +129,7 @@ bool constructTargetPath(HTTPConnxData &conn) {
  */
 void determineContentType(HTTPConnxData &conn, const string &path) {
   // Default to generic binary type
-  conn.content_type = "application/octet-stream";
+  conn.urlMatcherData.content_type = "application/octet-stream";
 
   string file_extension = "";
   size_t dot_position = path.rfind('.');
@@ -146,9 +147,9 @@ void determineContentType(HTTPConnxData &conn, const string &path) {
     // Check if we have a MIME type mapping for this extension
     if (Constants::mimeTypes.find(file_extension) !=
         Constants::mimeTypes.end()) {
-      conn.content_type = Constants::mimeTypes[file_extension];
+      conn.urlMatcherData.content_type = Constants::mimeTypes[file_extension];
       debuglog(GREEN, "URLMatcher: Found MIME type: %s",
-               conn.content_type.c_str());
+               conn.urlMatcherData.content_type.c_str());
     } else {
       debuglog(
           YELLOW,
@@ -174,7 +175,7 @@ bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat,
   determineContentType(conn, path_for_stat);
 
   debuglog(YELLOW, "URLMatcher: File '%s' using MIME type '%s'",
-           path_for_stat.c_str(), conn.content_type.c_str());
+           path_for_stat.c_str(), conn.urlMatcherData.content_type.c_str());
 
   conn.file_fd = open(path_for_stat.c_str(), O_RDONLY);
   if (conn.file_fd < 0) {
@@ -243,7 +244,7 @@ bool handleIndexFile(HTTPConnxData &conn, const string &index_file_path,
  * @return true if directory was successfully processed
  */
 bool handleDirectoryListing(HTTPConnxData &conn) {
-  if (!conn.config->autoindex) {
+  if (!conn.urlMatcherData.autoindex) {
     debuglog(RED, "URLMatcher: Autoindex is disabled.");
     SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden to list directory
     conn.state = CONN_SIMPLE_RESPONSE;
@@ -253,9 +254,9 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
 
   debuglog(YELLOW,
            "URLMatcher: Autoindex is enabled. Calling getDIRListing for '%s'.",
-           conn.full_path.c_str());
+           conn.urlMatcherData.full_path.c_str());
 
-  if (DirectoryListing::getDIRListing(conn, conn.full_path)) {
+  if (DirectoryListing::getDIRListing(conn, conn.urlMatcherData.full_path)) {
     debuglog(GREEN,
              "URLMatcher: getDIRListing prepared listing response for fd %d.",
              conn.client_fd);
@@ -291,44 +292,61 @@ void validateRequest(HTTPConnxData &conn)
     }
 
     // check if target contains CGI alias
-    string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
-    string cgi_path = conn.config->cgiData.cgi_path_alias.second;
-    debuglog(RED, "URLMatcher: CGI path alias: '%s' -> '%s'",
-             cgi_path_alias.c_str(), cgi_path.c_str());    
+    string cgi_path_alias = conn.urlMatcherData.config->cgiData.cgi_path_alias.first;
+    string cgi_path = conn.urlMatcherData.config->cgiData.cgi_path_alias.second;
     if (conn.data.target.find(cgi_path_alias) == 0) 
     { // found CGI alias
-      debuglog(RED, "URLMatcher: CGI alias found. Target: %s",
+      debuglog(YELLOW, "URLMatcher: CGI path alias: '%s' -> '%s'",
+               cgi_path_alias.c_str(), cgi_path.c_str());    
+      debuglog(YELLOW, "URLMatcher: CGI alias found. Target: %s",
                conn.data.target.c_str()); 
       //TODO, use cgi path 
-      conn.full_path = cgi_path + conn.data.target.substr(cgi_path_alias.length());
-      conn.path_for_stat = conn.full_path;
+      conn.urlMatcherData.full_path = cgi_path + conn.data.target.substr(cgi_path_alias.length());
+      conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
       debuglog(RED, "URLMatcher: Updated full path to CGI: '%s'",
-               conn.full_path.c_str());
+               conn.urlMatcherData.full_path.c_str());
 
       conn.state = CONN_SIMPLE_RESPONSE;
-      SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.full_path, 200);
+      SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
-      
       return;
     }
     else 
     { // no cgi alias, is there a location?
       // loop through location blocks
-      if(conn.config->has_locations) 
+      if(conn.urlMatcherData.config->has_locations) 
       {
         for (std::map<std::string, Location>::const_iterator it =
-                 conn.config->location_blocks.begin();
-             it != conn.config->location_blocks.end(); ++it) {
+                 conn.urlMatcherData.config->location_blocks.begin();
+             it != conn.urlMatcherData.config->location_blocks.end(); ++it) {
           if (conn.data.target.find(it->first) == 0) { // found location
             debuglog(RED, "URLMatcher: Found location block for '%s'",
                      it->first.c_str());
-            // update the paths and remove prefix from the target
-            conn.full_path = it->second.root + conn.data.target.substr(it->first.length());
-            conn.path_for_stat = conn.full_path;
-            debuglog(RED, "URLMatcher: Updated full path to '%s'",
-                     conn.full_path.c_str());
+            debuglog(RED, "URLMatcher: Location root is '%s' with length %zu", 
+                     it->second.root.c_str(), it->second.root.length());
+
+            // Always set autoindex regardless of root presence
+            conn.urlMatcherData.autoindex = it->second.autoindex;
+            debuglog(YELLOW, "URLMatcher: Location block autoindex is %s", 
+                     conn.urlMatcherData.autoindex ? "enabled" : "disabled");
+
+            // Only update paths if location's root is different from the server's root
+            if (it->second.root != conn.urlMatcherData.config->root) {
+              // Override paths only if root is different from server root
+              conn.urlMatcherData.full_path = it->second.root + conn.data.target.substr(it->first.length());
+              conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
+              debuglog(RED, "URLMatcher: Updated full path to '%s'", 
+                       conn.urlMatcherData.full_path.c_str());
+            } else {
+              // Root in location is same as server root, keep using the default paths
+              debuglog(RED, "URLMatcher: Location root is same as server root, using default paths");
+              // DON'T change any paths here
+            }
             
-           
+            // Apply other location settings like methods, redirects, etc.
+            
+            // Break out of the location search loop since we found a match
+            break;
           }
         }
       }
@@ -338,7 +356,7 @@ void validateRequest(HTTPConnxData &conn)
 	// check if the request is upload. 
 	if (conn.data.method == "POST" && conn.data.content_length > 0) {
 		debuglog(YELLOW, "URLMatcher: Upload request detected.");
-		conn.file_fd = open(conn.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		conn.file_fd = open(conn.urlMatcherData.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (conn.file_fd < 0) {
 			perror("URLMatcher: Failed to open file for upload");
 			SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
@@ -359,7 +377,7 @@ void validateRequest(HTTPConnxData &conn)
 
     // Step 3: Check if the path exists
     struct stat path_stat;
-    if (stat(conn.path_for_stat.c_str(), &path_stat) != 0) {
+    if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0) {
       perror("URLMatcher: stat failed");
       // debuglog(RED, "URLMatcher: Path not found or inaccessible '%s'",
       // conn.path_for_stat.c_str());
@@ -372,20 +390,20 @@ void validateRequest(HTTPConnxData &conn)
     // Step 4: Handle based on path type
     // Handle regular file
     if (S_ISREG(path_stat.st_mode)) {
-      handleRegularFile(conn, conn.path_for_stat, path_stat);
+      handleRegularFile(conn, conn.urlMatcherData.path_for_stat, path_stat);
     }
     // Handle directory
     else if (S_ISDIR(path_stat.st_mode)) {
       debuglog(YELLOW, "URLMatcher: Target is a directory '%s'",
-               conn.full_path.c_str());
+               conn.urlMatcherData.full_path.c_str());
 
       // First check for an index file
-      string index_file_path = conn.full_path;
+      string index_file_path = conn.urlMatcherData.full_path;
       if (index_file_path.empty() ||
           index_file_path[index_file_path.length() - 1] != '/') {
         index_file_path += '/';
       }
-      index_file_path += conn.config->index;
+      index_file_path += conn.urlMatcherData.config->index;
 
       struct stat index_stat;
       debuglog(YELLOW, "URLMatcher: Checking for index file at '%s'",
@@ -401,14 +419,14 @@ void validateRequest(HTTPConnxData &conn)
         debuglog(YELLOW,
                  "URLMatcher: Index file '%s' not found or not regular. "
                  "Checking autoindex.",
-                 conn.config->index.c_str());
+                 conn.urlMatcherData.config->index.c_str());
         handleDirectoryListing(conn);
       }
     }
     // Handle other file types
     else {
       debuglog(RED, "URLMatcher: Path '%s' is not a regular file or directory.",
-               conn.path_for_stat.c_str());
+               conn.urlMatcherData.path_for_stat.c_str());
       SimpleResponse::htmlErrorResponse(
           conn, 403); // Forbidden - don't serve unusual file types
       conn.state = CONN_SIMPLE_RESPONSE;

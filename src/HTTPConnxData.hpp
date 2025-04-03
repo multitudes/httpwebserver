@@ -55,7 +55,7 @@ struct HTTPConnxData {
     // Connection info
     string host;
     uint16_t port;
-	char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
+	  char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
 	
 
     string request;
@@ -96,6 +96,17 @@ struct HTTPConnxData {
 		  }
   };
 
+
+  struct URLMatcherData {
+
+    const ServerData* config;      // Pointer to server configuration for this connection
+    string full_path;              // Full path to the requested resource
+    string path_for_stat;          // Path adjusted for stat() calls
+    string content_type;           // Content type (MIME type) for the response
+    bool autoindex;
+
+    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), autoindex(false) {}
+  };
   // Connection state and metadata
   ConnectionState state;
 
@@ -131,19 +142,14 @@ struct HTTPConnxData {
   size_t bytes_received;
 
   // New fields for paths, config, and content type
-  const ServerData* config;      // Pointer to server configuration for this connection
-  string full_path;              // Full path to the requested resource
-  string path_for_stat;          // Path adjusted for stat() calls
-  string content_type;           // Content type (MIME type) for the response
+  URLMatcherData urlMatcherData;
 
   HTTPConnxData()
       : state(CONN_INCOMING), data(), client_fd(-1), indexServerConf(-1),
         is_sending(0), is_receiving(0), headers_sent(false), poll_stdin_idx(-1),
         poll_stdout_idx(-1), child_pid(-1), cgi_processing(false), file_fd(-1),
         file_size(0), file_offset(0), writeto_fd(-1), upload_completed(false),
-        bytes_received(0), config(NULL), full_path(""), path_for_stat(""), 
-        content_type("") {
-
+        bytes_received(0) {
     filename[0] = '\0';
   }
 
