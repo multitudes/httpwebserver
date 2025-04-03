@@ -278,20 +278,63 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
  *        Prioritizes index file check, then autoindex check, then listing.
  * @param conn The connection data structure.
  */
-void validateRequest(HTTPConnxData &conn) {
-  // Only process if we don't have headers yet
-  if (conn.data.request.empty() || !conn.data.headers_received) {
-    // Step 1: Receive and parse the HTTP request
-    if (!receiveAndParseRequest(conn)) {
-      return; // status CONN_PARSING_HEADER still headers to be read! status CONN_PARSING_HEADER
-    }
+void validateRequest(HTTPConnxData &conn) 
+{
+  if (conn.data.request.empty() || !conn.data.headers_received) 
+  {
+    if (!receiveAndParseRequest(conn))
+      return; // Request handling complete or failed
 
-	// If I am here it means I have received the headers
-
-    // Step 2: Get configuration and construct the target path
+    // Get server configuration and construct the target path
     if (!constructTargetPath(conn)) {
 		return; // Request handling complete or failed
     }
+
+    // check if target contains CGI alias
+    string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
+    string cgi_path = conn.config->cgiData.cgi_path_alias.second;
+    debuglog(RED, "URLMatcher: CGI path alias: '%s' -> '%s'",
+             cgi_path_alias.c_str(), cgi_path.c_str());    
+    if (conn.data.target.find(cgi_path_alias) == 0) 
+    { // found CGI alias
+      debuglog(RED, "URLMatcher: CGI alias found. Target: %s",
+               conn.data.target.c_str()); 
+      //TODO, use cgi path 
+      conn.full_path = cgi_path + conn.data.target.substr(cgi_path_alias.length());
+      conn.path_for_stat = conn.full_path;
+      debuglog(RED, "URLMatcher: Updated full path to CGI: '%s'",
+               conn.full_path.c_str());
+
+      conn.state = CONN_SIMPLE_RESPONSE;
+      SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.full_path, 200);
+      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+      
+      return;
+    }
+    else 
+    { // no cgi alias, is there a location?
+      // loop through location blocks
+      if(conn.config->has_locations) 
+      {
+        for (std::map<std::string, Location>::const_iterator it =
+                 conn.config->location_blocks.begin();
+             it != conn.config->location_blocks.end(); ++it) {
+          if (conn.data.target.find(it->first) == 0) { // found location
+            debuglog(RED, "URLMatcher: Found location block for '%s'",
+                     it->first.c_str());
+            // update the paths and remove prefix from the target
+            conn.full_path = it->second.root + conn.data.target.substr(it->first.length());
+            conn.path_for_stat = conn.full_path;
+            debuglog(RED, "URLMatcher: Updated full path to '%s'",
+                     conn.full_path.c_str());
+            
+           
+          }
+        }
+      }
+    }
+
+
 	// check if the request is upload. 
 	if (conn.data.method == "POST" && conn.data.content_length > 0) {
 		debuglog(YELLOW, "URLMatcher: Upload request detected.");
