@@ -33,9 +33,10 @@ public:
   void parseServerBlock(const std::string& serverBlockContent, ServerData& ServerData);
   void parseLocationBlock(const std::string& locationContent, Location& location, ServerData& ServerData);
   void parseCgiBlock(const std::string& cgiContent, CGIData& cgiConfig);
+  void removeDuplicatePorts();
   void configValidate();
   //void debugprintServerData(const ServerData& ServerData);
-  //void debugprintConfigs();
+  //static void debugprintConfigs();
   
 
   private:

@@ -40,8 +40,8 @@ int prepareCGI(HTTPConnxData& conn) {
     exit(1);
   } else {
     // Parent process
-    // conn.poll_stdin_idx = HTTPServer::add_to_poll(conn.child_stdin_pipe[1], POLLOUT);
-    // conn.poll_stdout_idx = HTTPServer::add_to_poll(conn.child_stdout_pipe[0], POLLIN);
+    // conn.poll_stdin_idx = SocketUtils::add_to_poll(conn.child_stdin_pipe[1], POLLOUT);
+    // conn.poll_stdout_idx = SocketUtils::add_to_poll(conn.child_stdout_pipe[0], POLLIN);
 
     // Close unused pipe ends
     close(conn.child_stdin_pipe[0]);  // Close read end of stdin pipe

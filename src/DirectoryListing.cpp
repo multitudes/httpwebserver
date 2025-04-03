@@ -71,7 +71,7 @@ namespace DirectoryListing
         connection.state = CONN_SIMPLE_RESPONSE;
         
         // generate HTTP header and include html payload using the stored content type
-        SimpleResponse::addHTTPHeader(connection, connection.content_type, htmlCode, 200);
+        SimpleResponse::createResponse(connection, connection.content_type, htmlCode, 200);
 
         debuglog(BLUE, "Directory simple response: \n%s", connection.data.response.c_str());
 
