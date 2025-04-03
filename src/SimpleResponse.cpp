@@ -14,7 +14,7 @@ using std::string;
 namespace SimpleResponse {
 
     // addd HTTP header to the response and set the response
-    void addHTTPHeader(HTTPConnxData &connection, string contentType, std::string response, int statusCode)
+    void createResponse(HTTPConnxData &connection, std::string contentType, std::string response, int statusCode)
     {
         string header = "HTTP/1.1 ";
         header += Utils::to_string(statusCode) + " " + Constants::statusMessages[statusCode] + "\r\n";
@@ -57,7 +57,7 @@ namespace SimpleResponse {
         htmlCode += "</body>\n";
         htmlCode += "</html>\n";
        
-        addHTTPHeader(connection, connection.content_type, htmlCode, statusCode); 
+        createResponse(connection, connection.content_type, htmlCode, statusCode); 
     }
 
     // generate a simple text response
@@ -70,7 +70,7 @@ namespace SimpleResponse {
         connection.content_type = Constants::mimeTypes[".txt"];
 
         response = Utils::to_string(statusCode) + statusText;
-        addHTTPHeader(connection, connection.content_type, response, statusCode); 
+        createResponse(connection, connection.content_type, response, statusCode); 
     }
 
     // New function to prepare headers for file responses

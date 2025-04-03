@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <vector>
 #include "Config.hpp"
+#include <cstring>
 
 using std::map;
 using std::string;
@@ -54,6 +55,8 @@ struct HTTPConnxData {
     // Connection info
     string host;
     uint16_t port;
+	char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
+	
 
     string request;
     size_t content_length;
@@ -88,7 +91,9 @@ struct HTTPConnxData {
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_sent(false), sending_response(false), response_sent(false),
-          parse_status(PARSE_INCOMPLETE) {}
+          parse_status(PARSE_INCOMPLETE) {
+			memset(client_ip, 0, sizeof(client_ip)); 
+		  }
   };
 
   // Connection state and metadata

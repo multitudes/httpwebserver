@@ -1,10 +1,10 @@
 #pragma once
 
 #include <map>
+#include <stdint.h>
 #include <string>
 #include <utility>
 #include <vector>
-#include <stdint.h> 
 
 struct CGIData {
   std::pair<std::string, std::string> cgi_path_alias;
@@ -12,12 +12,11 @@ struct CGIData {
   std::vector<std::string> cgi_extensions;
   std::vector<std::string> acceptedMethods;
 
-  CGIData() : cgi_path_alias(), upload_dir() 
-  {
-      acceptedMethods.push_back("GET");
-      acceptedMethods.push_back("POST");
-      acceptedMethods.push_back("DELETE");
-      acceptedMethods.push_back("PUT");
+  CGIData() : cgi_path_alias(), upload_dir() {
+    acceptedMethods.push_back("GET");
+    acceptedMethods.push_back("POST");
+    acceptedMethods.push_back("DELETE");
+    acceptedMethods.push_back("PUT");
   }
 };
 
@@ -55,27 +54,19 @@ struct BaseConf {
   std::vector<std::string> acceptedMethods;
   std::map<int, std::string> error_pages;
   std::string upload_dir;
-  
 
-  BaseConf() :
-    maxConnections(100),
-    requestTimeout(60),
-    responseTimeout(60),
-    keepalive_timeout(30),
-    maxBodySize(10000000),
-    autoindex(false),
-    file_server(true),
-    upload_dir("./www/uploads"),
-    parsedindex(false)
-    {
-      defaultheaders["Content-Type"] = "text/html";
-      defaultheaders["Server"] = "webserv/1.0";
-      defaultheaders["Connection"] = "keep-alive";
-      acceptedMethods.push_back("GET");
-      acceptedMethods.push_back("POST");
-      acceptedMethods.push_back("DELETE");
-      acceptedMethods.push_back("PUT");
-    }
+  BaseConf()
+      : maxConnections(100), requestTimeout(60), responseTimeout(60),
+        keepalive_timeout(30), maxBodySize(10000000), autoindex(false),
+        file_server(true), upload_dir("./www/uploads"), parsedindex(false) {
+    defaultheaders["Content-Type"] = "text/html";
+    defaultheaders["Server"] = "webserv/1.0";
+    defaultheaders["Connection"] = "keep-alive";
+    acceptedMethods.push_back("GET");
+    acceptedMethods.push_back("POST");
+    acceptedMethods.push_back("DELETE");
+    acceptedMethods.push_back("PUT");
+  }
 };
 
 struct ServerData : public BaseConf {
@@ -110,4 +101,4 @@ struct HttpConfig {
   HttpConfig() {}
 };
 
-// 
+//
