@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <algorithm>
 
 using std::signal;
 
@@ -46,7 +47,7 @@ void add_to_poll(int fd, short events) {
   
   // Update events for an existing fd
   // Returns true if found and updated, false otherwise
-  bool SocketUtils::update_poll_events(int fd, short events) {
+  bool update_poll_events(int fd, short events) {
 	for (HTTPServer::PollfdsVector::iterator it = HTTPServer::pollfds.begin(); it != HTTPServer::pollfds.end();
 		 ++it) {
 	  if (it->fd == fd) {
