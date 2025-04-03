@@ -21,20 +21,24 @@ struct CGIData {
 };
 
 struct Location {
-  std::string upload_dir;
-  bool autoindex;
-  bool file_upload;
-  bool internal;
+	std::string upload_dir;
+	bool autoindex;
+	bool file_upload;
+	bool internal;
+  std::string root;
   std::vector<std::string> acceptedMethods;
-  // std::pair<int, std::string> return_directive;
-  std::string redirect;
+  std::pair<int, std::string> return_directive;
   std::map<int, std::string> error_pages;
 
-  Location()
-      : upload_dir("/www/uploads"), autoindex(false), file_upload(false),
-        internal(false), acceptedMethods(),
-        // return_directive(),
-        error_pages() {}
+  Location() :
+    upload_dir("/www/uploads"),
+    autoindex(false), 
+    file_upload(false),
+    internal(false),
+	  acceptedMethods(),
+    return_directive(), 
+    root("www"),
+    error_pages() {}
 };
 
 struct BaseConf {
@@ -71,15 +75,21 @@ struct ServerData : public BaseConf {
   std::vector<std::string> server_names;
   std::string index;
   std::string root;
+  bool parsedroot;
   std::map<std::string, Location> location_blocks;
   CGIData cgiData;
   std::vector<std::string> acceptedMethods;
   bool cgi_exists;
   bool has_locations;
 
-  ServerData()
-      : serverListenAddress("localhost"), index("index.html"), root("www"),
-        cgi_exists(false), has_locations(false) {};
+  ServerData() :
+    serverListenAddress("localhost"),
+    index("index.html"),
+    root("www"),
+    parsedroot(false),
+    cgi_exists(false),
+    has_locations(false)
+    {};
 
   bool hasCGI() const { return cgi_exists; }
   bool hasDirectives() const { return has_locations; }
