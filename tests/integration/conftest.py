@@ -12,3 +12,6 @@ def webserver():
     server.terminate()
     server.wait()
 
+@pytest.fixture
+def base_url():
+    return "http://localhost:4244"  # Default port

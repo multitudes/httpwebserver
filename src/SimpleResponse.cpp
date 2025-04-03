@@ -21,7 +21,6 @@ namespace SimpleResponse {
         header += "Content-Type: " + contentType;
         header += "\r\n";
         header += "Content-Length: " + Utils::to_string(static_cast<int>(response.size())) + "\r\n";
-		header += "Set-Cookie: SESSION_ID=abc123; Path=/; HttpOnly; Secure; SameSite=Strict\r\n";
         header += "\r\n";
 
         connection.data.response = header + response;
@@ -80,7 +79,7 @@ namespace SimpleResponse {
         string header = "HTTP/1.1 200 OK\r\n";
         header += "Content-Type: " + conn.content_type + "\r\n";
         header += "Content-Length: " + Utils::to_string(fileSize) + "\r\n";
-        header += "Connection: close\r\n";
+        // header += "Connection: close\r\n";
         header += "\r\n";
         
         conn.data.response = header;

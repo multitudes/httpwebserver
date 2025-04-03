@@ -29,7 +29,8 @@ using std::map;
 using std::map;
 
 namespace HTTPServer {
-
+void cleanup_upload(HTTPConnxData& conn);
+void finish_upload(HTTPConnxData& conn);
 /**
  * testing: use the following command to test the server
  *
