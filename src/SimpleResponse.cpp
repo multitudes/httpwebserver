@@ -21,6 +21,7 @@ namespace SimpleResponse {
         header += "Content-Type: " + contentType;
         header += "\r\n";
         header += "Content-Length: " + Utils::to_string(static_cast<int>(response.size())) + "\r\n";
+		header += "Set-Cookie: SESSION_ID=abc123; Path=/; HttpOnly; Secure; SameSite=Strict\r\n";
         header += "\r\n";
 
         connection.data.response = header + response;

@@ -354,6 +354,7 @@ int run() {
               continue;
             }
             conn.data.bytes_sent += static_cast<size_t>(bytes_written);
+			conn.data.response = ""; // clear the response buffer
 			if (conn.data.bytes_sent >= conn.data.content_length) {
 			  debuglog(YELLOW, "Upload complete first write");
 			  debuglog(YELLOW, "Written %ld bytes to %s (total: %zu)\n",
@@ -367,6 +368,12 @@ int run() {
 		      conn.state = CONN_SIMPLE_RESPONSE;
 			  continue;
 			}
+			// debuglog(YELLOW, "Not all data received yet - please continue");
+			// lastActivityTime[current_fd] = std::time(NULL);
+			// SimpleResponse::createResponse(conn, "text/plain", "Continue", 100);
+			// conn.state = CONN_SIMPLE_RESPONSE;
+			// SocketUtils::update_poll_events(current_fd, POLLOUT);
+			// continue;
 		  }
 			// read again
 			char buffer[BUFFER_SIZE];
