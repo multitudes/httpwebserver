@@ -117,6 +117,4 @@ test: $(NAME) venv
 	@echo "Running tests..."
 	@$(PYTEST) tests/
 
-
-
 .PHONY: all venv test clean
