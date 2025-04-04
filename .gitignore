@@ -5,9 +5,7 @@ ComparisonServers/apache/www/cgi-bin/__pycache__/test_cgi_form.cpython-313-pytes
 venv/*
 .DS_Store
 tests/integration/__pycache__/*
-test*.txt
 src/scrap.cpp
-upload
 tests/integration/venv/lib64
 obj/*
 virtual/*
