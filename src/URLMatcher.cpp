@@ -372,6 +372,7 @@ namespace URLMatcher
           // Only update paths if location's root is different from the server's root
           if (location.root != conn.urlMatcherData.config->root)
           {
+			debugcolor(RED, "overriding path with location block");
             // Override paths only if root is different from server root
             conn.urlMatcherData.full_path = location.root + conn.data.target.substr(location_pair->first.length());
             conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
@@ -399,12 +400,49 @@ namespace URLMatcher
             conn.state = CONN_SIMPLE_RESPONSE;
             SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
             return;
-          }
+          } else 
+		  {
+			debuglog(YELLOW, "URLMatcher: Location block return directive not found");
+		  }
+
+		  // check for error pages
+		  if (!location.error_pages.empty())
+		  {
+			conn.urlMatcherData.error_pages = location.error_pages;
+			debuglog(YELLOW, "URLMatcher: Location block error pages found");
+		  }
+		  else
+		  {
+			debuglog(YELLOW, "URLMatcher: Location block error pages not found");
+		  }
+
+		  // check for file upload
+		  if (location.upload_dir != "")
+		  {
+			conn.urlMatcherData.file_upload = true;
+			conn.urlMatcherData.file_upload_dir = location.upload_dir;
+			debuglog(YELLOW, "URLMatcher: Location block file upload is enabled");
+		  }
+		  else 
+		  {
+			debugcolor(RED, "no upload dir found in location block");
+		  }
+		  if (location.upload_dir != "")
+		  {
+			conn.urlMatcherData.file_upload = true;
+			conn.urlMatcherData.file_upload_dir = location.upload_dir;
+			debuglog(YELLOW, "URLMatcher: upload dir found %s",
+					 location.upload_dir.c_str());
+		  }
+		  else
+		  {
+			debugcolor(RED, "no upload dir found in location block");
+		  }
           if (location.file_upload)
           {
             conn.urlMatcherData.file_upload = true;
             conn.urlMatcherData.file_upload_dir = location.upload_dir;
-            debuglog(YELLOW, "URLMatcher: Location block file upload is enabled");
+            debuglog(YELLOW, "URLMatcher: file upload is enabled");
           } 
 
           break;
@@ -448,7 +486,7 @@ namespace URLMatcher
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return;
     }
-
+	debug("accepted method found: %s", conn.data.method.c_str());
     
     
     if (conn.data.method == "POST" && conn.data.content_length > 0)
@@ -463,15 +501,9 @@ namespace URLMatcher
         conn.state = CONN_SIMPLE_RESPONSE;
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
-      }
-      {
-        debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
-                 conn.urlMatcherData.full_path.c_str());
-        SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden
-        conn.state = CONN_SIMPLE_RESPONSE;
-        SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
-        return;
-      }
+      } 
+	  debugcolor(MAGENTA, "opening file for upload: %s",
+			 conn.urlMatcherData.full_path.c_str());
       conn.file_fd = open(conn.urlMatcherData.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
       if (conn.file_fd < 0)
       {
