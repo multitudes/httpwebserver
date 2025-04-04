@@ -52,7 +52,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   switch (conn.parseHeaders(conn)) {
   case PARSE_SUCCESS:
     debuglog(YELLOW, "Headers parsed successfully");
-	conn.data.headers_received = true;
+    conn.data.headers_received = true;
     break;
   case PARSE_INCOMPLETE:
     debuglog(YELLOW, "Headers incomplete");
@@ -67,9 +67,10 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     return false;
   }
 
-//   debuglog(MAGENTA, "Parsed connection data: %s",
-        //    conn.formatConnectionDataLong(conn.data).c_str());
-  debugcolor(MAGENTA, "Parsed whole connection data: %s", conn.data.request.c_str());
+  //   debuglog(MAGENTA, "Parsed connection data: %s",
+  //    conn.formatConnectionDataLong(conn.data).c_str());
+  debugcolor(MAGENTA, "Parsed whole connection data: %s",
+             conn.data.request.c_str());
   return true;
 }
 
@@ -279,46 +280,47 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
  *        Prioritizes index file check, then autoindex check, then listing.
  * @param conn The connection data structure.
  */
-void validateRequest(HTTPConnxData &conn) 
-{
-  if (conn.data.request.empty() || !conn.data.headers_received) 
-  {
+void validateRequest(HTTPConnxData &conn) {
+  if (conn.data.request.empty() || !conn.data.headers_received) {
     if (!receiveAndParseRequest(conn))
       return; // Request handling complete or failed
 
     // Get server configuration and construct the target path
     if (!constructTargetPath(conn)) {
-		return; // Request handling complete or failed
+      return; // Request handling complete or failed
     }
 
     // check if target contains CGI alias
     string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
     string cgi_path = conn.config->cgiData.cgi_path_alias.second;
     debuglog(RED, "URLMatcher: CGI path alias: '%s' -> '%s'",
-             cgi_path_alias.c_str(), cgi_path.c_str());    
-    if (conn.data.target.find(cgi_path_alias) == 0) 
-    { // found CGI alias
+             cgi_path_alias.c_str(), cgi_path.c_str());
+    if (conn.data.target.find(cgi_path_alias) == 0) { // found CGI alias
       debuglog(RED, "URLMatcher: CGI alias found. Target: %s",
-               conn.data.target.c_str()); 
-      //TODO, use cgi path 
-      conn.full_path = cgi_path + conn.data.target.substr(cgi_path_alias.length());
+               conn.data.target.c_str());
+      // TODO, use cgi path
+      conn.full_path =
+          cgi_path + conn.data.target.substr(cgi_path_alias.length());
       conn.path_for_stat = conn.full_path;
       debuglog(RED, "URLMatcher: Updated full path to CGI: '%s'",
                conn.full_path.c_str());
 
-      conn.state = CONN_SIMPLE_RESPONSE;
-      SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.full_path, 200);
-      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+      //   conn.state = CONN_SIMPLE_RESPONSE;
+      //   SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call
+      //   CGI from: " + conn.full_path, 200);
+      //   SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+      conn.state = CONN_CGI;
+      debug("CGI request detected");
+      // Start CGI process for this connection
+      if (CGI::prepareCGI(conn) < 0) {
+        conn.reset();
+        return;
+      }
 
-	  
-      
       return;
-    }
-    else 
-    { // no cgi alias, is there a location?
+    } else { // no cgi alias, is there a location?
       // loop through location blocks
-      if(conn.config->has_locations) 
-      {
+      if (conn.config->has_locations) {
         for (std::map<std::string, Location>::const_iterator it =
                  conn.config->location_blocks.begin();
              it != conn.config->location_blocks.end(); ++it) {
@@ -326,7 +328,8 @@ void validateRequest(HTTPConnxData &conn)
             debuglog(RED, "URLMatcher: Found location block for '%s'",
                      it->first.c_str());
             // update the paths and remove prefix from the target
-            conn.full_path = it->second.root + conn.data.target.substr(it->first.length());
+            conn.full_path =
+                it->second.root + conn.data.target.substr(it->first.length());
             conn.path_for_stat = conn.full_path;
             debuglog(RED, "URLMatcher: Updated full path to '%s'",
                      conn.full_path.c_str());
@@ -335,28 +338,28 @@ void validateRequest(HTTPConnxData &conn)
       }
     }
 
+    // check if the request is upload.
+    if (conn.data.method == "POST" && conn.data.content_length > 0) {
+      debuglog(YELLOW, "URLMatcher: Upload request detected.");
+      conn.file_fd =
+          open(conn.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+      if (conn.file_fd < 0) {
+        perror("URLMatcher: Failed to open file for upload");
+        SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
+        conn.state = CONN_SIMPLE_RESPONSE;
+        SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+        return;
+      }
 
-	// check if the request is upload. 
-	if (conn.data.method == "POST" && conn.data.content_length > 0) {
-		debuglog(YELLOW, "URLMatcher: Upload request detected.");
-		conn.file_fd = open(conn.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-		if (conn.file_fd < 0) {
-			perror("URLMatcher: Failed to open file for upload");
-			SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
-			conn.state = CONN_SIMPLE_RESPONSE;
-			SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
-			return;
-		}
-		
-		std::string payload = conn.data.request.substr(conn.data.headers_end);
-		if (!payload.empty()) {
-			conn.data.response = payload;
-			conn.data.bytes_sent = 0;
-		}
-		conn.state = CONN_UPLOAD;
-			
-		return;
-	}
+      std::string payload = conn.data.request.substr(conn.data.headers_end);
+      if (!payload.empty()) {
+        conn.data.response = payload;
+        conn.data.bytes_sent = 0;
+      }
+      conn.state = CONN_UPLOAD;
+
+      return;
+    }
 
     // Step 3: Check if the path exists
     struct stat path_stat;

@@ -86,14 +86,14 @@ int run() {
                            10000); // Wait indefinitely
 
     if (poll_result < 0) {
-      if (errno != EINTR) { // Interrupted by signal
+      if (errno != EINTR) { 
         perror("poll failed");
         break;
       }
-      perror("Poll interrupted by signal");
-      continue; // Interrupted by signal
+      perror("Poll got signal");
+      continue; 
     } else if (poll_result == 0) {
-      continue; // Timeout
+      continue; 
     }
 
     // Process events on file descriptors
