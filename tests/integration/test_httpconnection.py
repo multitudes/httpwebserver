@@ -117,9 +117,17 @@ def test_upload_picture_with_verification():
     
     print("Picture upload and verification successful!")
 
+
 # def test_upload_file():
-# 	files = {'file': ('test.txt', 'This is a test file.')}
-# 	response = requests.post(f"{WEBSERVER_URL}/upload", files=files)
-# 	assert response.status_code == 200
-# 	assert "File uploaded successfully" in response.text
+#     # Path to the test file
+#     test_file_path = 'tests/uploadtest.txt'
+    
+#     # Open the file in binary mode
+#     with open(test_file_path, 'rb') as f:
+#         files = {'file': (test_file_path, f)}
+#         response = requests.post(f"{WEBSERVER_URL}/upload", files=files)
+    
+#     # Check the response
+#     assert response.status_code == 200
+#     assert "File uploaded successfully" in response.text
 
