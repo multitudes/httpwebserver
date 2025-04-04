@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <algorithm>
 
 using std::string;
 
@@ -308,6 +309,12 @@ namespace URLMatcher
     string cgi_path_alias = conn.urlMatcherData.config->cgiData.cgi_path_alias.first;
     string cgi_path = conn.urlMatcherData.config->cgiData.cgi_path_alias.second;
 
+      // First check if a CGI alias is defined
+      if (cgi_path_alias.empty()) {
+        debuglog(BLUE, "URLMatcher: No CGI alias defined in config.");
+        return false;
+    }
+
     if (conn.data.target.find(cgi_path_alias) == 0)
     { // found CGI alias
       debuglog(BLUE, "URLMatcher: CGI path alias: '%s' -> '%s'",
@@ -332,7 +339,7 @@ namespace URLMatcher
     }
   }
 
-  void checkForLocationBlock(HTTPConnxData &conn)
+  void updateWithLocationBlockConfig(HTTPConnxData &conn)
   {
     if (conn.urlMatcherData.config->has_locations)
     {
@@ -401,12 +408,29 @@ namespace URLMatcher
       // Get server configuration and construct the standard target path
       if (!getConfigSetURLMatcherData(conn))
         return; // Request handling complete or failed
+
       // check if target contains CGI alias
       if (findCGIPathAlias(conn))
         return;
-      checkForLocationBlock(conn);
+
+      updateWithLocationBlockConfig(conn);
       if (conn.urlMatcherData.return_directive)
         return;
+
+      // check if the request method is accepted (GET POST etc)
+      if (std::find(conn.urlMatcherData.acceptedMethods.begin(),
+                    conn.urlMatcherData.acceptedMethods.end(),
+                    std::string(conn.data.method)) == conn.urlMatcherData.acceptedMethods.end())
+      {
+        debuglog(RED, "URLMatcher: Method '%s' not allowed in location '%s'",
+                 conn.data.method.c_str(), conn.urlMatcherData.full_path.c_str());
+        SimpleResponse::htmlErrorResponse(conn, 405); // Method Not Allowed
+        conn.state = CONN_SIMPLE_RESPONSE;
+        SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+        return;
+      }
+
+
 
       // check if the request is upload.
       if (conn.data.method == "POST" && conn.data.content_length > 0)
