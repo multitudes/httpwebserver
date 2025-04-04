@@ -65,13 +65,13 @@ namespace DirectoryListing
         debuglog(GREEN, "Directory contents: \n%s", dirString.c_str());
         
         // Set content type directly in the connection
-        connection.content_type = Constants::mimeTypes[".html"];
+        connection.urlMatcherData.content_type = Constants::mimeTypes[".html"];
         
         // update connection state
         connection.state = CONN_SIMPLE_RESPONSE;
         
         // generate HTTP header and include html payload using the stored content type
-        SimpleResponse::createResponse(connection, connection.content_type, htmlCode, 200);
+        SimpleResponse::createResponse(connection, connection.urlMatcherData.content_type, htmlCode, 200);
 
         debuglog(BLUE, "Directory simple response: \n%s", connection.data.response.c_str());
 

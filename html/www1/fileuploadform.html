@@ -10,7 +10,7 @@
 </head>
 
 <body>
-    <h1>File Upload</h1>
+    <h1>File Upload with CGI</h1>
     <div class="box">
         <form action="/cgi-bin/hello.py" method="POST" enctype="multipart/form-data">
             <label for="file">Select file:</label>
@@ -19,17 +19,15 @@
         </form>
         <p>Supported file types: .jpg, .png, .pdf, .txt</p>
     </div>
+    <h1>File Upload with standard upload</h1>
     <div class="box">
         <form action="/uploads" method="POST" enctype="multipart/form-data">
-
-                <label for="fileUpload">Select a file to upload:</label>
-                <input type="file" id="fileUpload" name="fileUpload" >
-                <p class="note">Maximum file size: 10MB</p>
-                <div id="file-info"></div>
-         
-            <button type="submit" class="btn-upload">Upload File</button>
+            <label for="file">Select file:</label>
+            <input type="file" id="file" name="file">
+            <button type="submit">Upload</button>
         </form>
-    </div>    
+        <p>Supported file types: .jpg, .png, .pdf, .txt</p>
+    </div> 
 
    <div class="file-list">
         <h2>Uploaded Files</h2>
