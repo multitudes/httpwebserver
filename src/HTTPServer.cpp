@@ -270,12 +270,11 @@ int run() {
       }
 
       if (conn.state == CONN_UPLOAD) {
-        if (pollfds[i].revents & POLLIN) {
-          debuglog(YELLOW, "Handling upload event for connection %d",
-                   conn.client_fd);
 
-          // First handle any buffered data from header parsing
+          // First handle any buffered payload data left over from header parsing
           if (!conn.data.response.empty()) {
+			debuglog(YELLOW, "HTTPServer - first writing leftover payload for connection %d",
+				conn.client_fd);
             ssize_t bytes_written =
                 write(conn.file_fd, conn.data.response.c_str(),
                       conn.data.response.size());
@@ -295,10 +294,14 @@ int run() {
               continue;
             }
           }
-
-          // Then read more data from socket
+		  
+		  if (pollfds[i].revents & POLLIN) {
+			  // Then read more data from socket
+			debuglog(YELLOW, "HTTPServer - Handling upload event for connection %d",
+					 conn.client_fd);
+		  debug("read from client %d", conn.client_fd);
           char buffer[BUFFER_SIZE];
-          ssize_t bytes_read = recv(conn.client_fd, buffer, sizeof(buffer), 0);
+          ssize_t bytes_read = recv(conn.client_fd, buffer, sizeof(buffer), MSG_DONTWAIT);
 
           if (bytes_read <= 0) {
             if (bytes_read == 0) {
@@ -306,8 +309,13 @@ int run() {
             } else {
               perror("recv failed during upload");
             }
-            cleanup_upload(conn);
-            conn.reset();
+			// normally here I would check for the errors but the subject prohibit it
+			// if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			// 	// No data available yet - keep in READING_BODY state
+			// 	return;
+			// }
+            // cleanup_upload(conn);
+            // conn.reset();
             continue;
           }
 
@@ -325,7 +333,8 @@ int run() {
           if (conn.data.bytes_sent >= conn.data.content_length) {
             finish_upload(conn);
           }
-        }
+		}
+		
 
       } else if (conn.state == CONN_CGI) {
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);

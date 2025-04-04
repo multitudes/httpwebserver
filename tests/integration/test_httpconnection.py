@@ -1,32 +1,10 @@
 import pytest
 import requests
 
+# List of all ports from your config
+PORTS = [4244, 4245, 4246, 4247, 4248]
 
 WEBSERVER_URL = "http://localhost:4244"
-
-# def test_cgi_basic_health():
-#     response = requests.get(f"{WEBSERVER_URL}/cgi-bin/health")
-#     assert response.status_code == 200
-    
-def test_response_basic_health():
-	response = requests.get(f"{WEBSERVER_URL}/index.html")
-	assert response.status_code == 200
-
-def test_response_404():
-	response = requests.get(f"{WEBSERVER_URL}/notfound")
-	assert response.status_code == 404
-      
-# def test_upload_basic_health():
-# 	response = requests.get(f"{WEBSERVER_URL}/upload")
-# 	assert response.status_code == 200
-
-# def test_upload_file():
-# 	files = {'file': ('test.txt', 'This is a test file.')}
-# 	response = requests.post(f"{WEBSERVER_URL}/upload", files=files)
-# 	assert response.status_code == 200
-# 	assert "File uploaded successfully" in response.text
-
-
 
 def test_server_responses(webserver, base_url):
     """Test basic server responses"""
@@ -39,10 +17,15 @@ def test_server_responses(webserver, base_url):
     for endpoint in endpoints:
         response = requests.get(endpoint)
         assert response.status_code == 200
+    
+def test_response_index():
+	response = requests.get(f"{WEBSERVER_URL}/index.html")
+	assert response.status_code == 200
 
-# List of all ports from your config
-PORTS = [4244, 4245, 4246, 4247, 4248]
-
+def test_response_404():
+	response = requests.get(f"{WEBSERVER_URL}/notfound")
+	assert response.status_code == 404
+      
 # Basic tests for all ports
 def test_all_ports_respond():
     for port in PORTS:
@@ -101,12 +84,42 @@ def test_upload_with_verification():
     # 3. Check response
     assert response.status_code in [200, 201]
     
-    # 4. Verify file exists on server (optional)
-    # downloaded = requests.get(upload_url)
-    # with open(test_file, 'rb') as f:
-    #     original_content = f.read()
-    #     assert downloaded.content == original_content, "Uploaded content doesn't match original"
+    # 4. Verify file exists on server 
+    downloaded = requests.get(upload_url)
+    with open(test_file, 'rb') as f:
+        original_content = f.read()
+        assert downloaded.content == original_content, "Uploaded content doesn't match original"
     
-    # print("Upload and verification successful!")
+    print("Upload and verification successful!")
 	
+def test_upload_picture_with_verification():
+    # 1. Prepare test file
+    test_file = 'tests/egyptiancatsuploadtest.jpeg'
+    upload_url = 'http://localhost:4244/upload/egyptiancatsuploadtest.jpeg'
+    
+    # 2. Upload the picture
+    with open(test_file, 'rb') as f:
+        response = requests.post(
+            upload_url,
+            data=f,
+            headers={'Content-Type': 'image/jpeg'},
+            timeout=5
+        )
+    
+    # 3. Check response
+    assert response.status_code in [200, 201], f"Upload failed: {response.text}"
+    
+    # 4. Verify file exists on server
+    downloaded = requests.get(upload_url)
+    with open(test_file, 'rb') as f:
+        original_content = f.read()
+        assert downloaded.content == original_content, "Uploaded content doesn't match original"
+    
+    print("Picture upload and verification successful!")
+
+# def test_upload_file():
+# 	files = {'file': ('test.txt', 'This is a test file.')}
+# 	response = requests.post(f"{WEBSERVER_URL}/upload", files=files)
+# 	assert response.status_code == 200
+# 	assert "File uploaded successfully" in response.text
 
