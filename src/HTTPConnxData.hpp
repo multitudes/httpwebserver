@@ -99,13 +99,15 @@ struct HTTPConnxData {
 
   struct URLMatcherData {
 
-    const ServerData* config;      // Pointer to server configuration for this connection
+    const ServerData* config;      
     string full_path;              // Full path to the requested resource
     string path_for_stat;          // Path adjusted for stat() calls
     string content_type;           // Content type (MIME type) for the response
     bool autoindex;
-
-    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), autoindex(false) {}
+    bool return_directive;         // Flag for return directive
+    
+    std::vector<std::string> acceptedMethods;
+    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), autoindex(false), return_directive(false), acceptedMethods() {}
   };
   // Connection state and metadata
   ConnectionState state;

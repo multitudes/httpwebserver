@@ -117,6 +117,7 @@ namespace URLMatcher
     conn.urlMatcherData.full_path = conn.urlMatcherData.config->root + target;
     conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
     conn.urlMatcherData.autoindex = conn.urlMatcherData.config->autoindex;
+    conn.urlMatcherData.acceptedMethods = conn.urlMatcherData.config->acceptedMethods;
 
     // Adjust path_for_stat: remove trailing slash unless it's just the root path
     if (conn.urlMatcherData.path_for_stat.length() > conn.urlMatcherData.config->root.length() + 1 &&
@@ -334,40 +335,55 @@ namespace URLMatcher
   {
     if (conn.urlMatcherData.config->has_locations)
     {
-      for (std::map<std::string, Location>::const_iterator it =
+      for (std::map<std::string, Location>::const_iterator location_pair =
                conn.urlMatcherData.config->location_blocks.begin();
-           it != conn.urlMatcherData.config->location_blocks.end(); ++it)
+           location_pair != conn.urlMatcherData.config->location_blocks.end(); ++location_pair)
       {
-        if (conn.data.target.find(it->first) == 0)
+        if (conn.data.target.find(location_pair->first) == 0)
         { // found location
+          Location location = location_pair->second;
           debuglog(RED, "URLMatcher: Found location block for '%s'",
-                   it->first.c_str());
-          debuglog(RED, "URLMatcher: Location root is '%s' with length %zu",
-                   it->second.root.c_str(), it->second.root.length());
+                   location_pair->first.c_str());
+          debuglog(RED, "URLMatcher: Location root is '%s' wlocation_pairh length %zu",
+                   location.root.c_str(), location.root.length());
 
           // Only update paths if location's root is different from the server's root
-          if (it->second.root != conn.urlMatcherData.config->root)
+          if (location.root != conn.urlMatcherData.config->root)
           {
             // Override paths only if root is different from server root
-            conn.urlMatcherData.full_path = it->second.root + conn.data.target.substr(it->first.length());
+            conn.urlMatcherData.full_path = location.root + conn.data.target.substr(location_pair->first.length());
             conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
             debuglog(RED, "URLMatcher: Updated full path to '%s'",
                      conn.urlMatcherData.full_path.c_str());
           }
           else
             debuglog(RED, "URLMatcher: Location root is same as server root, using default paths");
-           
-            // set autoindex
-           conn.urlMatcherData.autoindex = it->second.autoindex;
-           debuglog(YELLOW, "URLMatcher: Location block autoindex is %s",
-                    conn.urlMatcherData.autoindex ? "enabled" : "disabled");
+
+          // set autoindex
+          conn.urlMatcherData.autoindex = location.autoindex;
+          debuglog(YELLOW, "URLMatcher: Location block autoindex is %s",
+                   conn.urlMatcherData.autoindex ? "enabled" : "disabled");
+
+          // set accepted methods
+          conn.urlMatcherData.acceptedMethods = location.acceptedMethods;
+          debuglog(YELLOW, "URLMatcher: accepted methods updated to Location block accepted methods");
+
+          //check for return directive
+          if (location.return_directive.first != 0)
+          {
+            conn.urlMatcherData.return_directive = true;
+            debuglog(YELLOW, "URLMatcher: Location block return directive found");
+            SimpleResponse::createResponse(conn, "text/plain", location.return_directive.second, location.return_directive.first);
+            conn.state = CONN_SIMPLE_RESPONSE;
+            SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+            return;
+          }
+
           break;
         }
       }
     }
   }
-
-  
 
   /**
    * @brief Validates incoming request, handles file/directory serving.
@@ -388,6 +404,8 @@ namespace URLMatcher
       if (findCGIPathAlias(conn))
         return;
       checkForLocationBlock(conn);
+      if (conn.urlMatcherData.return_directive)
+        return;
 
       // check if the request is upload.
       if (conn.data.method == "POST" && conn.data.content_length > 0)
@@ -414,7 +432,7 @@ namespace URLMatcher
         return;
       }
 
-      // Step 3: Check if the path exists
+
       struct stat path_stat;
       if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0)
       {
@@ -427,7 +445,7 @@ namespace URLMatcher
         return;
       }
 
-      // Step 4: Handle based on path type
+
       // Handle regular file
       if (S_ISREG(path_stat.st_mode))
       {

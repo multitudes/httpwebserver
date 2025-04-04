@@ -20,6 +20,13 @@ namespace SimpleResponse {
         header += Utils::to_string(statusCode) + " " + Constants::statusMessages[statusCode] + "\r\n";
         header += "Content-Type: " + contentType;
         header += "\r\n";
+        
+        // Add Location header for redirect status codes (301, 302, 303, 307, 308)
+        if ((statusCode == 301 || statusCode == 302 || statusCode == 303 || 
+             statusCode == 307 || statusCode == 308) && !response.empty()) {
+            header += "Location: " + response + "\r\n";
+        }
+        
         header += "Content-Length: " + Utils::to_string(static_cast<int>(response.size())) + "\r\n";
         header += "\r\n";
 
