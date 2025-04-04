@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv File Upload Form</title>
+    <link rel="icon" href="favicon/favicon.ico" type="image/x-icon">
+	<link rel="stylesheet" type="text/css" href="css/style.css">
+</head>
+
+<body>
+    <h1>File Upload with CGI</h1>
+    <div class="box">
+        <form action="/cgi-bin/hello.py" method="POST" enctype="multipart/form-data">
+            <label for="file">Select file:</label>
+            <input type="file" id="file" name="file">
+            <button type="submit">Upload</button>
+        </form>
+        <p>Supported file types: .jpg, .png, .pdf, .txt</p>
+    </div>
+    <h1>File Upload with standard upload</h1>
+    <div class="box">
+        <form action="/uploads" method="POST" enctype="multipart/form-data">
+            <label for="file">Select file:</label>
+            <input type="file" id="file" name="file">
+            <button type="submit">Upload</button>
+        </form>
+        <p>Supported file types: .jpg, .png, .pdf, .txt</p>
+    </div> 
+
+   <div class="file-list">
+        <h2>Uploaded Files</h2>
+        <form action="/cgi-bin/delete.py" method="POST">
+            <ul>
+                <!-- Dynamically generated file list -->
+                <!-- Example static entry for demonstration -->
+                <li>
+                    <input type="checkbox" name="delete_files" value="file1.txt">
+                    <a href="/uploads/file1.txt" target="_blank">file1.txt</a>
+                </li>
+                <li>
+                    <input type="checkbox" name="delete_files" value="file2.jpg">
+                    <a href="/uploads/file2.jpg" target="_blank">file2.jpg</a>
+                </li>
+            </ul>
+            <button type="submit">Delete Selected Files</button>
+        </form>
+    </div>
+</body>
+
+</html>

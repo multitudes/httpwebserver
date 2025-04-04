@@ -103,11 +103,14 @@ struct HTTPConnxData {
     string full_path;              // Full path to the requested resource
     string path_for_stat;          // Path adjusted for stat() calls
     string content_type;           // Content type (MIME type) for the response
+    string file_upload_dir;             // Directory for file uploads
     bool autoindex;
     bool return_directive;         // Flag for return directive
+    bool file_upload;           // Flag for file upload
+  
     
     std::vector<std::string> acceptedMethods;
-    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), autoindex(false), return_directive(false), acceptedMethods() {}
+    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), file_upload_dir(""), autoindex(false), return_directive(false), file_upload(false), acceptedMethods() {}
   };
   // Connection state and metadata
   ConnectionState state;
