@@ -310,15 +310,15 @@ int run() {
               perror("recv failed during upload");
             }
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				// No data available yet - keep in READING_BODY state
-				debug("No data available yet - keep in READING_BODY state");
+				debug("No data available yet - keep in reading state");
 				continue;
 			}
             cleanup_upload(conn);
             conn.reset();
             continue;
           }
-
+		  debug("Received %ld bytes from client", bytes_read);
+		  debug("writing to file %d", conn.file_fd);
           ssize_t bytes_written = write(conn.file_fd, buffer, bytes_read);
           if (bytes_written <= 0) {
             perror(bytes_written < 0 ? "Failed to write to file"
