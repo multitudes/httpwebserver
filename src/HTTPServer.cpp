@@ -2,13 +2,13 @@
 #include "HTTPServer.hpp"
 #include "Constants.hpp"
 #include "DirectoryListing.hpp"
+#include "SimpleResponse.hpp"
 #include "URLMatcher.hpp"
 #include "debug.h"
 #include <ctime>
 #include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "SimpleResponse.hpp"
 
 using std::map;
 using std::string;
@@ -44,18 +44,15 @@ vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
 
-
-
 int run() {
-  SocketUtils::setSignalHandlers();
-  Constants::initStatusMessageMap();
-  Constants::initMimeTypes();
   struct sockaddr_in server_addr;
   bool skip_to_next_iteration = false;
-  vector<ServerData> configs_ = Config::getServerData(NULL);
+
+
+  vector<ServerData> configs_ = Config::getServerData();
   vector<int> serverSockets;
-  serverSockets.reserve(10);
-  pollfds.reserve(100);
+
+  SocketUtils::initialize();
 
   if (configs_.empty()) {
     debuglog(RED, "No configuration data found");
@@ -140,7 +137,7 @@ int run() {
               accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
           if (client_fd < 0) {
             perror("Accept failed");
-			// TODO send error response
+            // TODO send error response
             skip_to_next_iteration = true;
             break;
           }
@@ -148,7 +145,7 @@ int run() {
           if (!SocketUtils::setSendRecTimeout(client_fd)) {
             perror("Failed to set send/receive timeout");
             close(client_fd);
-			// TODO send error response
+            // TODO send error response
             skip_to_next_iteration = true;
             break;
           }
@@ -168,21 +165,26 @@ int run() {
           SocketUtils::add_to_poll(client_fd, POLLIN);
           conn.state = CONN_INCOMING;
 
-		  // Store client IP address
-		  inet_ntop(AF_INET, &client_addr.sin_addr, conn.data.client_ip, sizeof(conn.data.client_ip));
-		  uint16_t client_port = ntohs(client_addr.sin_port);
-		  
-		  // add the timeout for the client
-		  lastActivityTime[client_fd] = std::time(NULL);
+          // Store client IP address
+          inet_ntop(AF_INET, &client_addr.sin_addr, conn.data.client_ip,
+                    sizeof(conn.data.client_ip));
+          uint16_t client_port = ntohs(client_addr.sin_port);
 
-		  debuglog(YELLOW,"Client connected from %s:%d", conn.data.client_ip, client_port);
+          // add the timeout for the client
+          lastActivityTime[client_fd] = std::time(NULL);
 
-          debuglog(YELLOW,"Connection data initialized in state INCOMING for client %d",
-                client_fd);
+          debuglog(YELLOW, "Client connected from %s:%d", conn.data.client_ip,
+                   client_port);
+
+          debuglog(
+              YELLOW,
+              "Connection data initialized in state INCOMING for client %d",
+              client_fd);
           skip_to_next_iteration = true;
         }
       }
-	  // go back to the while loop if we had an error - TODO remove it when i get the URLMatcher func
+      // go back to the while loop if we had an error - TODO remove it when i
+      // get the URLMatcher func
       if (skip_to_next_iteration) {
         skip_to_next_iteration = false;
         continue;
@@ -196,7 +198,8 @@ int run() {
 
       if (conn.state == CONN_INCOMING) {
         URLMatcher::validateRequest(conn);
-		debuglog(YELLOW, "Connection fd %d new state %d", conn.client_fd, conn.state);
+        debuglog(YELLOW, "Connection fd %d new state %d", conn.client_fd,
+                 conn.state);
         // continue;
       }
 
@@ -266,61 +269,73 @@ int run() {
         continue;
       }
 
-    if (conn.state == CONN_UPLOAD) {
-   	 if (pollfds[i].revents & POLLIN) {
-        debuglog(YELLOW, "Handling upload event for connection %d", conn.client_fd);
-        
-        // First handle any buffered data from header parsing
-        if (!conn.data.response.empty()) {
-            ssize_t bytes_written = write(conn.file_fd, conn.data.response.c_str(),
-                                        conn.data.response.size());
+      if (conn.state == CONN_UPLOAD) {
+
+          // First handle any buffered payload data left over from header parsing
+          if (!conn.data.response.empty()) {
+			debuglog(YELLOW, "HTTPServer - first writing leftover payload for connection %d",
+				conn.client_fd);
+            ssize_t bytes_written =
+                write(conn.file_fd, conn.data.response.c_str(),
+                      conn.data.response.size());
             if (bytes_written <= 0) {
-                perror(bytes_written < 0 ? "Failed to write to file" : "No data written to file");
-                cleanup_upload(conn); // Helper to close fd and remove file
-                conn.reset();
-                continue;
+              perror(bytes_written < 0 ? "Failed to write to file"
+                                       : "No data written to file");
+              cleanup_upload(conn); // Helper to close fd and remove file
+              conn.reset();
+              continue;
             }
-            
+
             conn.data.bytes_sent += bytes_written;
             conn.data.response.clear();
-            
-            if (conn.data.bytes_sent >= conn.data.content_length) {
-                finish_upload(conn);
-                continue;
-            }
-        }
-        
-        // Then read more data from socket
-        char buffer[BUFFER_SIZE];
-        ssize_t bytes_read = recv(conn.client_fd, buffer, sizeof(buffer), 0);
-        
-        if (bytes_read <= 0) {
-            if (bytes_read == 0) {
-                debug("Client disconnected during upload");
-            } else {
-                perror("recv failed during upload");
-            }
-            cleanup_upload(conn);
-            conn.reset();
-            continue;
-        }
-        
-        ssize_t bytes_written = write(conn.file_fd, buffer, bytes_read);
-        if (bytes_written <= 0) {
-            perror(bytes_written < 0 ? "Failed to write to file" : "No data written to file");
-            cleanup_upload(conn);
-            conn.reset();
-            continue;
-        }
-        
-        conn.data.bytes_sent += bytes_written;
-        
-        if (conn.data.bytes_sent >= conn.data.content_length) {
-            finish_upload(conn);
-        }
-    }
 
- 
+            if (conn.data.bytes_sent >= conn.data.content_length) {
+              finish_upload(conn);
+              continue;
+            }
+          }
+		  
+		  if (pollfds[i].revents & POLLIN) {
+			  // Then read more data from socket
+			debuglog(YELLOW, "HTTPServer - Handling upload event for connection %d",
+					 conn.client_fd);
+		  debug("read from client %d", conn.client_fd);
+          char buffer[BUFFER_SIZE];
+          ssize_t bytes_read = recv(conn.client_fd, buffer, sizeof(buffer), MSG_DONTWAIT);
+
+          if (bytes_read <= 0) {
+            if (bytes_read == 0) {
+              debug("Client disconnected during upload");
+            } else {
+              perror("recv failed during upload");
+            }
+			// normally here I would check for the errors but the subject prohibit it
+			// if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			// 	// No data available yet - keep in READING_BODY state
+			// 	return;
+			// }
+            // cleanup_upload(conn);
+            // conn.reset();
+            continue;
+          }
+
+          ssize_t bytes_written = write(conn.file_fd, buffer, bytes_read);
+          if (bytes_written <= 0) {
+            perror(bytes_written < 0 ? "Failed to write to file"
+                                     : "No data written to file");
+            cleanup_upload(conn);
+            conn.reset();
+            continue;
+          }
+
+          conn.data.bytes_sent += bytes_written;
+
+          if (conn.data.bytes_sent >= conn.data.content_length) {
+            finish_upload(conn);
+          }
+		}
+		
+
       } else if (conn.state == CONN_CGI) {
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
         // check if the cgi is ready to be sent
@@ -360,7 +375,8 @@ int run() {
             close(conn.child_stdin_pipe[1]);
             conn.is_sending = 0;
             conn.is_receiving = 1;
-            SocketUtils::update_poll_events(conn.child_stdin_pipe[1], 0); // Remove POLLOUT
+            SocketUtils::update_poll_events(conn.child_stdin_pipe[1],
+                                            0); // Remove POLLOUT
             SocketUtils::update_poll_events(conn.child_stdout_pipe[0], POLLIN);
           }
         }
@@ -397,8 +413,8 @@ int run() {
         continue;
       }
     }
-	// after every loop i check for idle connections
-	SocketUtils::checkForIdleConnections();
+    // after every loop i check for idle connections
+    SocketUtils::checkForIdleConnections();
   }
   // Cleanup
   // TODO
@@ -408,84 +424,84 @@ int run() {
 // Send HTTP response headers
 // maybe it should be somewhere else?
 int send_headers(HTTPConnxData &conn) {
-	if (!conn.data.response.empty()) {
-	  if (send(conn.client_fd, conn.data.response.c_str(),
-			   conn.data.response.size(), 0) < 0) {
-		perror("Failed to send headers");
-		return -1;
-	  }
-	  conn.headers_sent = true;
-	}
-	return 0;
+  if (!conn.data.response.empty()) {
+    if (send(conn.client_fd, conn.data.response.c_str(),
+             conn.data.response.size(), 0) < 0) {
+      perror("Failed to send headers");
+      return -1;
+    }
+    conn.headers_sent = true;
   }
-  
-  /**
-   * @brief read the file in buffers and send it to the client
-   * 
-   * @param conn the connection data
-   * @return 0 if the file is sent completely, -1 on error, 1 if more data to send
-   */
-  int send_file(HTTPConnxData &conn) {
-	char buffer[BUFFER_SIZE];
-	ssize_t bytes_read = read(conn.file_fd, buffer, sizeof(buffer));
-  
-	if (bytes_read < 0) {
-	  perror("Failed to read file");
-	  return -1;
-	}
-	if (bytes_read == 0) {
-	  close(conn.file_fd);
-	  conn.file_fd = -1;
-	  return 0; // EOF
-	}
-  
-	ssize_t bytes_sent =
-		send(conn.client_fd, buffer, static_cast<size_t>(bytes_read), 0);
-	if (bytes_sent < 0) {
-	  perror("Failed to send data");
-	  return -1;
-	}
-  
-	conn.data.bytes_sent += static_cast<size_t>(bytes_sent);
-  
-	// Check if we've sent the entire file
-	if (conn.data.bytes_sent >= conn.file_size) {
-	  return 0; // File sent completely
-	}
-  
-	return 1; // More data to send
+  return 0;
+}
+
+/**
+ * @brief read the file in buffers and send it to the client
+ *
+ * @param conn the connection data
+ * @return 0 if the file is sent completely, -1 on error, 1 if more data to send
+ */
+int send_file(HTTPConnxData &conn) {
+  char buffer[BUFFER_SIZE];
+  ssize_t bytes_read = read(conn.file_fd, buffer, sizeof(buffer));
+
+  if (bytes_read < 0) {
+    perror("Failed to read file");
+    return -1;
   }
-  
-  /**
-   * @brief Finish the upload process
-   * 
-   * @param conn the connection data
-   * @return void
-   * 
-   * It closes the file descriptor and sends a 201 response to the client
-   * updates the poll events to POLLOUT
-   * and sets the state to CONN_SIMPLE_RESPONSE
-   */
-  void finish_upload(HTTPConnxData& conn) {
-	  debuglog(YELLOW, "Upload complete. Written %zu bytes to %s", 
-			   conn.data.bytes_sent, conn.filename);
-	  close(conn.file_fd);
-	  conn.upload_completed = true;
-	  SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
-	  SimpleResponse::createResponse(conn, "text/plain", 
-								   "File uploaded successfully.", 201);
-	  conn.state = CONN_SIMPLE_RESPONSE;
-	  lastActivityTime[conn.client_fd] = time(NULL);
+  if (bytes_read == 0) {
+    close(conn.file_fd);
+    conn.file_fd = -1;
+    return 0; // EOF
   }
-  
-  /**
-   * @brief Cleanup the upload process when upload fails
-   */
-  void cleanup_upload(HTTPConnxData& conn) {
-	  if (conn.file_fd >= 0) {
-		  close(conn.file_fd);
-		  unlink(conn.filename); // Remove partial upload
-	  }
+
+  ssize_t bytes_sent =
+      send(conn.client_fd, buffer, static_cast<size_t>(bytes_read), 0);
+  if (bytes_sent < 0) {
+    perror("Failed to send data");
+    return -1;
   }
+
+  conn.data.bytes_sent += static_cast<size_t>(bytes_sent);
+
+  // Check if we've sent the entire file
+  if (conn.data.bytes_sent >= conn.file_size) {
+    return 0; // File sent completely
+  }
+
+  return 1; // More data to send
+}
+
+/**
+ * @brief Finish the upload process
+ *
+ * @param conn the connection data
+ * @return void
+ *
+ * It closes the file descriptor and sends a 201 response to the client
+ * updates the poll events to POLLOUT
+ * and sets the state to CONN_SIMPLE_RESPONSE
+ */
+void finish_upload(HTTPConnxData &conn) {
+  debuglog(YELLOW, "Upload complete. Written %zu bytes to %s",
+           conn.data.bytes_sent, conn.filename);
+  close(conn.file_fd);
+  conn.upload_completed = true;
+  SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+  SimpleResponse::createResponse(conn, "text/plain",
+                                 "File uploaded successfully.", 201);
+  conn.state = CONN_SIMPLE_RESPONSE;
+  lastActivityTime[conn.client_fd] = time(NULL);
+}
+
+/**
+ * @brief Cleanup the upload process when upload fails
+ */
+void cleanup_upload(HTTPConnxData &conn) {
+  if (conn.file_fd >= 0) {
+    close(conn.file_fd);
+    unlink(conn.filename); // Remove partial upload
+  }
+}
 
 } // namespace HTTPServer

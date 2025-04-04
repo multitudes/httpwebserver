@@ -23,7 +23,8 @@
 class Config {
 public:
   static void initialize(std::string& config_file);
-  static std::vector<ServerData>& getServerData(char *config_file);
+  static const std::vector<ServerData>& getServerData();
+  static const std::vector<ServerData>& getServerData(char *config_file);
   static const ServerData* getConfigByPort(uint16_t port); 
   static void cleanup();
 

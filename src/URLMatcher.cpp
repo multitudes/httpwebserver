@@ -67,8 +67,9 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     return false;
   }
 
-  debuglog(MAGENTA, "Parsed connection data: %s",
-           conn.formatConnectionDataLong(conn.data).c_str());
+//   debuglog(MAGENTA, "Parsed connection data: %s",
+        //    conn.formatConnectionDataLong(conn.data).c_str());
+  debugcolor(MAGENTA, "Parsed whole connection data: %s", conn.data.request.c_str());
   return true;
 }
 
