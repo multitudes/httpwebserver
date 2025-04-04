@@ -328,9 +328,19 @@ namespace URLMatcher
       debuglog(BLUE, "URLMatcher: Updated full path to CGI: '%s'",
                conn.urlMatcherData.full_path.c_str());
 
-      conn.state = CONN_SIMPLE_RESPONSE;
-      SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
-      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+    //   conn.state = CONN_SIMPLE_RESPONSE;
+    //   SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
+    //   SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+		conn.state = CONN_CGI;
+		debug("CGI request detected");
+		// Start CGI process for this connection
+		if (CGI::prepareCGI(conn) < 0) {
+			conn.reset();
+			conn.state = CONN_SIMPLE_RESPONSE;
+      		SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
+      		SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+			return false;
+		}
       return true;
     }
     else
