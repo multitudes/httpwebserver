@@ -309,6 +309,8 @@ void validateRequest(HTTPConnxData &conn)
       conn.state = CONN_SIMPLE_RESPONSE;
       SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.full_path, 200);
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+
+	  
       
       return;
     }
@@ -328,8 +330,6 @@ void validateRequest(HTTPConnxData &conn)
             conn.path_for_stat = conn.full_path;
             debuglog(RED, "URLMatcher: Updated full path to '%s'",
                      conn.full_path.c_str());
-            
-           
           }
         }
       }
