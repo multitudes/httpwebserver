@@ -198,6 +198,7 @@ int run() {
 
       if (conn.state == CONN_INCOMING) {
         URLMatcher::validateRequest(conn);
+		debug("incoming connection fd %d", conn.client_fd);
         debuglog(YELLOW, "Connection fd %d new state %d", conn.client_fd,
                  conn.state);
         // continue;
@@ -329,7 +330,8 @@ int run() {
           }
 
           conn.data.bytes_sent += bytes_written;
-
+		  debug("Wrote %ld bytes to file", bytes_written);
+		  debug("total bytes sent %zu", conn.data.bytes_sent);
           if (conn.data.bytes_sent >= conn.data.content_length) {
             finish_upload(conn);
           }
