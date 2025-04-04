@@ -86,7 +86,7 @@ namespace SimpleResponse {
         string header = "HTTP/1.1 200 OK\r\n";
         header += "Content-Type: " + conn.urlMatcherData.content_type + "\r\n";
         header += "Content-Length: " + Utils::to_string(fileSize) + "\r\n";
-        header += "Connection: close\r\n";
+        // header += "Connection: close\r\n";
         header += "\r\n";
         
         conn.data.response = header;

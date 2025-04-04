@@ -7,6 +7,9 @@
 # The -c flag indicates that the compiler should only produce an object file without linking.
 # $< is another special variable, representing the first prerequisite (dependency) of the rule. It is the source file.
 
+# Detect OS (Linux vs Mac)
+UNAME_S := $(shell uname -s)
+
 NAME 			= 	webserv
 CXX				= 	c++
 
@@ -46,7 +49,7 @@ OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
 HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )
 HDRS 			+= $(addprefix $(SRC_DIR), )
 
-all: $(NAME) #test
+all: $(NAME) test
 
 # # Add PIE flags only for Linux
 # ifeq ($(shell uname -s), Linux)
@@ -69,10 +72,13 @@ clean:
 	rm -f $(OBJS)
 	rm -rf $(OBJ_DIR)
 
+# Clean everything (including venv)
 fclean: clean
-	rm -rf $(NAME)
+	@rm -f $(NAME)
+	@rm -rf $(VENV_DIR)
+	@echo "Cleaned project and virtual environment"
 
-re: fclean all
+re: clean all
 
 # The idea is for this project to use run for production with extra flags to speed it up
 # and optimize the binary size
@@ -87,26 +93,28 @@ valrun: all
 
 
 # Check if venv exists, create if not
+# Makefile for webserver with automatic venv setup
 VENV_DIR = venv
 PYTHON = python3
 PIP = $(VENV_DIR)/bin/pip
-PIP_INSTALL = $(PIP) install -r tests/requirements.txt
+PYTEST = $(VENV_DIR)/bin/pytest
 
+# Virtual environment setup
 venv:
 	@echo "Setting up virtual environment..."
 	@if [ ! -d "$(VENV_DIR)" ]; then \
-		echo "Creating virtual environment..."; \
-		$(PYTHON) -m venv $(VENV_DIR); \
+		$(PYTHON) -m venv $(VENV_DIR) || $(PYTHON) -m virtualenv $(VENV_DIR); \
 		$(PIP) install --upgrade pip; \
 		$(PIP) install pytest; \
-		$(PIP_INSTALL); \
+		if [ -f "tests/requirements.txt" ]; then $(PIP) install -r tests/requirements.txt; fi; \
+		echo "Virtual environment ready"; \
 	else \
-		echo "Virtual environment already exists."; \
+		echo "Virtual environment already exists"; \
 	fi
 
-# Run tests (ensure venv is set up)
-test: $(NAME) #venv
+# Run tests
+test: $(NAME) venv
 	@echo "Running tests..."
-	@. $(VENV_DIR)/bin/activate && pytest tests
+	@$(PYTEST) tests/
 
-.PHONY: all clean fclean re run valrun test
+.PHONY: all venv test clean

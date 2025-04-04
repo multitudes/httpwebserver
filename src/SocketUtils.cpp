@@ -20,9 +20,7 @@
 #include <algorithm>
 
 using std::signal;
-
 namespace SocketUtils {
-
 
 // Add a file descriptor to the poll array
 void add_to_poll(int fd, short events) {
@@ -70,6 +68,11 @@ void add_to_poll(int fd, short events) {
  */
 void initialize() {
   setSignalHandlers();
+  Constants::initStatusMessageMap();
+  Constants::initMimeTypes();
+  // for performance reasons, I reserve space in the vectors
+  HTTPServer::serverSockets.reserve(10);
+  HTTPServer::pollfds.reserve(100);
 }
 
 void setSignalHandlers() {

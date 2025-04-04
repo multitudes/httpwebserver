@@ -74,10 +74,11 @@ namespace URLMatcher
       return false;
     }
 
-    debuglog(MAGENTA, "Parsed connection data: %s",
-             conn.formatConnectionDataLong(conn.data).c_str());
-    return true;
-  }
+//   debuglog(MAGENTA, "Parsed connection data: %s",
+        //    conn.formatConnectionDataLong(conn.data).c_str());
+  debugcolor(MAGENTA, "Parsed whole connection data: %s", conn.data.request.c_str());
+  return true;
+}
 
   /**
    * @brief Gets configuration and constructs the target path
