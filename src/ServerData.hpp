@@ -31,13 +31,13 @@ struct Location {
   std::map<int, std::string> error_pages;
 
   Location() :
-    upload_dir("/www/uploads"),
-    autoindex(false), 
-    file_upload(false),
+    upload_dir(""), // 5 
+    autoindex(false),  // 4 same priority because different
+    file_upload(false), // 4 same priority because different
     internal(false),
-	  acceptedMethods(),
-    return_directive(), 
-    root("www"),
+	  acceptedMethods(),  // 2 if post then could be upload - if not could be autoindex
+    return_directive(),  // 1st - return immediately 
+    root(""), // 5 check for new root yes no
     error_pages() {}
 };
 

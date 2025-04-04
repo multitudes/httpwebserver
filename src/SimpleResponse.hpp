@@ -14,9 +14,7 @@ namespace SimpleResponse {
 
     void createResponse(HTTPConnxData &connections, string contentType, std::string response, int statusCode);
 
-    // Functions for file responses
-    void prepareFileResponse(HTTPConnxData &conn, string contentType, long fileSize);
-    void prepareFileResponse(HTTPConnxData &conn, long fileSize); // Overloaded version that uses conn.content_type
+    void prepareFileResponse(HTTPConnxData &conn, long fileSize);
 
     void htmlErrorResponse(HTTPConnxData &connections, int statusCode);  
 

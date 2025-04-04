@@ -95,17 +95,13 @@ PIP_INSTALL = $(PIP) install -r tests/requirements.txt
 venv:
 	@echo "Setting up virtual environment..."
 	@if [ ! -d "$(VENV_DIR)" ]; then \
-		echo "Creating virtual environment..."; \
-		$(PYTHON) -m venv $(VENV_DIR); \
+		$(PYTHON) -m venv $(VENV_DIR) || $(PYTHON) -m virtualenv $(VENV_DIR); \
 		$(PIP) install --upgrade pip; \
-		$(PIP) install pytest; \
 		$(PIP_INSTALL); \
-	else \
-		echo "Virtual environment already exists."; \
 	fi
 
 # Run tests (ensure venv is set up)
-test: $(NAME) #venv
+test: $(NAME) venv
 	@echo "Running tests..."
 	@. $(VENV_DIR)/bin/activate && pytest tests
 
