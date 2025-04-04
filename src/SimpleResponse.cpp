@@ -20,6 +20,13 @@ namespace SimpleResponse {
         header += Utils::to_string(statusCode) + " " + Constants::statusMessages[statusCode] + "\r\n";
         header += "Content-Type: " + contentType;
         header += "\r\n";
+        
+        // Add Location header for redirect status codes (301, 302, 303, 307, 308)
+        if ((statusCode == 301 || statusCode == 302 || statusCode == 303 || 
+             statusCode == 307 || statusCode == 308) && !response.empty()) {
+            header += "Location: " + response + "\r\n";
+        }
+        
         header += "Content-Length: " + Utils::to_string(static_cast<int>(response.size())) + "\r\n";
         header += "\r\n";
 
@@ -35,7 +42,7 @@ namespace SimpleResponse {
         string statusText = Constants::statusMessages[statusCode];
         
         // Set content type directly in the connection
-        connection.content_type = Constants::mimeTypes[".html"];
+        connection.urlMatcherData.content_type = Constants::mimeTypes[".html"];
 
         htmlCode = "<!DOCTYPE html>\n";
         htmlCode += "<html lang = \"en\">\n";
@@ -57,7 +64,7 @@ namespace SimpleResponse {
         htmlCode += "</body>\n";
         htmlCode += "</html>\n";
        
-        createResponse(connection, connection.content_type, htmlCode, statusCode); 
+        createResponse(connection, connection.urlMatcherData.content_type, htmlCode, statusCode); 
     }
 
     // generate a simple text response
@@ -67,17 +74,17 @@ namespace SimpleResponse {
         string statusText = Constants::statusMessages[statusCode];
         
         // Set content type directly in the connection
-        connection.content_type = Constants::mimeTypes[".txt"];
+        connection.urlMatcherData.content_type = Constants::mimeTypes[".txt"];
 
         response = Utils::to_string(statusCode) + statusText;
-        createResponse(connection, connection.content_type, response, statusCode); 
+        createResponse(connection, connection.urlMatcherData.content_type, response, statusCode); 
     }
 
     void prepareFileResponse(HTTPConnxData &conn, long fileSize)
     {
         // Use the content type already stored in the connection
         string header = "HTTP/1.1 200 OK\r\n";
-        header += "Content-Type: " + conn.content_type + "\r\n";
+        header += "Content-Type: " + conn.urlMatcherData.content_type + "\r\n";
         header += "Content-Length: " + Utils::to_string(fileSize) + "\r\n";
         // header += "Connection: close\r\n";
         header += "\r\n";
@@ -87,7 +94,7 @@ namespace SimpleResponse {
         conn.data.bytes_sent = 0;
         
         debuglog(GREEN, "File response headers prepared using stored content type: %s\n%s", 
-                 conn.content_type.c_str(), conn.data.response.c_str());
+                 conn.urlMatcherData.content_type.c_str(), conn.data.response.c_str());
     }
 
 }
