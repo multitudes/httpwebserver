@@ -1,0 +1,13 @@
+POST /test1.txt HTTP/1.1
+Host: localhost:4244
+User-Agent: curl/8.7.1
+Accept: */*
+Content-Length: 203
+Content-Type: multipart/form-data; boundary=------------------------rutqheIf8PtOr5yPy2eGtg
+
+--------------------------rutqheIf8PtOr5yPy2eGtg
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+hello
+--------------------------rutqheIf8PtOr5yPy2eGtg--
