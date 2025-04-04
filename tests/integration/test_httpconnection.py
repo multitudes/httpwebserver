@@ -117,30 +117,7 @@ def test_upload_picture_with_verification():
     
     print("Picture upload and verification successful!")
 
-# TODO this should not fail!! 
-# the logs are showing 
-# DEBUG src/URLMatcher.cpp:receiveAndParseRequest:72: Parsed whole connection data: POST /upload HTTP/1.1
-# Host: localhost:4244
-# User-Agent: python-requests/2.32.3
-# Accept-Encoding: gzip, deflate
-# Accept: */*
-# Connection: keep-alive
-# Content-Length: 177
-# Content-Type: multipart/form-data; boundary=763f4c1630f23eaca0036caaf292593b
 
-# --763f4c1630f23eaca0036caaf292593b
-# Content-Disposition: form-data; name="file"; filename="tests/uploadtest.txt"
-
-# Hello test for upload
-# --763f4c1630f23eaca0036caaf292593b--
-
-# [Server] : URLMatcher: Constructed path for stat: 'htmltest/www1/upload'
-# [Server] : URLMatcher: Original full path for dir checks: 'htmltest/www1/upload'
-# [Server] : URLMatcher: CGI path alias: '/cgi' -> '/cgi-bin'
-# [Server] : URLMatcher: Found location block for '/upload'
-# [Server] : URLMatcher: Updated full path to 'htmltest/www1/'
-# [Server] : URLMatcher: Upload request detected.
-# DEBUG src/URLMatcher.cpp:validateRequest:343: URLMatcher: Upload request detected ful path: htmltest/www1/
 # def test_upload_file():
 #     # Path to the test file
 #     test_file_path = 'tests/uploadtest.txt'
