@@ -309,13 +309,13 @@ int run() {
             } else {
               perror("recv failed during upload");
             }
-			// normally here I would check for the errors but the subject prohibit it
-			// if (errno == EAGAIN || errno == EWOULDBLOCK) {
-			// 	// No data available yet - keep in READING_BODY state
-			// 	return;
-			// }
-            // cleanup_upload(conn);
-            // conn.reset();
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				// No data available yet - keep in READING_BODY state
+				debug("No data available yet - keep in READING_BODY state");
+				continue;
+			}
+            cleanup_upload(conn);
+            conn.reset();
             continue;
           }
 

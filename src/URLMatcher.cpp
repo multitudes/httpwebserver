@@ -339,6 +339,8 @@ void validateRequest(HTTPConnxData &conn)
 	// check if the request is upload. 
 	if (conn.data.method == "POST" && conn.data.content_length > 0) {
 		debuglog(YELLOW, "URLMatcher: Upload request detected.");
+		debug("URLMatcher: Upload request detected ful path: %s",
+			  conn.full_path.c_str());
 		conn.file_fd = open(conn.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (conn.file_fd < 0) {
 			perror("URLMatcher: Failed to open file for upload");
