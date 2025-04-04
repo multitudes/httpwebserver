@@ -75,11 +75,11 @@ namespace URLMatcher
       return false;
     }
 
-//   debuglog(MAGENTA, "Parsed connection data: %s",
-        //    conn.formatConnectionDataLong(conn.data).c_str());
-  debugcolor(MAGENTA, "Parsed whole connection data: %s", conn.data.request.c_str());
-  return true;
-}
+    //   debuglog(MAGENTA, "Parsed connection data: %s",
+    //    conn.formatConnectionDataLong(conn.data).c_str());
+    debugcolor(MAGENTA, "Parsed whole connection data: %s", conn.data.request.c_str());
+    return true;
+  }
 
   /**
    * @brief Gets configuration and constructs the target path
@@ -120,6 +120,8 @@ namespace URLMatcher
     conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
     conn.urlMatcherData.autoindex = conn.urlMatcherData.config->autoindex;
     conn.urlMatcherData.acceptedMethods = conn.urlMatcherData.config->acceptedMethods;
+    conn.urlMatcherData.file_upload_dir = conn.urlMatcherData.config->upload_dir;
+
 
     // Adjust path_for_stat: remove trailing slash unless it's just the root path
     if (conn.urlMatcherData.path_for_stat.length() > conn.urlMatcherData.config->root.length() + 1 &&
@@ -309,10 +311,11 @@ namespace URLMatcher
     string cgi_path_alias = conn.urlMatcherData.config->cgiData.cgi_path_alias.first;
     string cgi_path = conn.urlMatcherData.config->cgiData.cgi_path_alias.second;
 
-      // First check if a CGI alias is defined
-      if (cgi_path_alias.empty()) {
-        debuglog(BLUE, "URLMatcher: No CGI alias defined in config.");
-        return false;
+    // First check if a CGI alias is defined
+    if (cgi_path_alias.empty())
+    {
+      debuglog(BLUE, "URLMatcher: No CGI alias defined in config.");
+      return false;
     }
 
     if (conn.data.target.find(cgi_path_alias) == 0)
@@ -376,7 +379,7 @@ namespace URLMatcher
           conn.urlMatcherData.acceptedMethods = location.acceptedMethods;
           debuglog(YELLOW, "URLMatcher: accepted methods updated to Location block accepted methods");
 
-          //check for return directive
+          // check for return directive
           if (location.return_directive.first != 0)
           {
             conn.urlMatcherData.return_directive = true;
@@ -386,6 +389,12 @@ namespace URLMatcher
             SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
             return;
           }
+          if (location.file_upload)
+          {
+            conn.urlMatcherData.file_upload = true;
+            conn.urlMatcherData.file_upload_dir = location.upload_dir;
+            debuglog(YELLOW, "URLMatcher: Location block file upload is enabled");
+          } 
 
           break;
         }
@@ -400,64 +409,81 @@ namespace URLMatcher
    */
   void validateRequest(HTTPConnxData &conn)
   {
-    if (conn.data.request.empty() || !conn.data.headers_received)
+
+    if (!receiveAndParseRequest(conn))
+      return; // Request handling complete or failed
+
+    // Get server configuration and construct the standard target path
+    if (!getConfigSetURLMatcherData(conn))
+      return; // Request handling complete or failed
+
+    // check if target contains CGI alias
+    if (findCGIPathAlias(conn))
+      return;
+
+    updateWithLocationBlockConfig(conn);
+    if (conn.urlMatcherData.return_directive)
+      return;
+
+    // check if the request method is accepted (GET POST etc)
+    if (std::find(conn.urlMatcherData.acceptedMethods.begin(),
+                  conn.urlMatcherData.acceptedMethods.end(),
+                  std::string(conn.data.method)) == conn.urlMatcherData.acceptedMethods.end())
     {
-      if (!receiveAndParseRequest(conn))
-        return; // Request handling complete or failed
+      debuglog(RED, "URLMatcher: Method '%s' not allowed in location '%s'",
+               conn.data.method.c_str(), conn.urlMatcherData.full_path.c_str());
+      SimpleResponse::htmlErrorResponse(conn, 405); // Method Not Allowed
+      conn.state = CONN_SIMPLE_RESPONSE;
+      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+      return;
+    }
 
-      // Get server configuration and construct the standard target path
-      if (!getConfigSetURLMatcherData(conn))
-        return; // Request handling complete or failed
-
-      // check if target contains CGI alias
-      if (findCGIPathAlias(conn))
-        return;
-
-      updateWithLocationBlockConfig(conn);
-      if (conn.urlMatcherData.return_directive)
-        return;
-
-      // check if the request method is accepted (GET POST etc)
-      if (std::find(conn.urlMatcherData.acceptedMethods.begin(),
-                    conn.urlMatcherData.acceptedMethods.end(),
-                    std::string(conn.data.method)) == conn.urlMatcherData.acceptedMethods.end())
+    
+    
+    if (conn.data.method == "POST" && conn.data.content_length > 0)
+    {
+      debuglog(YELLOW, "URLMatcher: Upload request detected.");
+      // check if upload allowed
+      if (!conn.urlMatcherData.file_upload)
       {
-        debuglog(RED, "URLMatcher: Method '%s' not allowed in location '%s'",
-                 conn.data.method.c_str(), conn.urlMatcherData.full_path.c_str());
-        SimpleResponse::htmlErrorResponse(conn, 405); // Method Not Allowed
+        debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
+                 conn.urlMatcherData.full_path.c_str());
+        SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden
+        conn.state = CONN_SIMPLE_RESPONSE;
+        SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+        return;
+      }
+      {
+        debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
+                 conn.urlMatcherData.full_path.c_str());
+        SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden
+        conn.state = CONN_SIMPLE_RESPONSE;
+        SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+        return;
+      }
+      conn.file_fd = open(conn.urlMatcherData.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+      if (conn.file_fd < 0)
+      {
+        perror("URLMatcher: Failed to open file for upload");
+        SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
         conn.state = CONN_SIMPLE_RESPONSE;
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
 
-
-
-      // check if the request is upload.
-      if (conn.data.method == "POST" && conn.data.content_length > 0)
+      std::string payload = conn.data.request.substr(conn.data.headers_end);
+      if (!payload.empty())
       {
-        debuglog(YELLOW, "URLMatcher: Upload request detected.");
-        conn.file_fd = open(conn.urlMatcherData.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (conn.file_fd < 0)
-        {
-          perror("URLMatcher: Failed to open file for upload");
-          SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
-          conn.state = CONN_SIMPLE_RESPONSE;
-          SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
-          return;
-        }
-
-        std::string payload = conn.data.request.substr(conn.data.headers_end);
-        if (!payload.empty())
-        {
-          conn.data.response = payload;
-          conn.data.bytes_sent = 0;
-        }
-        conn.state = CONN_UPLOAD;
-
-        return;
+        conn.data.response = payload;
+        conn.data.bytes_sent = 0;
       }
+      conn.state = CONN_UPLOAD;
 
+      return;
+    } // end POST
 
+    if (conn.data.method == "GET")
+    {
       struct stat path_stat;
       if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0)
       {
@@ -469,7 +495,6 @@ namespace URLMatcher
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
-
 
       // Handle regular file
       if (S_ISREG(path_stat.st_mode))
@@ -521,6 +546,6 @@ namespace URLMatcher
         conn.state = CONN_SIMPLE_RESPONSE;
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       }
-    }
+    } // end GET
   } // end of validateRequest
 } // end of namespace URLMatcher
