@@ -95,122 +95,132 @@ int run() {
     } else if (poll_result == 0) {
       continue; 
     }
-
     // Process events on file descriptors
     for (size_t i = 0; i < pollfds.size(); i++) {
-      if (!(pollfds[i].revents & (POLLIN | POLLOUT))) {
-        continue; // No events on this fd
-      }
-
-      // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
-      // requested
-      if (pollfds[i].revents & (POLLERR | POLLNVAL)) {
-        debuglog(RED, "Error condition on fd %d", pollfds[i].fd);
-        int error = 0;
-        socklen_t len = sizeof(error);
-        if (getsockopt(pollfds[i].fd, SOL_SOCKET, SO_ERROR, &error, &len) ==
+		if (!(pollfds[i].revents & (POLLIN | POLLOUT))) {
+			continue; // No events on this fd
+		}
+		
+		// Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
+		// requested
+		if (pollfds[i].revents & (POLLERR | POLLNVAL)) {
+			debuglog(RED, "Error condition on fd %d", pollfds[i].fd);
+			int error = 0;
+			socklen_t len = sizeof(error);
+			if (getsockopt(pollfds[i].fd, SOL_SOCKET, SO_ERROR, &error, &len) ==
             0) {
-          debuglog(RED, "Socket error on fd %d: %s", pollfds[i].fd,
-                   strerror(error));
-        }
-        connections[pollfds[i].fd].reset();
-        SocketUtils::remove_from_poll(pollfds[i].fd);
-        continue;
-      }
+				debuglog(RED, "Socket error on fd %d: %s", pollfds[i].fd,
+					strerror(error));
+				}
+				connections[pollfds[i].fd].reset();
+				SocketUtils::remove_from_poll(pollfds[i].fd);
+				continue;
+			}
+			
+			if (pollfds[i].revents & POLLHUP) {
+				debuglog(RED, "Connection closed by client on fd %d ", pollfds[i].fd);
+				connections[pollfds[i].fd].reset();
+				SocketUtils::remove_from_poll(pollfds[i].fd);
+				continue;
+			}
+			
+			int current_fd = pollfds[i].fd;
+			
+			// Handle new connections on server socket
+			for (size_t j = 0; j < serverSockets.size(); j++) {
 
-      if (pollfds[i].revents & POLLHUP) {
-        debuglog(RED, "Connection closed by client on fd %d ", pollfds[i].fd);
-        connections[pollfds[i].fd].reset();
-        SocketUtils::remove_from_poll(pollfds[i].fd);
-        continue;
-      }
+				int server_fd = serverSockets[j];
+				if (current_fd == server_fd && (pollfds[i].revents & POLLIN)) {
+					debug("server socket %d is ready to accept", server_fd);
+          			struct sockaddr_in client_addr;
+          			socklen_t client_len = sizeof(client_addr);
+					int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+					if (client_fd < 0) {
+						debug("accept failed %s", strerror(errno));
+						perror("Accept failed");
+						// TODO send error response
+						skip_to_next_iteration = true;
+						break;
+					}
+					// set the timeouts on the read write to client
+					if (!SocketUtils::setSendRecTimeout(client_fd)) {
+						perror("Failed to set send/receive timeout");
+						close(client_fd);
+						// TODO send error response
+						skip_to_next_iteration = true;
+						break;
+					}
+					if (pollfds.size() >= Constants::maxConnections) {
+						debuglog(RED,
+								"Maximum connections reached, rejecting new connection");
+						close(client_fd); // TODO
+						// sendErrorResponse(clientfd, 503, "Service Unavailable");
+						return false;
+					}
 
-      int current_fd = pollfds[i].fd;
+          			debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
+               		ntohs(client_addr.sin_port));
 
-      // Handle new connections on server socket
-      for (size_t j = 0; j < serverSockets.size(); j++) {
-        int server_fd = serverSockets[j];
-        if (current_fd == server_fd && (pollfds[i].revents & POLLIN)) {
-          struct sockaddr_in client_addr;
-          socklen_t client_len = sizeof(client_addr);
-          int client_fd =
-              accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-          if (client_fd < 0) {
-            perror("Accept failed");
-            // TODO send error response
-            skip_to_next_iteration = true;
-            break;
-          }
-          // set the timeouts on the read write to client
-          if (!SocketUtils::setSendRecTimeout(client_fd)) {
-            perror("Failed to set send/receive timeout");
-            close(client_fd);
-            // TODO send error response
-            skip_to_next_iteration = true;
-            break;
-          }
-          if (pollfds.size() >= Constants::maxConnections) {
-            debuglog(RED,
-                     "Maximum connections reached, rejecting new connection");
-            close(client_fd); // TODO
-            // sendErrorResponse(clientfd, 503, "Service Unavailable");
-            return false;
-          }
+					HTTPConnxData &conn = connections[client_fd];
+					conn.client_fd = client_fd;
+					SocketUtils::add_to_poll(client_fd, POLLIN);
+					conn.state = CONN_INCOMING;
 
-          debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
-                ntohs(client_addr.sin_port));
+					// Store client IP address
+					inet_ntop(AF_INET, &client_addr.sin_addr, conn.data.client_ip,
+								sizeof(conn.data.client_ip));
+					uint16_t client_port = ntohs(client_addr.sin_port);
 
-          HTTPConnxData &conn = connections[client_fd];
-          conn.client_fd = client_fd;
-          SocketUtils::add_to_poll(client_fd, POLLIN);
-          conn.state = CONN_INCOMING;
+					// add the timeout for the client
+					lastActivityTime[client_fd] = std::time(NULL);
 
-          // Store client IP address
-          inet_ntop(AF_INET, &client_addr.sin_addr, conn.data.client_ip,
-                    sizeof(conn.data.client_ip));
-          uint16_t client_port = ntohs(client_addr.sin_port);
+					debuglog(YELLOW, "Client connected from %s:%d", conn.data.client_ip,
+							client_port);
 
-          // add the timeout for the client
-          lastActivityTime[client_fd] = std::time(NULL);
+					debuglog(
+						YELLOW,
+						"Connection data initialized in state INCOMING for client %d",
+						client_fd);
+					skip_to_next_iteration = true;
+				}
+      	}
 
-          debuglog(YELLOW, "Client connected from %s:%d", conn.data.client_ip,
-                   client_port);
-
-          debuglog(
-              YELLOW,
-              "Connection data initialized in state INCOMING for client %d",
-              client_fd);
-          skip_to_next_iteration = true;
-        }
-      }
-      // go back to the while loop if we had an error - TODO remove it when i
-      // get the URLMatcher func
-      if (skip_to_next_iteration) {
-        skip_to_next_iteration = false;
-        continue;
-      }
+		// go back to the while loop if we had an error - TODO remove it when i
+		// get the URLMatcher func
+		if (skip_to_next_iteration) {
+			debug("continue to next loop");
+			skip_to_next_iteration = false;
+			continue;
+		}
 
       HTTPConnxData &conn = connections[current_fd];
       if (conn.client_fd == -1) {
         debuglog(RED, "Connection fd %d not found in connections", current_fd);
         continue;
       }
-
+	//   debug("got connection %d", conn.client_fd);
+	  if (pollfds[i].revents & POLLIN) {
       if (conn.state == CONN_INCOMING) {
+		  debug("CONN_INCOMING fd %d", conn.client_fd);
         URLMatcher::validateRequest(conn);
-        debuglog(YELLOW, "Connection fd %d new state %d", conn.client_fd,
-                 conn.state);
-        // continue;
+        continue;
       }
+	}
 
+	 if (pollfds[i].revents & POLLIN) {
+	  // here only if the previous validate request could not parse the whole headers
       if (conn.state == CONN_PARSING_HEADER) {
+		// debug("CONN_PARSING_HEADER fd %d", conn.client_fd);
         // parse header
         // if header complete, set state
         // else continue parsing
         continue;
       }
+	}
 
+	 if (pollfds[i].revents & POLLOUT) {
       if (conn.state == CONN_SIMPLE_RESPONSE) {
+		debug("CONN_SIMPLE_RESPONSE fd %d", conn.client_fd);
         debuglog(YELLOW, "Connection fd %d in state SIMPLE_RESPONSE",
                  conn.client_fd);
         // check if the response is ready to be sent
@@ -223,20 +233,20 @@ int run() {
           SocketUtils::remove_from_poll(conn.client_fd);
           conn.reset();
         }
-        conn.data.headers_received = false;
-        conn.data = HTTPConnxData::ConnectionData();
-        conn.state = CONN_INCOMING;
+		conn.reset();
         SocketUtils::update_poll_events(current_fd, POLLIN);
         debuglog(YELLOW, "Switched connection %d fd back to POLLIN",
                  conn.client_fd);
         continue;
-      }
+		}
+	}
 
+	if (pollfds[i].revents & POLLOUT) {
       if (conn.state == CONN_FILE_REQUEST) {
+		debug("CONN_FILE_REQUEST fd %d", conn.client_fd);
         // check if the file is ready to be sent
         // if not set to CONN_CLOSING
         // else send the file
-        if (pollfds[i].revents & POLLOUT) {
           debuglog(YELLOW, "Handling write event for connection fd %d",
                    conn.client_fd);
 
@@ -269,10 +279,13 @@ int run() {
         continue;
       }
 
-      if (conn.state == CONN_UPLOAD) {
 
+
+	  if (pollfds[i].revents & POLLIN && conn.state == CONN_UPLOAD) {
+   
+		debug("CONN_UPLOAD fd %d", conn.client_fd);
           // First handle any buffered payload data left over from header parsing
-          if (!conn.data.response.empty()) {
+        if (!conn.data.response.empty()) {
 			debuglog(YELLOW, "HTTPServer - first writing leftover payload for connection %d",
 				conn.client_fd);
             ssize_t bytes_written =
@@ -296,6 +309,7 @@ int run() {
           }
 		  
 		  if (pollfds[i].revents & POLLIN) {
+			debug("POLLIN event on upload connection %d", conn.client_fd);
 			  // Then read more data from socket
 			debuglog(YELLOW, "HTTPServer - Handling upload event for connection %d",
 					 conn.client_fd);
@@ -306,13 +320,12 @@ int run() {
           if (bytes_read <= 0) {
             if (bytes_read == 0) {
               debug("Client disconnected during upload");
-            } else {
-              perror("recv failed during upload");
-            }
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				debug("No data available yet - keep in reading state");
 				continue;
 			}
+			debug("%s", strerror(errno));
+		    perror("recv failed during upload");
             cleanup_upload(conn);
             conn.reset();
             continue;
@@ -329,11 +342,15 @@ int run() {
           }
 
           conn.data.bytes_sent += bytes_written;
-
+		  debug("Wrote %ld bytes to file", bytes_written);
+		  debug("total bytes sent %zu", conn.data.bytes_sent);
+		  debug("content length %zu", conn.data.content_length);
           if (conn.data.bytes_sent >= conn.data.content_length) {
+			debug("Upload complete");
             finish_upload(conn);
           }
 		}
+		continue;
 		
 
       } else if (conn.state == CONN_CGI) {
@@ -483,11 +500,13 @@ int send_file(HTTPConnxData &conn) {
  * and sets the state to CONN_SIMPLE_RESPONSE
  */
 void finish_upload(HTTPConnxData &conn) {
+	debug("Finishing upload for connection %d", conn.client_fd);
   debuglog(YELLOW, "Upload complete. Written %zu bytes to %s",
            conn.data.bytes_sent, conn.filename);
   close(conn.file_fd);
   conn.upload_completed = true;
   SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+  debug("switched to POLLOUT for connection %d", conn.client_fd);
   SimpleResponse::createResponse(conn, "text/plain",
                                  "File uploaded successfully.", 201);
   conn.state = CONN_SIMPLE_RESPONSE;

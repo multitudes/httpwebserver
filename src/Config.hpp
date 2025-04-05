@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <exception>
+#include "Parser.hpp"
 
 /**
  * @brief Server configuration provider
@@ -28,15 +29,6 @@ public:
   static const ServerData* getConfigByPort(uint16_t port); 
   static void cleanup();
 
-  void parseGlobalSettings(const std::string& httpContent, BaseConf& baseConfig);
-  void parseErrorPageBlock(const std::string& blockContent, BaseConf& baseConfig);
-  void parseServerBlocks(const std::string& serverContent, HttpConfig& httpConfig, BaseConf& baseConfig);
-  void parseServerBlock(const std::string& serverBlockContent, ServerData& ServerData);
-  void parseLocationBlock(const std::string& locationContent, Location& location, ServerData& ServerData);
-  void parseCgiBlock(const std::string& cgiContent, CGIData& cgiConfig);
-  void removeDuplicatePorts();
-  void configValidate();
-  //void debugprintServerData(const ServerData& ServerData);
   //static void debugprintConfigs();
   
 
@@ -50,10 +42,9 @@ public:
   // better and clearer to have a func to validate acc to a set of rules
   static bool validate();
 
-  static std::map<uint16_t, ServerData*> port_map_;// map of port to server data
-  static std::vector<ServerData> servers;// configuration data same as httpConfig
-  static Config *instance_;// singleton instance for Config
-  static std::string _filename;// configuration file name
+  static std::map<uint16_t, ServerData*> port_map_;
+  static std::vector<ServerData> servers;
+  static Config *instance_;
+  static std::string _filename;
 };
 
-size_t findClosingBrace(const std::string& content, size_t start);
