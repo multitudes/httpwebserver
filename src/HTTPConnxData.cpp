@@ -174,12 +174,14 @@ ParseStatus HTTPConnxData::extractPortFromHost(std::string& host, uint16_t& port
 ParseStatus HTTPConnxData::processContentHeaders() {
   // Process Host header
   if (!checkHeader(*this, "Host", data.host)) {
-    debuglog(RED, "Missing Host header");
+	debug("Missing Host header");
+	debuglog(RED, "Missing Host header");
     return PARSE_ERROR;
   }
 
   // Extract port (mandatory )
   if (extractPortFromHost(data.host, data.port) != PARSE_SUCCESS) {
+	debug("POrt extraction failed");
     return PARSE_ERROR;
   }
 
@@ -195,7 +197,8 @@ ParseStatus HTTPConnxData::processContentHeaders() {
   if (checkHeader(*this, "Transfer-Encoding", transfer_encoding)) {
     data.chunked = (transfer_encoding == "chunked");
     if (data.chunked) {
-      debuglog(YELLOW, "Chunked transfer encoding detected");
+		debug("Chunked transfer encoding detected");
+        debuglog(YELLOW, "Chunked transfer encoding detected");
     }
   }
 
@@ -222,18 +225,19 @@ ParseStatus HTTPConnxData::processContentHeaders() {
 ParseStatus HTTPConnxData::parseHeaders(HTTPConnxData &conn) {
   ConnectionData &data = conn.data;
   if (data.request.empty()) {
-    debuglog(YELLOW, "Empty request received");
+    debug("Empty request received");
     return PARSE_INCOMPLETE;
   }
 
   data.headers_end = data.request.find("\r\n\r\n");
   if (data.headers_end == string::npos) {
+	debug("Headers not complete");
     return PARSE_INCOMPLETE;
   }
 
   data.headers_end += 4; // Skip \r\n\r\n
   data.headers_received = true;
-
+  debug("Headers complete");
   std::istringstream iss(data.request);
   string line;
 

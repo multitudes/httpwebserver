@@ -26,10 +26,11 @@ namespace URLMatcher
    */
   bool receiveAndParseRequest(HTTPConnxData &conn)
   {
+	debug("Entered function");
     char buffer[BUFFER_SIZE + 1];
 
     // Ensure BUFFER_SIZE > 0 for recv
-    ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+    ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, MSG_DONTWAIT);
 
     if (bytes_read <= 0)
     {
@@ -40,7 +41,15 @@ namespace URLMatcher
       }
       else
       {
-        perror("URLMatcher: recv failed");
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+		{
+			debug("No data available yet - keep in reading state");
+			return false;
+		}
+
+		//
+		debug("%s", strerror(errno));
+        // perror("URLMatcher: recv failed");
       }
       SocketUtils::remove_from_poll(conn.client_fd);
       close(conn.client_fd);
@@ -458,7 +467,7 @@ namespace URLMatcher
    */
   void validateRequest(HTTPConnxData &conn)
   {
-
+	debug("entering function");
     if (!receiveAndParseRequest(conn))
       return; // Request handling complete or failed
 
@@ -490,11 +499,13 @@ namespace URLMatcher
     
     
     if (conn.data.method == "POST" && conn.data.content_length > 0)
-    {
+    { 
+		debug("POST request detected");
       debuglog(YELLOW, "URLMatcher: Upload request detected.");
       // check if upload allowed
       if (!conn.urlMatcherData.file_upload)
       {
+		debug("file upload not allowed");
         debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
                  conn.urlMatcherData.full_path.c_str());
         SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden
@@ -517,10 +528,13 @@ namespace URLMatcher
       std::string payload = conn.data.request.substr(conn.data.headers_end);
       if (!payload.empty())
       {
+		debug("payload found %s", payload.c_str());
         conn.data.response = payload;
         conn.data.bytes_sent = 0;
       }
       conn.state = CONN_UPLOAD;
+	  debug("setting state to CONN_UPLOAD");
+	  
 
       return;
     } // end POST
