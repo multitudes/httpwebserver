@@ -5,6 +5,8 @@
 #include "Constants.hpp"
 #include "debug.h"
 
+
+
 int main(int argc, char *argv[]) {
     try {
         std::string configFile = Constants::default_config_file; // Default config path
@@ -15,7 +17,7 @@ int main(int argc, char *argv[]) {
             configFile = argv[1]; 
         }
 		Config::initialize(configFile); // Explicit initialization
-        HTTPServer::run(configFile);
+        HTTPServer::run(configFile, AutoRload);
         Config::cleanup();
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;

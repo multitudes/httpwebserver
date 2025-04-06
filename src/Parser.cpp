@@ -266,7 +266,8 @@ void parseServerBlocks(const std::string &httpContent,
 
         // Move past this server block for the next iteration
         pos = blockEnd + 1;
-        debuglog(GREEN, "Parsed server block %d\n\n", ++serverBlockCount);
+        ++serverBlockCount;
+        debuglog(GREEN, "Parsed server block %d\n\n", serverBlockCount);
     }
 }
 
