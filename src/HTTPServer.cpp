@@ -64,11 +64,11 @@ int run(std::string configFile) {
 
   while (1) {
 
-    //when autoreload is 1 then reload the config file
+	  //when autoreload is 1 then reload the config file
+	  long long currentTime = Parser::getCurrentTimeMillis();
     if(Constants::autoReload) {
-      long long currentTime = Parser::getCurrentTimeMillis();
 	  if (!reload(configFile, currentTime)) {
-		break;
+		exit(1);
 	  }
 	}
      

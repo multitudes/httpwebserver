@@ -3,7 +3,7 @@
 
 # include <stdio.h>
 
-#define NDEBUG 1
+// #define NDEBUG 1
 
 /*
 This allows us to use the debug macro to print debug messages but to 
