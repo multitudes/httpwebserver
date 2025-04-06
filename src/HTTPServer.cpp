@@ -64,18 +64,17 @@ int run(std::string configFile) {
 
   while (1) {
 
-	  //when autoreload is 1 then reload the config file
-	  long long currentTime = Parser::getCurrentTimeMillis();
+	//when autoreload is 1 then reload the config file
+	long long currentTime = Parser::getCurrentTimeMillis();
     if(Constants::autoReload) {
 	  if (!reload(configFile, currentTime)) {
 		exit(1);
 	  }
 	}
      
-    
     int poll_result = poll(&pollfds[0], static_cast<nfds_t>(pollfds.size()),
                            10000); 
-	// debug("poll result %d", poll_result);
+	
     if (poll_result < 0) {
       if (errno != EINTR) { 
         perror("poll failed");
