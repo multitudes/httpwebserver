@@ -266,7 +266,8 @@ void parseServerBlocks(const std::string &httpContent,
 
         // Move past this server block for the next iteration
         pos = blockEnd + 1;
-        debuglog(GREEN, "Parsed server block %d\n\n", ++serverBlockCount);
+        ++serverBlockCount;
+        debuglog(GREEN, "Parsed server block %d\n\n", serverBlockCount);
     }
 }
 
@@ -876,7 +877,7 @@ void debugprintConfigs(std::vector<ServerData>& servers, std::map<uint16_t, Serv
      debuglog(BLUE, "\nPort Mapping:");
      std::map<uint16_t, ServerData*>::const_iterator it;
      for (it = port_map_.begin(); it != port_map_.end(); ++it) {
-         size_t serverIndex = it->second - &servers[0];  
+         size_t serverIndex = static_cast<size_t>(it->second - &servers[0]);  
          // Calculate server index 
          debuglog(BLUE, "  Port %hu: Server %zu", it->first,
          serverIndex);

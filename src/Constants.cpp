@@ -11,6 +11,7 @@ namespace Constants {
     int requestTimeout = 60;
     int responseTimeout = 60;
     int keepalive_timeout = 30;
+	bool autoReload = true;
 
     void initStatusMessageMap() {
 		debuglog(YELLOW, "Initializing status code to status text mapping");
