@@ -1,4 +1,4 @@
-#include "SimpleResponse.hpp"
+#include "Responses.hpp"
 #include "HTTPConnxData.hpp"
 #include "Constants.hpp"
 #include "Config.hpp"
@@ -13,7 +13,7 @@
 #include <poll.h> // Add this include for POLLOUT
 using std::string;
 
-namespace SimpleResponse {
+namespace Responses {
 
     // addd HTTP header to the response and set the response
     void createResponse(HTTPConnxData &connection, std::string contentType, std::string response, int statusCode)
@@ -46,28 +46,28 @@ namespace SimpleResponse {
     void htmlErrorResponse(HTTPConnxData &connection, int statusCode)
     {
         // Check if a custom error page is defined for this status code
-        if (connection.urlMatcherData.error_pages.find(statusCode) != connection.urlMatcherData.error_pages.end())
+        if (connection.urlMatcherData.config->error_pages.find(statusCode) != connection.urlMatcherData.config->error_pages.end())
         {
-            string errorPagePath = connection.urlMatcherData.error_pages[statusCode];
-            debuglog(GREEN, "Custom error page found: %s", errorPagePath.c_str());
-            
-            // Use the URLMatcher helper function to serve the custom error page
-            if (URLMatcher::serveCustomErrorPage(connection, errorPagePath, statusCode))
-            {
-                // Error page was successfully prepared
-                // The state is already set to CONN_FILE_REQUEST by serveCustomErrorPage
-                debuglog(GREEN, "Serving custom error page with status %d", statusCode);
-                return;
+            auto it = connection.urlMatcherData.config->error_pages.find(statusCode);
+            if (it != connection.urlMatcherData.config->error_pages.end()) {
+                string errorPagePath = it->second;
+                debuglog(GREEN, "Custom error page found: %s", errorPagePath.c_str());
+                
+                // Use the URLMatcher helper function to serve the custom error page
+                if (serveCustomErrorPage(connection, errorPagePath, statusCode))
+                {
+                    // Error page was successfully prepared
+                    // The state is already set to CONN_FILE_REQUEST by serveCustomErrorPage
+                    debuglog(GREEN, "Serving custom error page with status %d", statusCode);
+                    return;
+                }
+                // If serving the custom error page failed, we'll fall through to the default error response
+                debuglog(RED, "Failed to serve custom error page, falling back to generated HTML");
             }
-            // If serving the custom error page failed, we'll fall through to the default error response
-            debuglog(RED, "Failed to serve custom error page, falling back to generated HTML");
         }
-        
         // If no custom error page is found or couldn't be read, generate a simple HTML response
         generatedHTMLResponse(connection, statusCode);
-        
     }
-
 
 
     void generatedHTMLResponse(HTTPConnxData &connection, int statusCode)
@@ -129,6 +129,46 @@ namespace SimpleResponse {
         
         debuglog(GREEN, "File response headers prepared using stored content type: %s\n%s", 
                  conn.urlMatcherData.content_type.c_str(), conn.data.response.c_str());
+    }
+
+    bool serveCustomErrorPage(HTTPConnxData &conn, const string &errorPagePath, int statusCode)
+    {
+      struct stat path_stat;
+      if (stat(errorPagePath.c_str(), &path_stat) != 0 || !S_ISREG(path_stat.st_mode))
+      {
+        debuglog(RED, "URLMatcher: Custom error page not found or not a regular file: %s", errorPagePath.c_str());
+        return false;
+      }
+  
+      // Determine content type based on file extension
+      URLMatcher::determineContentType(conn, errorPagePath);
+  
+      // Open the file
+      int fd = open(errorPagePath.c_str(), O_RDONLY);
+      if (fd < 0)
+      {
+        debuglog(RED, "URLMatcher: Failed to open custom error page: %s", errorPagePath.c_str());
+        return false;
+      }
+  
+      // Set up connection for serving the file
+      conn.file_fd = fd;
+      conn.file_size = path_stat.st_size;
+      conn.state = CONN_FILE_REQUEST;
+      
+      // Prepare headers with the error status code
+      string header = "HTTP/1.1 ";
+      header += Utils::to_string(statusCode) + " " + Constants::statusMessages[statusCode] + "\r\n";
+      header += "Content-Type: " + conn.urlMatcherData.content_type + "\r\n";
+      header += "Content-Length: " + Utils::to_string(conn.file_size) + "\r\n";
+      header += "\r\n";
+      
+      conn.data.response = header;
+      conn.headers_sent = false;
+      conn.data.bytes_sent = 0;
+      
+      debuglog(GREEN, "URLMatcher: Custom error page prepared with status %d", statusCode);
+      return true;
     }
 
 }

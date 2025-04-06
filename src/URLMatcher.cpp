@@ -5,7 +5,7 @@
 #include "DirectoryListing.hpp"
 #include "HTTPConnxData.hpp"
 #include "HTTPServer.hpp"
-#include "SimpleResponse.hpp"
+#include "Responses.hpp"
 #include "debug.h"
 #include "Utils.hpp"
 #include <fcntl.h>
@@ -95,7 +95,7 @@ namespace URLMatcher
     if (!conn.urlMatcherData.config)
     {
       debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
-      SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
+      Responses::htmlErrorResponse(conn, 500); // Internal Server Error
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -111,7 +111,7 @@ namespace URLMatcher
     {
       debuglog(RED, "URLMatcher: Directory traversal attempt detected: %s",
                conn.data.target.c_str());
-      SimpleResponse::htmlErrorResponse(conn, 400); // Bad Request
+      Responses::htmlErrorResponse(conn, 400); // Bad Request
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -121,8 +121,6 @@ namespace URLMatcher
     conn.urlMatcherData.autoindex = conn.urlMatcherData.config->autoindex;
     conn.urlMatcherData.acceptedMethods = conn.urlMatcherData.config->acceptedMethods;
     conn.urlMatcherData.file_upload_dir = conn.urlMatcherData.config->upload_dir;
-    if (!conn.urlMatcherData.config->error_pages.empty())
-      conn.urlMatcherData.error_pages = conn.urlMatcherData.config->error_pages;
 
     // Adjust path_for_stat: remove trailing slash unless it's just the root path
     if (conn.urlMatcherData.path_for_stat.length() > conn.urlMatcherData.config->root.length() + 1 &&
@@ -206,7 +204,7 @@ namespace URLMatcher
     if (conn.file_fd < 0)
     {
       perror("URLMatcher: Failed to open file");
-      SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden is a common reason
+      Responses::htmlErrorResponse(conn, 403); // Forbidden is a common reason
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -215,7 +213,7 @@ namespace URLMatcher
     conn.state = CONN_FILE_REQUEST;
 
     // Use the overloaded version that doesn't need the content type parameter
-    SimpleResponse::prepareFileResponse(conn, conn.file_size);
+    Responses::prepareFileResponse(conn, conn.file_size);
 
     debuglog(GREEN,
              "URLMatcher: Set state to CONN_FILE_REQUEST for fd %d, size %ld",
@@ -241,7 +239,7 @@ namespace URLMatcher
     if (conn.file_fd < 0)
     {
       perror("URLMatcher: Failed to open existing index file");
-      SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
+      Responses::htmlErrorResponse(conn, 500); // Internal Server Error
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -253,7 +251,7 @@ namespace URLMatcher
     conn.state = CONN_FILE_REQUEST;
 
     // Use the overloaded version that doesn't need the content type parameter
-    SimpleResponse::prepareFileResponse(conn, conn.file_size);
+    Responses::prepareFileResponse(conn, conn.file_size);
 
     debuglog(
         GREEN,
@@ -273,7 +271,7 @@ namespace URLMatcher
     if (!conn.urlMatcherData.autoindex)
     {
       debuglog(RED, "URLMatcher: Autoindex is disabled.");
-      SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden to list directory
+      Responses::htmlErrorResponse(conn, 403); // Forbidden to list directory
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -296,7 +294,7 @@ namespace URLMatcher
                "URLMatcher: getDIRListing returned false for fd %d (likely "
                "opendir error).",
                conn.client_fd);
-      SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
+      Responses::htmlErrorResponse(conn, 500); // Internal Server Error
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -332,7 +330,7 @@ namespace URLMatcher
       if (CGI::prepareCGI(conn) < 0)
       {
         conn.reset();
-        SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
+        Responses::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return false;
       }
@@ -399,17 +397,10 @@ namespace URLMatcher
             conn.urlMatcherData.return_directive = true;
             debuglog(YELLOW, "URLMatcher: Location block return directive found: %d %s", 
                      location.return_directive.first, location.return_directive.second.c_str());
-            SimpleResponse::createResponse(conn, "text/plain", location.return_directive.second, 
+            Responses::createResponse(conn, "text/plain", location.return_directive.second, 
                                           location.return_directive.first);
             SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
             return;
-          }
-
-          // Check for custom error pages in location block
-          if (!location.error_pages.empty())
-          {
-            conn.urlMatcherData.error_pages = location.error_pages;
-            debuglog(YELLOW, "URLMatcher: Location block error pages found and applied");
           }
 
           // Check for file upload settings in location block
@@ -473,7 +464,7 @@ namespace URLMatcher
     {
       debuglog(RED, "URLMatcher: Method '%s' not allowed in location '%s'",
                conn.data.method.c_str(), conn.urlMatcherData.full_path.c_str());
-      SimpleResponse::htmlErrorResponse(conn, 405); // Method Not Allowed
+      Responses::htmlErrorResponse(conn, 405); // Method Not Allowed
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return;
     }
@@ -487,7 +478,7 @@ namespace URLMatcher
       {
         debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
                  conn.urlMatcherData.full_path.c_str());
-        SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden
+        Responses::htmlErrorResponse(conn, 403); // Forbidden
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
@@ -497,7 +488,7 @@ namespace URLMatcher
       if (conn.file_fd < 0)
       {
         perror("URLMatcher: Failed to open file for upload");
-        SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
+        Responses::htmlErrorResponse(conn, 500); // Internal Server Error
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
@@ -519,7 +510,7 @@ namespace URLMatcher
       if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0)
       {
         perror("URLMatcher: stat failed");
-        SimpleResponse::htmlErrorResponse(conn, 404); // Not Found
+        Responses::htmlErrorResponse(conn, 404); // Not Found
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
@@ -569,56 +560,10 @@ namespace URLMatcher
       {
         debuglog(RED, "URLMatcher: Path '%s' is not a regular file or directory.",
                  conn.urlMatcherData.path_for_stat.c_str());
-        SimpleResponse::htmlErrorResponse(conn, 415); // Unsupported Media Type
+        Responses::htmlErrorResponse(conn, 415); // Unsupported Media Type
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       }
     } // end GET
   } // end of validateRequest
-
-  /**
-   * @brief Serves a custom error page with the specified status code
-   * @param conn The connection data structure
-   * @param errorPagePath Path to the custom error page file
-   * @param statusCode HTTP status code to use in the response
-   * @return true if the error page was successfully prepared, false otherwise
-   */
-  bool serveCustomErrorPage(HTTPConnxData &conn, const string &errorPagePath, int statusCode)
-  {
-    struct stat path_stat;
-    if (stat(errorPagePath.c_str(), &path_stat) != 0 || !S_ISREG(path_stat.st_mode))
-    {
-      debuglog(RED, "URLMatcher: Custom error page not found or not a regular file: %s", errorPagePath.c_str());
-      return false;
-    }
-
-    // Determine content type based on file extension
-    determineContentType(conn, errorPagePath);
-
-    // Open the file
-    int fd = open(errorPagePath.c_str(), O_RDONLY);
-    if (fd < 0)
-    {
-      debuglog(RED, "URLMatcher: Failed to open custom error page: %s", errorPagePath.c_str());
-      return false;
-    }
-
-    // Set up connection for serving the file
-    conn.file_fd = fd;
-    conn.file_size = path_stat.st_size;
-    conn.state = CONN_FILE_REQUEST;
-    
-    // Prepare headers with the error status code
-    string header = "HTTP/1.1 ";
-    header += Utils::to_string(statusCode) + " " + Constants::statusMessages[statusCode] + "\r\n";
-    header += "Content-Type: " + conn.urlMatcherData.content_type + "\r\n";
-    header += "Content-Length: " + Utils::to_string(conn.file_size) + "\r\n";
-    header += "\r\n";
-    
-    conn.data.response = header;
-    conn.headers_sent = false;
-    conn.data.bytes_sent = 0;
-    
-    debuglog(GREEN, "URLMatcher: Custom error page prepared with status %d", statusCode);
-    return true;
-  }
+ 
 } // end of namespace URLMatcher

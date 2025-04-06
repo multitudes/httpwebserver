@@ -2,7 +2,7 @@
 #include "HTTPServer.hpp"
 #include "Constants.hpp"
 #include "DirectoryListing.hpp"
-#include "SimpleResponse.hpp"
+#include "Responses.hpp"
 #include "URLMatcher.hpp"
 #include "debug.h"
 #include <ctime>
@@ -488,7 +488,7 @@ void finish_upload(HTTPConnxData &conn) {
   close(conn.file_fd);
   conn.upload_completed = true;
   SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
-  SimpleResponse::createResponse(conn, "text/plain",
+  Responses::createResponse(conn, "text/plain",
                                  "File uploaded successfully.", 201);
   conn.state = CONN_SIMPLE_RESPONSE;
   lastActivityTime[conn.client_fd] = time(NULL);

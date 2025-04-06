@@ -10,7 +10,7 @@ enum CONTENT_TYPE {
 
 using std::string;
 
-namespace SimpleResponse {
+namespace Responses {
 
     void createResponse(HTTPConnxData &connections, string contentType, std::string response, int statusCode);
 
@@ -21,5 +21,7 @@ namespace SimpleResponse {
     void generatedHTMLResponse(HTTPConnxData &connection, int statusCode);
 
     void simpleStatusResponse(HTTPConnxData &connections, int statusCode);
+
+    bool serveCustomErrorPage(HTTPConnxData &conn, const string &errorPagePath, int statusCode);
 
 } // namespace DirectoryListing

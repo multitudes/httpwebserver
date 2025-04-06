@@ -1,21 +1,33 @@
-#pragma once
+#ifndef URL_MATCHER_HPP
+#define URL_MATCHER_HPP
 
-#include "HTTPConnxData.hpp"
-#include <map>
+#include <string>
+#include <sys/stat.h>
 
+// Forward declarations
+class HTTPConnxData;
 
-/**
- * This module is called when an incoming request is received
- * and header are parsed and it will validate the target url
- * agains the server configuration and change the state of
- * the connection to either CONN_FILE_REQUEST or CONN_CGI
- * or CONN_UPLOAD or CONN_SIMPLE_RESPONSE depending on the request
- * and the server configuration
- */
-namespace URLMatcher {
+namespace URLMatcher
+{
+  bool receiveAndParseRequest(HTTPConnxData &conn);
 
-void validateRequest(HTTPConnxData &conn);
+  bool getConfigSetURLMatcherData(HTTPConnxData &conn);
 
-bool serveCustomErrorPage(HTTPConnxData &conn, const string &errorPagePath, int statusCode);
-  
-} // namespace URLMatcher
+  void determineContentType(HTTPConnxData &conn, const std::string &path);
+
+  bool handleRegularFile(HTTPConnxData &conn, const std::string &path_for_stat,
+                         const struct stat &path_stat);
+
+  bool handleIndexFile(HTTPConnxData &conn, const std::string &index_file_path,
+                       const struct stat &index_stat);
+
+  bool handleDirectoryListing(HTTPConnxData &conn);
+
+  bool findCGIPathAlias(HTTPConnxData &conn);
+
+  void updateWithLocationBlockConfig(HTTPConnxData &conn);
+
+  void validateRequest(HTTPConnxData &conn);
+}
+
+#endif // URL_MATCHER_HPP
