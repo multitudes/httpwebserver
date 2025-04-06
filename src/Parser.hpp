@@ -16,7 +16,7 @@
 
 
 namespace Parser {
-    
+
     extern long long starttime;
  
     void parse(std::string filename, std::vector<ServerData>& servers, std::map<uint16_t, ServerData*> &port_map_);

@@ -45,63 +45,35 @@ vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
 
-static std::string currentConfigFile;
-
-
-
 int run(std::string configFile) {
 
   struct sockaddr_in server_addr;
   bool skip_to_next_iteration = false;
 
-  currentConfigFile = configFile;
-
   vector<ServerData> configs_ = Config::getServerData();
   vector<int> serverSockets;
-
   SocketUtils::initialize();
 
   if (configs_.empty()) {
     debuglog(RED, "No configuration data found");
     throw std::runtime_error("Error: config with empty ports");
   }
-  // Create server sockets and bind to ports
   createServerSockets(configs_, serverSockets);
 
-  // Main polling loop
   while (1) {
-
-    //reloadConfigFile(configFile, serverSockets);
-
-    long long currentTime = Parser::getCurrentTimeMillis();
-    if (currentTime - Parser::starttime > 1000) {
-        debuglog(GREEN, "Reloading configuration file %s\n\n", currentConfigFile.c_str());
-        Parser::starttime = currentTime;
-  
-        
+      long long currentTime = Parser::getCurrentTimeMillis();
+      if (currentTime - Parser::starttime > 5000) {
+          debuglog(GREEN, "Reloading configuration file %s\n\n", configFile.c_str());
+          Parser::starttime = currentTime;
         try {
-            // Reinitialize the Config singleton
-            SocketUtils::shutdownServer();
-            SocketUtils::initialize();
-            Config::cleanup();
-            Config::initialize(currentConfigFile);
-            configs_ = Config::getServerData();
-            if (configs_.empty()) {
-                debuglog(RED, "No configuration data found");
-                throw std::runtime_error("Error: config with empty ports");
-            }
-            
-            createServerSockets(configs_, serverSockets);
-            
-            debuglog(GREEN, "Configuration reload complete with %zu servers", 
-                     Config::getServerData().size());
-        } catch (const std::exception& e) {
-           debuglog(RED, "Error reloading configuration: %s", e.what());
-           break;
+              reloadConfigFile(configFile, serverSockets, configs_);
+            } 
+            catch (const std::exception& e) {
+              debuglog(RED, "Error reloading configuration: %s", e.what());
+            break;
         }
-    }
+      }
     
-
     int poll_result = poll(&pollfds[0], static_cast<nfds_t>(pollfds.size()),
                            10000); // Wait indefinitely
 
@@ -567,10 +539,25 @@ void createServerSockets(const vector<ServerData>& configs, vector<int>& serverS
   }
 }
 
-void reloadConfigFile(std::string configFile, vector<int>&serverSockets)
+void reloadConfigFile(std::string configFile, vector<int>&serverSockets, vector<ServerData> &configs_)
 {
-}
+    SocketUtils::shutdownServer();
+            SocketUtils::initialize();
+            Config::cleanup();
+            Config::initialize(configFile);
+            configs_ = Config::getServerData();
+            if (configs_.empty()) {
+                debuglog(RED, "No configuration data found");
+                throw std::runtime_error("Error: config with empty ports");
+            }
+            
+            createServerSockets(configs_, serverSockets);
+            
+            debuglog(GREEN, "Configuration reload complete with %zu servers", 
+                     Config::getServerData().size());
 
+
+}
 
 
 } // namespace HTTPServer

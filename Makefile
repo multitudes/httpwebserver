@@ -62,7 +62,7 @@ all: $(NAME) #test
 # endif
 
 $(NAME): $(OBJS) $(HDRS)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) $(LDFLAGS) -o $(NAME)
+	$(CXX) $(CXXFLAGS)  $(INCLUDES) $(OBJS) $(LDFLAGS) -o $(NAME) 
 
 # Static pattern rule for compilation - adding the .o files in the obj folder
 $(OBJ_DIR)%.o: $(SRC_DIR)%.cpp

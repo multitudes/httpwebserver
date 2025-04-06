@@ -57,7 +57,7 @@ namespace HTTPServer {
 	int send_file(HTTPConnxData &conn);
 	int send_headers(HTTPConnxData &conn);
 	void createServerSockets(const vector<ServerData>& configs, vector<int>& serverSockets);
-	//void reloadConfigFile(std::string configFile, vector<int>&serverSockets);
+	void reloadConfigFile(std::string configFile, vector<int>&serverSockets, vector<ServerData> &configs_);
 
 	
 
