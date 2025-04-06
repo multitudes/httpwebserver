@@ -534,8 +534,6 @@ namespace URLMatcher
       }
       conn.state = CONN_UPLOAD;
 	  debug("setting state to CONN_UPLOAD");
-	  
-
       return;
     } // end POST
 
