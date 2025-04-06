@@ -45,7 +45,7 @@ vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
 
-int run(std::string configFile, int AutoReload) {
+int run(std::string configFile) {
 
   struct sockaddr_in server_addr;
   bool skip_to_next_iteration = false;
@@ -63,7 +63,7 @@ int run(std::string configFile, int AutoReload) {
   while (1) {
 
     //when autoreload is 1 then reload the config file
-    if(AutoReload) {
+    if(Constants::autoReload) {
       long long currentTime = Parser::getCurrentTimeMillis();
       if (currentTime - Parser::starttime > 5000) {
           debuglog(GREEN, "Reloading configuration file %s\n\n", configFile.c_str());

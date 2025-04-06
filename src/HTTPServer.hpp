@@ -22,7 +22,7 @@
 
 
 #define BUFFER_SIZE 4096
-#define AutoRload 1
+
 
 using std::string;
 using std::vector;
@@ -52,7 +52,7 @@ namespace HTTPServer {
 	extern std::map<int, HTTPConnxData> connections;
 	extern std::map<int, std::time_t> lastActivityTime;
 	
-	int run(std::string configFile, int AutoReload);
+	int run(std::string configFile);
 	void cleanup_upload(HTTPConnxData& conn);
 	void finish_upload(HTTPConnxData& conn);
 	int send_file(HTTPConnxData &conn);

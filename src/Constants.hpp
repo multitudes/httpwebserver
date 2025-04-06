@@ -15,6 +15,7 @@ namespace Constants {
     extern int requestTimeout;
     extern int responseTimeout;
     extern int keepalive_timeout;
+	extern bool autoReload;
 
 
 } // namespace Constants
