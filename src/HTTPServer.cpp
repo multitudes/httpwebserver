@@ -70,6 +70,7 @@ int run(std::string configFile) {
 	  if (!reload(configFile, currentTime)) {
 		break;
 	  }
+	}
      
     
     int poll_result = poll(&pollfds[0], static_cast<nfds_t>(pollfds.size()),
