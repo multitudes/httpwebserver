@@ -1,19 +1,432 @@
 <!DOCTYPE html>
-<html lang = "en">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>404 Not Found</title>
-		<link rel="icon" href="../favicon/favicon.ico" type="image/x-icon">
-		<link rel="stylesheet" type="text/css" href="../css/style.css">
-	</head>
-	<body>
-		<div class="rectangle">
-			<div class="circle">
-				<h1>404</h1>
-				<p>Page Not Found</p>
-			</div>
-			<p>The address you were looking for cannot be found or is not valid</p>
-		</div>
-	</body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>404 Not Found</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <!-- Include Three.js and the necessary example scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://threejs.org/examples/js/loaders/FontLoader.js"></script>
+  <script src="https://threejs.org/examples/js/geometries/TextGeometry.js"></script>
+  <script>
+    // Update these variables to change the error messages
+    var topMessage = "404";
+    var bottomMessage = "NOT FOUND";
+
+    // Rotation and movement settings
+    var rotationSpeed = 0.01;
+    var offsetDegrees = 270;
+    var moveSpeed = 0.03;
+    var bounceStrength = 0.8;
+    var nudgeStrength = 1.0;
+    var collisionRestitution = 0.9;
+
+    // Variables to store the meshes and their physics properties
+    var topTextMesh, bottomTextMesh, emojiMesh;
+    var topPhysics = {
+      rotationDir: Math.random() > 0.5 ? 1 : -1,
+      velocityX: (Math.random() - 0.5) * moveSpeed,
+      velocityY: (Math.random() - 0.5) * moveSpeed
+    };
+    var bottomPhysics = {
+      rotationDir: Math.random() > 0.5 ? 1 : -1,
+      velocityX: (Math.random() - 0.5) * moveSpeed,
+      velocityY: (Math.random() - 0.5) * moveSpeed
+    };
+    var emojiPhysics = {
+      rotationDir: Math.random() > 0.5 ? 1 : -1,
+      velocityX: (Math.random() - 0.5) * moveSpeed,
+      velocityY: (Math.random() - 0.5) * moveSpeed
+    };
+
+    // Mouse position tracking
+    var mouse = new THREE.Vector2();
+    var raycaster = new THREE.Raycaster();
+    
+    // Set up the scene, camera, and renderer
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 50;
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Add ambient and point lighting
+    var ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    var pointLight = new THREE.PointLight(0xffffff, 1);
+    pointLight.position.set(50, 50, 50);
+    scene.add(pointLight);
+
+    // Create a sad face emoji
+    function createSadFaceEmoji() {
+      // Create group to hold the emoji and enable billboard effect
+      emojiMesh = new THREE.Group();
+      
+      // Create sphere for the face
+      const geometry = new THREE.SphereGeometry(3, 32, 32);
+      const material = new THREE.MeshPhongMaterial({ color: 0xFFD700 }); // Gold/yellow color
+      const face = new THREE.Mesh(geometry, material);
+      emojiMesh.add(face);
+      
+      // Position the emoji
+      emojiMesh.position.y = 12; // Position above the 404
+      emojiMesh.position.z = 1; // Slightly in front
+      
+      // Add eyes - positioned so they're always visible from the front
+      const eyeGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+      const eyeMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 }); // Black
+      
+      const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      leftEye.position.set(-1, 0.7, 2.8); // More forward facing
+      emojiMesh.add(leftEye);
+      
+      const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      rightEye.position.set(1, 0.7, 2.8); // More forward facing
+      emojiMesh.add(rightEye);
+      
+      // Add eyebrows to enhance sad expression
+      const browGeometry = new THREE.BoxGeometry(1, 0.2, 0.2);
+      const browMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+      
+      const leftBrow = new THREE.Mesh(browGeometry, browMaterial);
+      leftBrow.position.set(-1, 1.5, 2.8);
+      leftBrow.rotation.z = -0.3; // Angle for sad expression
+      emojiMesh.add(leftBrow);
+      
+      const rightBrow = new THREE.Mesh(browGeometry, browMaterial);
+      rightBrow.position.set(1, 1.5, 2.8);
+      rightBrow.rotation.z = 0.3; // Angle for sad expression
+      emojiMesh.add(rightBrow);
+      
+      // Add sad mouth (curved line)
+      const mouthCurve = new THREE.CubicBezierCurve3(
+        new THREE.Vector3(-1.5, -1, 2.8),
+        new THREE.Vector3(-0.5, -2.2, 2.8), // Deeper curve for sadder expression
+        new THREE.Vector3(0.5, -2.2, 2.8),  // Deeper curve for sadder expression
+        new THREE.Vector3(1.5, -1, 2.8)
+      );
+      
+      const mouthGeometry = new THREE.TubeGeometry(mouthCurve, 20, 0.2, 8, false);
+      const mouthMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+      const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
+      emojiMesh.add(mouth);
+      
+      // Add a tear for extra sadness
+      const tearGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+      const tearMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x89CFF0, 
+        transparent: true,
+        opacity: 0.8
+      });
+      
+      const tear = new THREE.Mesh(tearGeometry, tearMaterial);
+      tear.position.set(-1.5, -0.2, 2.8);
+      emojiMesh.add(tear);
+      
+      scene.add(emojiMesh);
+    }
+
+    // Add mouse event listeners
+    document.addEventListener('mousedown', onMouseDown, false);
+    
+    function onMouseDown(event) {
+      // Calculate mouse position in normalized device coordinates
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      
+      // Update the raycaster
+      raycaster.setFromCamera(mouse, camera);
+      
+      // Calculate objects intersecting the ray (now including emoji)
+      var intersects = raycaster.intersectObjects([topTextMesh, bottomTextMesh, emojiMesh].filter(Boolean));
+      
+      if (intersects.length > 0) {
+        // Object was clicked
+        const clickedMesh = intersects[0].object;
+        let physics;
+        
+        if (clickedMesh === topTextMesh) {
+          physics = topPhysics;
+        } else if (clickedMesh === bottomTextMesh) {
+          physics = bottomPhysics;
+        } else if (clickedMesh === emojiMesh || clickedMesh.parent === emojiMesh) {
+          physics = emojiPhysics;
+        }
+        
+        // Apply a random nudge in the direction of the mouse
+        physics.velocityX += (mouse.x * nudgeStrength);
+        physics.velocityY += (mouse.y * nudgeStrength);
+        
+        // Randomly change rotation direction sometimes
+        if (Math.random() > 0.7) {
+          physics.rotationDir *= -1;
+        }
+      }
+    }
+
+    // Load the font and create the 3D text geometries
+    var loader = new THREE.FontLoader();
+    loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function(font) {
+      // Create the top text geometry and mesh
+      var topGeometry = new THREE.TextGeometry(topMessage, {
+        font: font,
+        size: 5,
+        height: 1,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.5,
+        bevelSize: 0.3,
+        bevelOffset: 0,
+        bevelSegments: 5
+      });
+      topGeometry.computeBoundingBox();
+      var topCenterOffset = -0.5 * (topGeometry.boundingBox.max.x - topGeometry.boundingBox.min.x);
+      var topMaterial = new THREE.MeshPhongMaterial({ color: 0x770000 });
+      topTextMesh = new THREE.Mesh(topGeometry, topMaterial);
+      topTextMesh.position.x = topCenterOffset;
+      topTextMesh.position.y = 4; // Position above center
+      // Set initial rotation to random value
+      topTextMesh.rotation.x = Math.random() * Math.PI * 2;
+      scene.add(topTextMesh);
+
+      // Create the bottom text geometry and mesh
+      var bottomGeometry = new THREE.TextGeometry(bottomMessage, {
+        font: font,
+        size: 2,
+        height: 1,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.5,
+        bevelSize: 0.3,
+        bevelOffset: 0,
+        bevelSegments: 5
+      });
+      bottomGeometry.computeBoundingBox();
+      var bottomCenterOffset = -0.5 * (bottomGeometry.boundingBox.max.x - bottomGeometry.boundingBox.min.x);
+      var bottomMaterial = new THREE.MeshPhongMaterial({ color: 0x999900 });
+      bottomTextMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
+      bottomTextMesh.position.x = bottomCenterOffset;
+      bottomTextMesh.position.y = -3; // Position below center
+      // Set initial rotation with offset plus random component
+      bottomTextMesh.rotation.x = (offsetDegrees * (Math.PI / 180)) + (Math.random() * Math.PI);
+      scene.add(bottomTextMesh);
+      
+      // Create the emoji after text is created
+      createSadFaceEmoji();
+    });
+
+    // Calculate boundaries based on viewport size
+    function getViewportBoundaries() {
+      const frustumHeight = 2 * Math.tan(camera.fov * Math.PI / 360) * camera.position.z;
+      const frustumWidth = frustumHeight * camera.aspect;
+      return {
+        left: -frustumWidth / 2,
+        right: frustumWidth / 2,
+        top: frustumHeight / 2,
+        bottom: -frustumHeight / 2
+      };
+    }
+
+    // Animation loop with physics and boundary checks
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      const boundaries = getViewportBoundaries();
+      
+      // Check collisions between all objects
+      if (topTextMesh && bottomTextMesh && emojiMesh) {
+        // Array of all objects and their physics
+        const objects = [
+          { mesh: topTextMesh, physics: topPhysics },
+          { mesh: bottomTextMesh, physics: bottomPhysics },
+          { mesh: emojiMesh, physics: emojiPhysics }
+        ];
+        
+        // Check collisions between each pair of objects
+        for (let i = 0; i < objects.length; i++) {
+          for (let j = i + 1; j < objects.length; j++) {
+            const obj1 = objects[i];
+            const obj2 = objects[j];
+            
+            const bounds1 = new THREE.Box3().setFromObject(obj1.mesh);
+            const bounds2 = new THREE.Box3().setFromObject(obj2.mesh);
+            
+            if (bounds1.intersectsBox(bounds2)) {
+              // Objects are colliding, calculate collision response
+              
+              // Find centers of each object
+              const center1 = new THREE.Vector3();
+              bounds1.getCenter(center1);
+              
+              const center2 = new THREE.Vector3();
+              bounds2.getCenter(center2);
+              
+              // Calculate collision normal (direction from obj2 to obj1)
+              const collisionNormal = new THREE.Vector3().subVectors(center1, center2).normalize();
+              
+              // Calculate relative velocity
+              const relativeVelocity = new THREE.Vector2(
+                obj1.physics.velocityX - obj2.physics.velocityX,
+                obj1.physics.velocityY - obj2.physics.velocityY
+              );
+              
+              // Project relative velocity onto collision normal
+              const relVelDotNormal = relativeVelocity.x * collisionNormal.x + relativeVelocity.y * collisionNormal.y;
+              
+              // Only apply impulse if objects are moving toward each other
+              if (relVelDotNormal < 0) {
+                // Calculate impulse scalar
+                const impulseStrength = -relVelDotNormal * collisionRestitution;
+                
+                // Apply impulse to velocities
+                obj1.physics.velocityX += collisionNormal.x * impulseStrength;
+                obj1.physics.velocityY += collisionNormal.y * impulseStrength;
+                
+                obj2.physics.velocityX -= collisionNormal.x * impulseStrength;
+                obj2.physics.velocityY -= collisionNormal.y * impulseStrength;
+                
+                // Add some small random variations to make it more interesting
+                obj1.physics.velocityX += (Math.random() - 0.5) * 0.02;
+                obj1.physics.velocityY += (Math.random() - 0.5) * 0.02;
+                obj2.physics.velocityX += (Math.random() - 0.5) * 0.02;
+                obj2.physics.velocityY += (Math.random() - 0.5) * 0.02;
+                
+                // Separate the objects to prevent sticking
+                const overlap = 0.1; // Small extra separation to prevent immediate re-collision
+                obj1.mesh.position.x += collisionNormal.x * overlap;
+                obj1.mesh.position.y += collisionNormal.y * overlap;
+                obj2.mesh.position.x -= collisionNormal.x * overlap;
+                obj2.mesh.position.y -= collisionNormal.y * overlap;
+                
+                // Occasionally change rotation direction on collision
+                if (Math.random() > 0.5) {
+                  obj1.physics.rotationDir *= -1;
+                }
+                if (Math.random() > 0.5) {
+                  obj2.physics.rotationDir *= -1;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Update each object (top text)
+      if (topTextMesh) {
+        // Apply rotation based on direction
+        topTextMesh.rotation.x += rotationSpeed * topPhysics.rotationDir;
+        
+        // Apply movement
+        topTextMesh.position.x += topPhysics.velocityX;
+        topTextMesh.position.y += topPhysics.velocityY;
+        
+        // Check boundaries and bounce
+        const topBounds = new THREE.Box3().setFromObject(topTextMesh);
+        
+        if (topBounds.min.x < boundaries.left) {
+          topTextMesh.position.x += (boundaries.left - topBounds.min.x);
+          topPhysics.velocityX = Math.abs(topPhysics.velocityX) * bounceStrength;
+        } else if (topBounds.max.x > boundaries.right) {
+          topTextMesh.position.x -= (topBounds.max.x - boundaries.right);
+          topPhysics.velocityX = -Math.abs(topPhysics.velocityX) * bounceStrength;
+        }
+        
+        if (topBounds.min.y < boundaries.bottom) {
+          topTextMesh.position.y += (boundaries.bottom - topBounds.min.y);
+          topPhysics.velocityY = Math.abs(topPhysics.velocityY) * bounceStrength;
+        } else if (topBounds.max.y > boundaries.top) {
+          topTextMesh.position.y -= (topBounds.max.y - boundaries.top);
+          topPhysics.velocityY = -Math.abs(topPhysics.velocityY) * bounceStrength;
+        }
+      }
+      
+      // Update each object (bottom text)
+      if (bottomTextMesh) {
+        // Apply rotation based on direction
+        bottomTextMesh.rotation.x += rotationSpeed * bottomPhysics.rotationDir;
+        
+        // Apply movement
+        bottomTextMesh.position.x += bottomPhysics.velocityX;
+        bottomTextMesh.position.y += bottomPhysics.velocityY;
+        
+        // Check boundaries and bounce
+        const bottomBounds = new THREE.Box3().setFromObject(bottomTextMesh);
+        
+        if (bottomBounds.min.x < boundaries.left) {
+          bottomTextMesh.position.x += (boundaries.left - bottomBounds.min.x);
+          bottomPhysics.velocityX = Math.abs(bottomPhysics.velocityX) * bounceStrength;
+        } else if (bottomBounds.max.x > boundaries.right) {
+          bottomTextMesh.position.x -= (bottomBounds.max.x - boundaries.right);
+          bottomPhysics.velocityX = -Math.abs(bottomPhysics.velocityX) * bounceStrength;
+        }
+        
+        if (bottomBounds.min.y < boundaries.bottom) {
+          bottomTextMesh.position.y += (boundaries.bottom - bottomBounds.min.y);
+          bottomPhysics.velocityY = Math.abs(bottomPhysics.velocityY) * bounceStrength;
+        } else if (bottomBounds.max.y > boundaries.top) {
+          bottomTextMesh.position.y -= (bottomBounds.max.y - boundaries.top);
+          bottomPhysics.velocityY = -Math.abs(bottomPhysics.velocityY) * bounceStrength;
+        }
+      }
+      
+      // Update emoji - make it always face the camera (billboard effect)
+      if (emojiMesh) {
+        // Remove any rotation-based animation for the emoji
+        // Instead, make it face the camera while still allowing position changes
+        
+        // Get the emoji's current position
+        const emojiPos = emojiMesh.position.clone();
+        
+        // Reset rotation
+        emojiMesh.rotation.set(0, 0, 0);
+        
+        // Look at the camera (billboard effect)
+        emojiMesh.lookAt(camera.position);
+        
+        // Apply movement
+        emojiMesh.position.x += emojiPhysics.velocityX;
+        emojiMesh.position.y += emojiPhysics.velocityY;
+        
+        // Add a small oscillation to make it look alive
+        emojiMesh.position.y += Math.sin(Date.now() * 0.002) * 0.05;
+        
+        // Check boundaries and bounce
+        const emojiBounds = new THREE.Box3().setFromObject(emojiMesh);
+        
+        if (emojiBounds.min.x < boundaries.left) {
+          emojiMesh.position.x += (boundaries.left - emojiBounds.min.x);
+          emojiPhysics.velocityX = Math.abs(emojiPhysics.velocityX) * bounceStrength;
+        } else if (emojiBounds.max.x > boundaries.right) {
+          emojiMesh.position.x -= (emojiBounds.max.x - boundaries.right);
+          emojiPhysics.velocityX = -Math.abs(emojiPhysics.velocityX) * bounceStrength;
+        }
+        
+        if (emojiBounds.min.y < boundaries.bottom) {
+          emojiMesh.position.y += (boundaries.bottom - emojiBounds.min.y);
+          emojiPhysics.velocityY = Math.abs(emojiPhysics.velocityY) * bounceStrength;
+        } else if (emojiBounds.max.y > boundaries.top) {
+          emojiMesh.position.y -= (emojiBounds.max.y - boundaries.top);
+          emojiPhysics.velocityY = -Math.abs(emojiPhysics.velocityY) * bounceStrength;
+        }
+      }
+      
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Adjust camera and renderer on window resize
+    window.addEventListener('resize', function(){
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }, false);
+  </script>
+</body>
 </html>
