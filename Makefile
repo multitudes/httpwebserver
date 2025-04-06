@@ -50,7 +50,7 @@ OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
 HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )
 HDRS 			+= $(addprefix $(SRC_DIR), )
 
-all: $(NAME) #test
+all: $(NAME) test
 
 # # Add PIE flags only for Linux
 # ifeq ($(shell uname -s), Linux)
@@ -83,7 +83,7 @@ re: clean all
 
 # The idea is for this project to use run for production with extra flags to speed it up
 # and optimize the binary size
-ARGS = config
+ARGS = config/default.conf
 run: all
 	@echo
 	@PATH=".$${PATH:+:$${PATH}}" && ./$(NAME) $(ARGS)
@@ -95,6 +95,7 @@ valrun: all
 
 # Check if venv exists, create if not
 # Makefile for webserver with automatic venv setup
+# Makefiles always run commands in a subshell so activate is not possible
 VENV_DIR = venv
 PYTHON = python3
 PIP = $(VENV_DIR)/bin/pip
@@ -113,9 +114,9 @@ venv:
 		echo "Virtual environment already exists"; \
 	fi
 
-# Run tests
+# Run tests in the venv
 test: $(NAME) venv
 	@echo "Running tests..."
 	@$(PYTEST) tests/
 
-.PHONY: all venv test clean
+.PHONY: all venv test clean fclean re run valrun

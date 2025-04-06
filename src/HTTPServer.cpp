@@ -75,7 +75,6 @@ int run() {
       }
       serverSockets.push_back(server_fd);
       SocketUtils::add_to_poll(server_fd, POLLIN);
-      //   int port = configs_[i].ports[j];
       debuglog(GREEN, "Server listening on port %d", configs_[i].ports[j]);
     }
   }
@@ -234,8 +233,8 @@ int run() {
           conn.reset();
         }
 		conn.reset();
-        SocketUtils::update_poll_events(current_fd, POLLIN);
-        debuglog(YELLOW, "Switched connection %d fd back to POLLIN",
+        SocketUtils::update_poll_events(current_fd, POLLIN|POLLOUT);
+        debuglog(YELLOW, "Switched connection %d fd back to POLLIN|POLLOUT",
                  conn.client_fd);
         continue;
 		}
@@ -280,7 +279,9 @@ int run() {
       }
 
 
-
+	  /*
+	   * @brief Handle file upload 
+	  */
 	  if (pollfds[i].revents & POLLIN && conn.state == CONN_UPLOAD) {
    
 		debug("CONN_UPLOAD fd %d", conn.client_fd);

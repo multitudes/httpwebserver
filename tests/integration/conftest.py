@@ -3,15 +3,38 @@ import time
 import pytest
 import requests
 
-# Single fixture to start/stop server (just like you have)
-@pytest.fixture(scope="session", autouse=True)
-def webserver():
+# # Single fixture to start/stop server (just like you have)
+# @pytest.fixture(scope="session", autouse=True)
+# def webserver():
+#     server = subprocess.Popen(["./webserv", "config/test.conf"])
+#     time.sleep(1)  # Give server time to start (all ports)
+#     yield
+#     server.terminate()
+#     server.wait()
+
+# @pytest.fixture
+# def base_url():
+#     return "http://localhost:4244"  # Default port
+
+
+@pytest.fixture(scope="function")
+def webserver_normal_config():
     server = subprocess.Popen(["./webserv", "config/test.conf"])
-    time.sleep(1)  # Give server time to start (all ports)
+    time.sleep(1)
     yield
     server.terminate()
-    server.wait()
 
-@pytest.fixture
-def base_url():
-    return "http://localhost:4244"  # Default port
+@pytest.fixture(scope="function")
+def webserver_empty_config():
+    server = subprocess.Popen(["./webserv", "config/empty.conf"])
+    time.sleep(1)
+    yield
+    server.terminate()
+
+def test_normal_config(webserver_normal_config):
+    response = requests.get("http://localhost:4244")
+    assert response.status_code == 200
+
+def test_empty_config(webserver_empty_config):
+    response = requests.get("http://localhost:4244")
+    assert response.status_code == 500

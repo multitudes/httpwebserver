@@ -867,17 +867,8 @@ void debugprintConfigs(std::vector<ServerData>& servers, std::map<uint16_t, Serv
          // Calculate server index 
          debuglog(BLUE, "  Port %hu: Server %zu", it->first,
          serverIndex);
-        //PRINT THE WHOLE SERVER BLOCK
-        debuglog(BLUE, "  Server Block: %d", servers[serverIndex].ports[0]);
-        debuglog(BLUE, "  Server Block: %d", servers[serverIndex].ports[1]);
-        debuglog(BLUE, "  Server Block: %s", servers[serverIndex].server_names[0].c_str());
-        debuglog(BLUE, "  Server Block: %s", servers[serverIndex].server_names[1].c_str());
-        debuglog(BLUE, "  Server Block: %s", servers[serverIndex].serverListenAddress.c_str());
-        debuglog(BLUE, "  Server Block: %s", servers[serverIndex].root.c_str());
-        debuglog(BLUE, "  Server Block: %s", servers[serverIndex].index.c_str());
-        debuglog(BLUE, "  Server Block: %s", servers[serverIndex].upload_dir.c_str());
-        debuglog(BLUE, "  Server Block: %s", servers[serverIndex].autoindex ? "on" : "off");
-        debuglog(BLUE, "  Server Block: %s", servers[serverIndex].file_server ? "on" : "off");
+
+
 
     }
 
