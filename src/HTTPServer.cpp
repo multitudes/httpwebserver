@@ -9,6 +9,7 @@
 #include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "Parser.hpp"
 
 using std::map;
 using std::string;
@@ -44,43 +45,35 @@ vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
 
-int run() {
+int run(std::string configFile) {
+
   struct sockaddr_in server_addr;
   bool skip_to_next_iteration = false;
 
-
   vector<ServerData> configs_ = Config::getServerData();
   vector<int> serverSockets;
-
   SocketUtils::initialize();
 
   if (configs_.empty()) {
     debuglog(RED, "No configuration data found");
     throw std::runtime_error("Error: config with empty ports");
   }
-  // Create server sockets and bind to ports
-  for (size_t i = 0; i < configs_.size(); i++) {
-    for (size_t j = 0; j < configs_[i].ports.size(); j++) {
-      int server_fd;
-      if ((server_fd = SocketUtils::createBindSocket(configs_[i].ports[j])) <
-          0) {
-        perror("Error creating socket");
-        throw std::runtime_error("Socket creation failed");
-      }
-      debuglog(YELLOW, "Socket created with fd %d", server_fd);
-      if (!SocketUtils::listenSocket(server_fd)) {
-        perror("Error listening on socket");
-        close(server_fd);
-        throw std::runtime_error("Error listening on socket");
-      }
-      serverSockets.push_back(server_fd);
-      SocketUtils::add_to_poll(server_fd, POLLIN);
-      debuglog(GREEN, "Server listening on port %d", configs_[i].ports[j]);
-    }
-  }
+  createServerSockets(configs_, serverSockets);
 
-  // Main polling loop
   while (1) {
+      long long currentTime = Parser::getCurrentTimeMillis();
+      if (currentTime - Parser::starttime > 5000) {
+          debuglog(GREEN, "Reloading configuration file %s\n\n", configFile.c_str());
+          Parser::starttime = currentTime;
+        try {
+              reloadConfigFile(configFile, serverSockets, configs_);
+            } 
+            catch (const std::exception& e) {
+              debuglog(RED, "Error reloading configuration: %s", e.what());
+            break;
+        }
+      }
+    
     int poll_result = poll(&pollfds[0], static_cast<nfds_t>(pollfds.size()),
                            10000); // Wait indefinitely
 
@@ -523,5 +516,48 @@ void cleanup_upload(HTTPConnxData &conn) {
     unlink(conn.filename); // Remove partial upload
   }
 }
+
+void createServerSockets(const vector<ServerData>& configs, vector<int>& serverSockets) {
+  for (size_t i = 0; i < configs.size(); i++) {
+    for (size_t j = 0; j < configs[i].ports.size(); j++) {
+      int server_fd;
+      if ((server_fd = SocketUtils::createBindSocket(configs[i].ports[j])) <
+          0) {
+        perror("Error creating socket");
+        throw std::runtime_error("Socket creation failed");
+      }
+      debuglog(YELLOW, "Socket created with fd %d", server_fd);
+      if (!SocketUtils::listenSocket(server_fd)) {
+        perror("Error listening on socket");
+        close(server_fd);
+        throw std::runtime_error("Error listening on socket");
+      }
+      serverSockets.push_back(server_fd);
+      SocketUtils::add_to_poll(server_fd, POLLIN);
+      debuglog(GREEN, "Server listening on port %d", configs[i].ports[j]);
+    }
+  }
+}
+
+void reloadConfigFile(std::string configFile, vector<int>&serverSockets, vector<ServerData> &configs_)
+{
+    SocketUtils::shutdownServer();
+            SocketUtils::initialize();
+            Config::cleanup();
+            Config::initialize(configFile);
+            configs_ = Config::getServerData();
+            if (configs_.empty()) {
+                debuglog(RED, "No configuration data found");
+                throw std::runtime_error("Error: config with empty ports");
+            }
+            
+            createServerSockets(configs_, serverSockets);
+            
+            debuglog(GREEN, "Configuration reload complete with %zu servers", 
+                     Config::getServerData().size());
+
+
+}
+
 
 } // namespace HTTPServer

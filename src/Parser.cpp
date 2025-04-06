@@ -3,10 +3,18 @@
 #include "Parser.hpp"
 #include <set>
 
+
+
 namespace Parser {
+
+    long long starttime = 0;
 
     void parse(std::string filename, std::vector<ServerData>& servers, std::map<uint16_t, ServerData*> &port_map_) 
     {
+        servers.clear();
+        port_map_.clear();
+        long long starttime = getCurrentTimeMillis();
+        debuglog(GREEN, "Parsing configuration file at time: %lld", starttime); 
         std::ifstream configFile(filename.c_str());
         if (!configFile.is_open()) {
                 throw std::runtime_error("Failed to open config file: " + filename);
@@ -40,7 +48,7 @@ namespace Parser {
             port_map_[servers[i].ports[j]] = &servers[i];
             }
         }
-        debugprintConfigs(servers, port_map_);
+        //debugprintConfigs(servers, port_map_);
         return ;
     }
 
@@ -718,6 +726,11 @@ size_t findClosingBrace(const std::string &content, size_t start)
 }
 
 
+long long getCurrentTimeMillis() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (long long)(tv.tv_sec) * 1000 + (long long)(tv.tv_usec) / 1000;
+}
 
 void debugprintConfigs(std::vector<ServerData>& servers, std::map<uint16_t, ServerData*> port_map_)
 {

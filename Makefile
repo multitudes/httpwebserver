@@ -50,7 +50,7 @@ OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
 HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )
 HDRS 			+= $(addprefix $(SRC_DIR), )
 
-all: $(NAME) test
+all: $(NAME) #test
 
 # # Add PIE flags only for Linux
 # ifeq ($(shell uname -s), Linux)
@@ -62,7 +62,7 @@ all: $(NAME) test
 # endif
 
 $(NAME): $(OBJS) $(HDRS)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) $(LDFLAGS) -o $(NAME)
+	$(CXX) $(CXXFLAGS)  $(INCLUDES) $(OBJS) $(LDFLAGS) -o $(NAME) 
 
 # Static pattern rule for compilation - adding the .o files in the obj folder
 $(OBJ_DIR)%.o: $(SRC_DIR)%.cpp

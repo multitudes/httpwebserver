@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
             configFile = argv[1]; 
         }
 		Config::initialize(configFile); // Explicit initialization
-        HTTPServer::run();
+        HTTPServer::run(configFile);
         Config::cleanup();
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
