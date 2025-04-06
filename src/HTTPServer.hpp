@@ -51,6 +51,7 @@ namespace HTTPServer {
 	extern std::vector<int> serverSockets;
 	extern std::map<int, HTTPConnxData> connections;
 	extern std::map<int, std::time_t> lastActivityTime;
+	extern vector<ServerData> configs_;
 	
 	int run(std::string configFile);
 	void cleanup_upload(HTTPConnxData& conn);
@@ -59,7 +60,7 @@ namespace HTTPServer {
 	int send_headers(HTTPConnxData &conn);
 	void createServerSockets(const vector<ServerData>& configs, vector<int>& serverSockets);
 	void reloadConfigFile(std::string configFile, vector<int>&serverSockets, vector<ServerData> &configs_);
-
+	bool reload(string configFile, long long currentTime);
 	
 
 } // namespace HTTPServer
