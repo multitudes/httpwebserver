@@ -445,6 +445,7 @@ namespace URLMatcher
    */
   void validateRequest(HTTPConnxData &conn)
   {
+
     if (!receiveAndParseRequest(conn))
       return; // Request handling complete or failed
 
@@ -456,31 +457,10 @@ namespace URLMatcher
     if (findCGIPathAlias(conn))
       return;
 
-    // Debug to print the server's has_locations flag
-    debuglog(MAGENTA, "URLMatcher: Server config has_locations flag is: %s", 
-             conn.urlMatcherData.config->has_locations ? "true" : "false");
-             
-    // Print the number of location blocks in the server config
-    debuglog(MAGENTA, "URLMatcher: Server config has %lu location blocks", 
-             conn.urlMatcherData.config->location_blocks.size());
-             
-    // Print the server's port and name for debugging
-    debuglog(MAGENTA, "URLMatcher: Server is listening on port %u with name '%s'", 
-             conn.urlMatcherData.config->ports[0],
-             conn.urlMatcherData.config->server_names[0].c_str());
-             
-    // Dump the first few location blocks if any exist
-    if (!conn.urlMatcherData.config->location_blocks.empty()) {
-        std::map<std::string, Location>::const_iterator it = conn.urlMatcherData.config->location_blocks.begin();
-        debuglog(MAGENTA, "URLMatcher: First location block is '%s' with root '%s'", 
-                 it->first.c_str(), it->second.root.c_str());
-    }
-
-    // Check for location block configurations that match the request path
     updateWithLocationBlockConfig(conn);
     if (conn.urlMatcherData.return_directive)
       return;
-    
+
     // Debug log to verify location blocks are being checked
     debuglog(MAGENTA, "URLMatcher: After location check - path_for_stat: '%s', autoindex: %s", 
              conn.urlMatcherData.path_for_stat.c_str(),
