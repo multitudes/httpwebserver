@@ -8,7 +8,9 @@
 #include <string>
 #include <sstream>
 #include "Utils.hpp"
-
+#include "SocketUtils.hpp"
+#include "URLMatcher.hpp"
+#include <poll.h> // Add this include for POLLOUT
 using std::string;
 
 namespace SimpleResponse {
@@ -32,11 +34,43 @@ namespace SimpleResponse {
 
         connection.data.response = header + response;
         
-        debuglog(GREEN, "Basic response: \n%s", connection.data.response.c_str());
+        // Always set state to CONN_SIMPLE_RESPONSE for simple string responses
+        connection.state = CONN_SIMPLE_RESPONSE;
+        
+        debuglog(GREEN, "Basic response prepared, state set to CONN_SIMPLE_RESPONSE");
     }
+
+
 
     // generate a simple HTML error response
     void htmlErrorResponse(HTTPConnxData &connection, int statusCode)
+    {
+        // Check if a custom error page is defined for this status code
+        if (connection.urlMatcherData.error_pages.find(statusCode) != connection.urlMatcherData.error_pages.end())
+        {
+            string errorPagePath = connection.urlMatcherData.error_pages[statusCode];
+            debuglog(GREEN, "Custom error page found: %s", errorPagePath.c_str());
+            
+            // Use the URLMatcher helper function to serve the custom error page
+            if (URLMatcher::serveCustomErrorPage(connection, errorPagePath, statusCode))
+            {
+                // Error page was successfully prepared
+                // The state is already set to CONN_FILE_REQUEST by serveCustomErrorPage
+                debuglog(GREEN, "Serving custom error page with status %d", statusCode);
+                return;
+            }
+            // If serving the custom error page failed, we'll fall through to the default error response
+            debuglog(RED, "Failed to serve custom error page, falling back to generated HTML");
+        }
+        
+        // If no custom error page is found or couldn't be read, generate a simple HTML response
+        generatedHTMLResponse(connection, statusCode);
+        
+    }
+
+
+
+    void generatedHTMLResponse(HTTPConnxData &connection, int statusCode)
     {
         string htmlCode;
         string statusText = Constants::statusMessages[statusCode];
@@ -85,7 +119,7 @@ namespace SimpleResponse {
         // Use the content type already stored in the connection
         string header = "HTTP/1.1 200 OK\r\n";
         header += "Content-Type: " + conn.urlMatcherData.content_type + "\r\n";
-        header += "Content-Length: " + Utils::to_string(fileSize) + "\r\n";
+        header += "Content-Length: " + Utils::to_string(static_cast<long long>(fileSize)) + "\r\n";
         // header += "Connection: close\r\n";
         header += "\r\n";
         

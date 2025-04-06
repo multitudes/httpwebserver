@@ -107,7 +107,7 @@ struct HTTPConnxData {
     bool autoindex;
     bool return_directive;         // Flag for return directive
     bool file_upload;           // Flag for file upload
-	map<int, std::string> error_pages; // Error pages for specific status codes
+	  map<int, std::string> error_pages; // Error pages for specific status codes
     
     std::vector<std::string> acceptedMethods;
     URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), file_upload_dir(""), autoindex(false), return_directive(false), file_upload(false), acceptedMethods() {}

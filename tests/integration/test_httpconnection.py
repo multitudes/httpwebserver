@@ -65,8 +65,6 @@ def test_internal_redirects():
 # Run with: pytest test_server.py -v
 
 
-
-
 def test_upload_with_verification():
     # 1. Prepare test file
     test_file = 'tests/uploadtest.txt'

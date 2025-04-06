@@ -16,4 +16,6 @@ namespace URLMatcher {
 
 void validateRequest(HTTPConnxData &conn);
 
+bool serveCustomErrorPage(HTTPConnxData &conn, const string &errorPagePath, int statusCode);
+  
 } // namespace URLMatcher

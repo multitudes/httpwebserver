@@ -558,7 +558,11 @@ void Config::parseServerBlock(const std::string &serverBlockContent,
 
     // Check for location blocks
     else if (trimmedLine.find("location") == 0) {
+      // Explicitly set the has_locations flag
       ServerData.has_locations = true;
+      debuglog(GREEN, "Config: Setting has_locations flag to true for server with port %u",
+               ServerData.ports.empty() ? 0 : ServerData.ports[0]);
+      
       // Find the path (between "location" and "{")
       size_t pathStart =
           trimmedLine.find_first_not_of(" \t", 8); // Skip "location"
@@ -595,33 +599,23 @@ void Config::parseServerBlock(const std::string &serverBlockContent,
 
               // Add this location to the server data
               ServerData.location_blocks[path] = location;
+              debuglog(GREEN, "Added location '%s' to server config, now has %lu locations",
+                       path.c_str(), ServerData.location_blocks.size());
             }
           }
         }
       }
-    } else if (trimmedLine.find("cgi") == 0) {
-      size_t openBrace = trimmedLine.find("{");
-      ServerData.cgi_exists = true;
-
-      if (openBrace != std::string::npos) {
-        // Find CGI block content
-        size_t locationPos = serverBlockContent.find(trimmedLine);
-
-        if (locationPos != std::string::npos) {
-          size_t blockStart = serverBlockContent.find("{", locationPos) + 1;
-          size_t blockEnd = findClosingBrace(serverBlockContent, blockStart);
-
-          if (blockEnd != std::string::npos) {
-            // Extract CGI block content
-            std::string cgiContent =
-                serverBlockContent.substr(blockStart, blockEnd - blockStart);
-
-            // Parse CGI directives
-            parseCgiBlock(cgiContent, ServerData.cgiData);
-          }
-        }
-      }
     }
+    
+    // ...existing code...
+  }
+  
+  // Double check the has_locations flag before finishing
+  if (!ServerData.location_blocks.empty() && !ServerData.has_locations) {
+    ServerData.has_locations = true;
+    debuglog(RED, "Config: Fixed has_locations flag for server with port %u, has %lu locations",
+             ServerData.ports.empty() ? 0 : ServerData.ports[0],
+             ServerData.location_blocks.size());
   }
 }
 

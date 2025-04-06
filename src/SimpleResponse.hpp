@@ -18,6 +18,8 @@ namespace SimpleResponse {
 
     void htmlErrorResponse(HTTPConnxData &connections, int statusCode);  
 
+    void generatedHTMLResponse(HTTPConnxData &connection, int statusCode);
+
     void simpleStatusResponse(HTTPConnxData &connections, int statusCode);
 
 } // namespace DirectoryListing
