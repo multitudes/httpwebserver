@@ -3,6 +3,8 @@
 
 # include <stdio.h>
 
+//#define NDEBUG 1
+
 /*
 This allows us to use the debug macro to print debug messages but to 
 compile them out when NDEBUG is defined.
@@ -31,6 +33,8 @@ including the macro below which is not allowed by norminette.
 
 # ifdef NDEBUG
 # define debug(M, ...)
+# define debugcolor(C, M, ...)
+# define debuglog(C, M, ...)
 # else
 # define debug(M, ...) fprintf(stderr, "\033[0;92mDEBUG %s:%s:%d: " M "\033[0m\n",\
         __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
