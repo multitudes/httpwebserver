@@ -43,10 +43,6 @@ struct Location {
 
 struct BaseConf {
   size_t maxBodySize;
-  std::size_t maxConnections;
-  int requestTimeout;
-  int responseTimeout;
-  int keepalive_timeout;
   std::map<std::string, std::string> defaultheaders;
   bool autoindex;
   bool parsedindex;
@@ -56,8 +52,7 @@ struct BaseConf {
   std::string upload_dir;
 
   BaseConf()
-      : maxConnections(100), requestTimeout(60), responseTimeout(60),
-        keepalive_timeout(30), maxBodySize(10000000), autoindex(false),
+      : maxBodySize(10000000), autoindex(false),
         file_server(true), upload_dir("./www/uploads"), parsedindex(false) {
     defaultheaders["Content-Type"] = "text/html";
     defaultheaders["Server"] = "webserv/1.0";
@@ -95,10 +90,3 @@ struct ServerData : public BaseConf {
   bool hasDirectives() const { return has_locations; }
 };
 
-struct HttpConfig {
-  std::vector<ServerData> servers;
-
-  HttpConfig() {}
-};
-
-//
