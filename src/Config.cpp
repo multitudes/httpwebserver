@@ -66,6 +66,26 @@ const std::vector<ServerData> &Config::getServerData() {
 	return Config::servers;
   }
 
+std::vector<ServerData> &Config::getServerVector() {
+    if (_filename.empty()) {
+      _filename = Constants::default_config_file;
+    }
+    if (instance_ == NULL) {
+      instance_ = new Config(Config::_filename);
+       }
+    return Config::servers;
+    }
+
+std::map<uint16_t, ServerData *> &Config::getPortMap() {
+  if (_filename.empty()) {
+    _filename = Constants::default_config_file;
+  }
+  if (instance_ == NULL) {
+    instance_ = new Config(Config::_filename);
+  }
+  return Config::port_map_;
+}
+
 const std::vector<ServerData> &Config::getServerData(char *config_file) {
   if (config_file == NULL) {
 	  _filename = Constants::default_config_file;

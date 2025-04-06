@@ -51,11 +51,13 @@ namespace HTTPServer {
 	extern std::map<int, HTTPConnxData> connections;
 	extern std::map<int, std::time_t> lastActivityTime;
 	
-	int run();
+	int run(std::string configFile);
 	void cleanup_upload(HTTPConnxData& conn);
 	void finish_upload(HTTPConnxData& conn);
 	int send_file(HTTPConnxData &conn);
 	int send_headers(HTTPConnxData &conn);
+	void createServerSockets(const vector<ServerData>& configs, vector<int>& serverSockets);
+	//void reloadConfigFile(std::string configFile, vector<int>&serverSockets);
 
 	
 

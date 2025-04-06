@@ -11,9 +11,13 @@
 #include <fstream>
 #include <stdexcept>
 #include <set>
+#include <sys/time.h>
+#include <ctime>
 
 
 namespace Parser {
+    
+    extern long long starttime;
  
     void parse(std::string filename, std::vector<ServerData>& servers, std::map<uint16_t, ServerData*> &port_map_);
     void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig);
@@ -24,6 +28,7 @@ namespace Parser {
     void parseServerBlock(const std::string &serverBlockContent, ServerData &ServerData, std::set<int> &Portset);
     void parseLocationBlock(const std::string &locationContent, Location &location, ServerData &ServerData);
     void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig);
+    long long getCurrentTimeMillis();
     void debugprintConfigs(std::vector<ServerData>& servers,  std::map<uint16_t, ServerData*> port_map_);
 
 } // namespace Parser
