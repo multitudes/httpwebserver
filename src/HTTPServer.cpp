@@ -88,37 +88,9 @@ int run(std::string configFile) {
     // Process events on file descriptors
 	// debug("here?");
     for (size_t i = 0; i < pollfds.size(); i++) {
-		if (!(pollfds[i].revents & (POLLIN | POLLOUT))) {
-			continue; // No events on this fd
-		}
-		// Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
-		// requested
-		if (pollfds[i].revents & POLLHUP) {
-			debuglog(RED, "Connection closed by client on fd %d ", pollfds[i].fd);
-			connections[pollfds[i].fd].reset();
-			SocketUtils::remove_from_poll(pollfds[i].fd);
-			continue;
-		}
-		if (pollfds[i].revents & (POLLERR | POLLNVAL)) {
-			debuglog(RED, "Error condition on fd %d", pollfds[i].fd);
-			int error = 0;
-			socklen_t len = sizeof(error);
-
-			if (getsockopt(pollfds[i].fd, SOL_SOCKET, SO_ERROR, &error, &len) ==
-				0) {
-				debug("Socket error on fd %d: %s", pollfds[i].fd, strerror(error));
-				        // Explicitly handle EPIPE (Broken pipe)
-				if (error == EPIPE) {
-					debug("Client disconnected (EPIPE) on fd %d", pollfds[i].fd);
-					debuglog(YELLOW, "Client disconnected (EPIPE) on fd %d", pollfds[i].fd);
-					// close(pollfds[i].fd);
-				}
-			}
-			debug("Erasing the connection %d from the map", pollfds[i].fd);
-			connections.erase(pollfds[i].fd);
-			debug("removing fd %d from poll", pollfds[i].fd);
-			SocketUtils::remove_from_poll(pollfds[i].fd);
-			continue;
+		
+		if (checkPollErrors(pollfds[i])) {
+			continue; // Skip to next iteration if no poll or minor errors
 		}
 		
 		int current_fd = pollfds[i].fd;
@@ -591,6 +563,43 @@ bool reload(string configFile, long long currentTime) {
 		}
 	}
 	return true;
+}
+
+bool checkPollErrors(pollfd currentfd) {
+	if (!(currentfd.revents & (POLLIN | POLLOUT))) {
+		return true;  // No events on this fd
+	}
+
+	// Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
+	// requested
+	if (currentfd.revents & POLLHUP) {
+		debuglog(RED, "Connection closed by client on fd %d ", currentfd.fd);
+		HTTPServer::connections[currentfd.fd].reset();
+		SocketUtils::remove_from_poll(currentfd.fd);
+		return true; 
+	}
+	if (currentfd.revents & (POLLERR | POLLNVAL)) {
+		debuglog(RED, "Error condition on fd %d", currentfd.fd);
+		int error = 0;
+		socklen_t len = sizeof(error);
+
+		if (getsockopt(currentfd.fd, SOL_SOCKET, SO_ERROR, &error, &len) ==
+			0) {
+			debug("Socket error on fd %d: %s", currentfd.fd, strerror(error));
+					// Explicitly handle EPIPE (Broken pipe)
+			if (error == EPIPE) {
+				debug("Client disconnected (EPIPE) on fd %d", currentfd.fd);
+				debuglog(YELLOW, "Client disconnected (EPIPE) on fd %d", currentfd.fd);
+				// close(currentfd.fd);
+			}
+		}
+		debug("Erasing the connection %d from the map", currentfd.fd);
+		HTTPServer::connections.erase(currentfd.fd);
+		debug("removing fd %d from poll", currentfd.fd);
+		SocketUtils::remove_from_poll(currentfd.fd);
+		return true; 
+	}
+	return false; // No errors
 }
 
 } // namespace HTTPServer
