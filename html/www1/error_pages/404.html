@@ -17,6 +17,16 @@
     var topMessage = "404";
     var bottomMessage = "NOT FOUND";
 
+    // Image paths - updated with full relative paths and fallback handling
+    var imagePaths = {
+      rufus: '../error_pages/rufus.jpg',
+      laurent: '../error_pages/laurent.jpg',
+      emily: '../error_pages/emily.jpg'
+    };
+    
+    // Debug flag to help troubleshoot image loading
+    var debug = true;
+
     // Rotation and movement settings
     var rotationSpeed = 0.01;
     var offsetDegrees = 270;
@@ -26,7 +36,8 @@
     var collisionRestitution = 0.9;
 
     // Variables to store the meshes and their physics properties
-    var topTextMesh, bottomTextMesh, emojiMesh;
+    var topTextMesh, bottomTextMesh;
+    var prismMeshes = [];
     var topPhysics = {
       rotationDir: Math.random() > 0.5 ? 1 : -1,
       velocityX: (Math.random() - 0.5) * moveSpeed,
@@ -37,11 +48,23 @@
       velocityX: (Math.random() - 0.5) * moveSpeed,
       velocityY: (Math.random() - 0.5) * moveSpeed
     };
-    var emojiPhysics = {
-      rotationDir: Math.random() > 0.5 ? 1 : -1,
-      velocityX: (Math.random() - 0.5) * moveSpeed,
-      velocityY: (Math.random() - 0.5) * moveSpeed
-    };
+    var prismPhysics = [
+      {
+        rotationDir: Math.random() > 0.5 ? 1 : -1,
+        velocityX: (Math.random() - 0.5) * moveSpeed * 0.7,
+        velocityY: (Math.random() - 0.5) * moveSpeed * 0.7
+      },
+      {
+        rotationDir: Math.random() > 0.5 ? 1 : -1,
+        velocityX: (Math.random() - 0.5) * moveSpeed * 0.7,
+        velocityY: (Math.random() - 0.5) * moveSpeed * 0.7
+      },
+      {
+        rotationDir: Math.random() > 0.5 ? 1 : -1,
+        velocityX: (Math.random() - 0.5) * moveSpeed * 0.7,
+        velocityY: (Math.random() - 0.5) * moveSpeed * 0.7
+      }
+    ];
 
     // Mouse position tracking
     var mouse = new THREE.Vector2();
@@ -64,73 +87,199 @@
     pointLight.position.set(50, 50, 50);
     scene.add(pointLight);
 
-    // Create a sad face emoji
-    function createSadFaceEmoji() {
-      // Create group to hold the emoji and enable billboard effect
-      emojiMesh = new THREE.Group();
+    // Function to create prisms with image textures
+    function createImagePrisms() {
+      const textureLoader = new THREE.TextureLoader();
       
-      // Create sphere for the face
-      const geometry = new THREE.SphereGeometry(3, 32, 32);
-      const material = new THREE.MeshPhongMaterial({ color: 0xFFD700 }); // Gold/yellow color
-      const face = new THREE.Mesh(geometry, material);
-      emojiMesh.add(face);
+      // Add error handling for texture loading
+      textureLoader.setCrossOrigin('');
       
-      // Position the emoji
-      emojiMesh.position.y = 12; // Position above the 404
-      emojiMesh.position.z = 1; // Slightly in front
+      // Helper function to load textures with error handling
+      function loadTextureWithFallback(path, fallbackColor) {
+        const texture = new THREE.Texture();
+        texture.generateMipmaps = false;
+        texture.minFilter = THREE.LinearFilter;
+        
+        textureLoader.load(
+          path, 
+          // Success callback
+          function(loadedTexture) {
+            texture.image = loadedTexture.image;
+            texture.needsUpdate = true;
+            if (debug) console.log(`Successfully loaded texture: ${path}`);
+          },
+          // Progress callback
+          undefined,
+          // Error callback
+          function(err) {
+            if (debug) console.error(`Failed to load texture: ${path}`, err);
+            // Create a canvas with fallback color and text
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = fallbackColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Image not found', canvas.width/2, canvas.height/2);
+            ctx.fillText(path, canvas.width/2, canvas.height/2 + 30);
+            
+            texture.image = canvas;
+            texture.needsUpdate = true;
+          }
+        );
+        
+        return texture;
+      }
       
-      // Add eyes - positioned so they're always visible from the front
-      const eyeGeometry = new THREE.SphereGeometry(0.5, 16, 16);
-      const eyeMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 }); // Black
+      // 1. Cylinder prism with Rufus image
+      const rufusTexture = loadTextureWithFallback(imagePaths.rufus, '#770000');
+      const cylinderGeometry = new THREE.CylinderGeometry(3, 3, 1, 32);
+      const cylinderMaterial = [
+        new THREE.MeshPhongMaterial({ color: 0x888888 }), // side
+        new THREE.MeshPhongMaterial({ map: rufusTexture }), // top
+        new THREE.MeshPhongMaterial({ map: rufusTexture })  // bottom
+      ];
+      const cylinderMesh = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+      cylinderMesh.position.set(-15, -10, 0);
+      cylinderMesh.rotation.x = Math.PI / 2; // Rotate to show the textured face
+      scene.add(cylinderMesh);
+      prismMeshes.push(cylinderMesh);
       
-      const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-      leftEye.position.set(-1, 0.7, 2.8); // More forward facing
-      emojiMesh.add(leftEye);
+      // 2. Triangular prism with Laurent image - completely rebuilt
+      const laurentTexture = loadTextureWithFallback(imagePaths.laurent, '#0077FF');
       
-      const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-      rightEye.position.set(1, 0.7, 2.8); // More forward facing
-      emojiMesh.add(rightEye);
+      // Create a simple triangular prism using a buffer geometry with custom faces
+      const prism = new THREE.Group();
       
-      // Add eyebrows to enhance sad expression
-      const browGeometry = new THREE.BoxGeometry(1, 0.2, 0.2);
-      const browMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+      // Define the side length as an accessible variable
+      const triangleSideLength = 8; // Length of each side of the equilateral triangle
+      const triangleHeight = (triangleSideLength * Math.sqrt(3)) / 2; // Height of the equilateral triangle
+      const prismDepth = 1; // Depth of the prism
       
-      const leftBrow = new THREE.Mesh(browGeometry, browMaterial);
-      leftBrow.position.set(-1, 1.5, 2.8);
-      leftBrow.rotation.z = -0.3; // Angle for sad expression
-      emojiMesh.add(leftBrow);
+      // Calculate vertices positions for perfect equilateral triangle
+      const vertices = [
+        // Front face (triangle)
+        0, (2/3) * triangleHeight, prismDepth/2,           // top front
+        -triangleSideLength/2, -triangleHeight/3, prismDepth/2,     // bottom left front
+        triangleSideLength/2, -triangleHeight/3, prismDepth/2,      // bottom right front
+        
+        // Back face (triangle)
+        0, (2/3) * triangleHeight, -prismDepth/2,          // top back
+        -triangleSideLength/2, -triangleHeight/3, -prismDepth/2,    // bottom left back
+        triangleSideLength/2, -triangleHeight/3, -prismDepth/2      // bottom right back
+      ];
       
-      const rightBrow = new THREE.Mesh(browGeometry, browMaterial);
-      rightBrow.position.set(1, 1.5, 2.8);
-      rightBrow.rotation.z = 0.3; // Angle for sad expression
-      emojiMesh.add(rightBrow);
+      // Create textured triangles for front and back
+      const frontGeometry = new THREE.BufferGeometry();
+      frontGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+        vertices[0], vertices[1], vertices[2],   // top front
+        vertices[3], vertices[4], vertices[5],   // bottom left front
+        vertices[6], vertices[7], vertices[8]    // bottom right front
+      ], 3));
+      frontGeometry.setAttribute('uv', new THREE.Float32BufferAttribute([
+        0.5, 1,    // top - flipped vertically (was 0.5, 0)
+        0, 0,      // bottom left - flipped vertically (was 0, 1)
+        1, 0       // bottom right - flipped vertically (was 1, 1)
+      ], 2));
+      frontGeometry.computeVertexNormals();
       
-      // Add sad mouth (curved line)
-      const mouthCurve = new THREE.CubicBezierCurve3(
-        new THREE.Vector3(-1.5, -1, 2.8),
-        new THREE.Vector3(-0.5, -2.2, 2.8), // Deeper curve for sadder expression
-        new THREE.Vector3(0.5, -2.2, 2.8),  // Deeper curve for sadder expression
-        new THREE.Vector3(1.5, -1, 2.8)
+      const backGeometry = new THREE.BufferGeometry();
+      backGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+        vertices[9], vertices[10], vertices[11],    // top back
+        vertices[15], vertices[16], vertices[17],   // bottom right back
+        vertices[12], vertices[13], vertices[14]    // bottom left back
+      ], 3));
+      backGeometry.setAttribute('uv', new THREE.Float32BufferAttribute([
+        0.5, 1,    // top - flipped vertically (was 0.5, 0)
+        1, 0,      // bottom right - flipped vertically (was 1, 1)
+        0, 0       // bottom left - flipped vertically (was 0, 1)
+      ], 2));
+      backGeometry.computeVertexNormals();
+      
+      // Create the triangular faces with the image texture
+      const frontTriangle = new THREE.Mesh(
+        frontGeometry,
+        new THREE.MeshPhongMaterial({ map: laurentTexture })
       );
+      prism.add(frontTriangle);
       
-      const mouthGeometry = new THREE.TubeGeometry(mouthCurve, 20, 0.2, 8, false);
-      const mouthMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
-      const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
-      emojiMesh.add(mouth);
+      const backTriangle = new THREE.Mesh(
+        backGeometry,
+        new THREE.MeshPhongMaterial({ map: laurentTexture })
+      );
+      prism.add(backTriangle);
       
-      // Add a tear for extra sadness
-      const tearGeometry = new THREE.SphereGeometry(0.3, 16, 16);
-      const tearMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0x89CFF0, 
-        transparent: true,
-        opacity: 0.8
-      });
+      // Create the three rectangular sides with gray material
+      const sideMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
       
-      const tear = new THREE.Mesh(tearGeometry, tearMaterial);
-      tear.position.set(-1.5, -0.2, 2.8);
-      emojiMesh.add(tear);
+      // Bottom side (rectangle)
+      const bottomGeometry = new THREE.BufferGeometry();
+      bottomGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+        vertices[3], vertices[4], vertices[5],    // bottom left front
+        vertices[6], vertices[7], vertices[8],    // bottom right front
+        vertices[12], vertices[13], vertices[14], // bottom left back
+        vertices[15], vertices[16], vertices[17]  // bottom right back
+      ], 3));
+      bottomGeometry.setIndex([0, 2, 1, 0, 3, 2]);
+      bottomGeometry.computeVertexNormals();
       
-      scene.add(emojiMesh);
+      const bottomSide = new THREE.Mesh(bottomGeometry, sideMaterial);
+      prism.add(bottomSide);
+      
+      // Left side (rectangle)
+      const leftGeometry = new THREE.BufferGeometry();
+      leftGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+        vertices[0], vertices[1], vertices[2],    // top front
+        vertices[3], vertices[4], vertices[5],    // bottom left front
+        vertices[9], vertices[10], vertices[11],  // top back
+        vertices[12], vertices[13], vertices[14]  // bottom left back
+      ], 3));
+      leftGeometry.setIndex([0, 2, 1, 1, 2, 3]);
+      leftGeometry.computeVertexNormals();
+      
+      const leftSide = new THREE.Mesh(leftGeometry, sideMaterial);
+      prism.add(leftSide);
+      
+      // Right side (rectangle)
+      const rightGeometry = new THREE.BufferGeometry();
+      rightGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+        vertices[0], vertices[1], vertices[2],    // top front
+        vertices[6], vertices[7], vertices[8],    // bottom right front
+        vertices[9], vertices[10], vertices[11],  // top back
+        vertices[15], vertices[16], vertices[17]  // bottom right back
+      ], 3));
+      rightGeometry.setIndex([0, 1, 2, 1, 3, 2]);
+      rightGeometry.computeVertexNormals();
+      
+      const rightSide = new THREE.Mesh(rightGeometry, sideMaterial);
+      prism.add(rightSide);
+      
+      // Position and add to scene
+      prism.position.set(5, 10, 0);
+      prism.rotation.y = Math.PI / 6; // Rotate slightly for better visibility
+      scene.add(prism);
+      prismMeshes.push(prism);
+      
+      // 3. Square prism (cube) with Emily image
+      const emilyTexture = loadTextureWithFallback(imagePaths.emily, '#00AA77');
+      // Create materials for each face of the cube
+      const cubeMaterials = [
+        new THREE.MeshPhongMaterial({ color: 0x888888 }), // right
+        new THREE.MeshPhongMaterial({ color: 0x888888 }), // left
+        new THREE.MeshPhongMaterial({ color: 0x888888 }), // top
+        new THREE.MeshPhongMaterial({ color: 0x888888 }), // bottom
+        new THREE.MeshPhongMaterial({ map: emilyTexture }), // front
+        new THREE.MeshPhongMaterial({ map: emilyTexture })  // back
+      ];
+      
+      const cubeGeometry = new THREE.BoxGeometry(6, 6, 1);
+      const cubeMesh = new THREE.Mesh(cubeGeometry, cubeMaterials);
+      cubeMesh.position.set(15, -8, 0);
+      scene.add(cubeMesh);
+      prismMeshes.push(cubeMesh);
     }
 
     // Add mouse event listeners
@@ -144,8 +293,9 @@
       // Update the raycaster
       raycaster.setFromCamera(mouse, camera);
       
-      // Calculate objects intersecting the ray (now including emoji)
-      var intersects = raycaster.intersectObjects([topTextMesh, bottomTextMesh, emojiMesh].filter(Boolean));
+      // Calculate objects intersecting the ray (now including prisms)
+      var allObjects = [topTextMesh, bottomTextMesh, ...prismMeshes].filter(Boolean);
+      var intersects = raycaster.intersectObjects(allObjects, true); // true for recursive (child objects)
       
       if (intersects.length > 0) {
         // Object was clicked
@@ -156,17 +306,25 @@
           physics = topPhysics;
         } else if (clickedMesh === bottomTextMesh) {
           physics = bottomPhysics;
-        } else if (clickedMesh === emojiMesh || clickedMesh.parent === emojiMesh) {
-          physics = emojiPhysics;
+        } else {
+          // Check if it's one of the prisms
+          for (let i = 0; i < prismMeshes.length; i++) {
+            if (clickedMesh === prismMeshes[i] || clickedMesh.parent === prismMeshes[i]) {
+              physics = prismPhysics[i];
+              break;
+            }
+          }
         }
         
-        // Apply a random nudge in the direction of the mouse
-        physics.velocityX += (mouse.x * nudgeStrength);
-        physics.velocityY += (mouse.y * nudgeStrength);
-        
-        // Randomly change rotation direction sometimes
-        if (Math.random() > 0.7) {
-          physics.rotationDir *= -1;
+        if (physics) {
+          // Apply a random nudge in the direction of the mouse
+          physics.velocityX += (mouse.x * nudgeStrength);
+          physics.velocityY += (mouse.y * nudgeStrength);
+          
+          // Randomly change rotation direction sometimes
+          if (Math.random() > 0.7) {
+            physics.rotationDir *= -1;
+          }
         }
       }
     }
@@ -210,7 +368,7 @@
       });
       bottomGeometry.computeBoundingBox();
       var bottomCenterOffset = -0.5 * (bottomGeometry.boundingBox.max.x - bottomGeometry.boundingBox.min.x);
-      var bottomMaterial = new THREE.MeshPhongMaterial({ color: 0x999900 });
+      var bottomMaterial = new THREE.MeshPhongMaterial({ color: 0xFFA500 }); // Orange color
       bottomTextMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
       bottomTextMesh.position.x = bottomCenterOffset;
       bottomTextMesh.position.y = -3; // Position below center
@@ -218,8 +376,8 @@
       bottomTextMesh.rotation.x = (offsetDegrees * (Math.PI / 180)) + (Math.random() * Math.PI);
       scene.add(bottomTextMesh);
       
-      // Create the emoji after text is created
-      createSadFaceEmoji();
+      // Create the image prisms
+      createImagePrisms();
     });
 
     // Calculate boundaries based on viewport size
@@ -240,180 +398,125 @@
       
       const boundaries = getViewportBoundaries();
       
-      // Check collisions between all objects
-      if (topTextMesh && bottomTextMesh && emojiMesh) {
-        // Array of all objects and their physics
-        const objects = [
-          { mesh: topTextMesh, physics: topPhysics },
-          { mesh: bottomTextMesh, physics: bottomPhysics },
-          { mesh: emojiMesh, physics: emojiPhysics }
-        ];
-        
-        // Check collisions between each pair of objects
-        for (let i = 0; i < objects.length; i++) {
-          for (let j = i + 1; j < objects.length; j++) {
-            const obj1 = objects[i];
-            const obj2 = objects[j];
-            
-            const bounds1 = new THREE.Box3().setFromObject(obj1.mesh);
-            const bounds2 = new THREE.Box3().setFromObject(obj2.mesh);
-            
-            if (bounds1.intersectsBox(bounds2)) {
-              // Objects are colliding, calculate collision response
+      // Create an array of all objects and their physics
+      let allObjects = [];
+      
+      if (topTextMesh) {
+        allObjects.push({ mesh: topTextMesh, physics: topPhysics });
+      }
+      
+      if (bottomTextMesh) {
+        allObjects.push({ mesh: bottomTextMesh, physics: bottomPhysics });
+      }
+      
+      // Add prisms to the objects array
+      for (let i = 0; i < prismMeshes.length; i++) {
+        if (prismMeshes[i]) {
+          allObjects.push({ mesh: prismMeshes[i], physics: prismPhysics[i] });
+        }
+      }
+      
+      // Check collisions between all pairs of objects
+      for (let i = 0; i < allObjects.length; i++) {
+        for (let j = i + 1; j < allObjects.length; j++) {
+          const obj1 = allObjects[i];
+          const obj2 = allObjects[j];
+          
+          const bounds1 = new THREE.Box3().setFromObject(obj1.mesh);
+          const bounds2 = new THREE.Box3().setFromObject(obj2.mesh);
+          
+          if (bounds1.intersectsBox(bounds2)) {
+            // Objects are colliding, calculate collision response
               
-              // Find centers of each object
-              const center1 = new THREE.Vector3();
-              bounds1.getCenter(center1);
+            // Find centers of each object
+            const center1 = new THREE.Vector3();
+            bounds1.getCenter(center1);
               
-              const center2 = new THREE.Vector3();
-              bounds2.getCenter(center2);
+            const center2 = new THREE.Vector3();
+            bounds2.getCenter(center2);
               
-              // Calculate collision normal (direction from obj2 to obj1)
-              const collisionNormal = new THREE.Vector3().subVectors(center1, center2).normalize();
+            // Calculate collision normal (direction from obj2 to obj1)
+            const collisionNormal = new THREE.Vector3().subVectors(center1, center2).normalize();
               
-              // Calculate relative velocity
-              const relativeVelocity = new THREE.Vector2(
-                obj1.physics.velocityX - obj2.physics.velocityX,
-                obj1.physics.velocityY - obj2.physics.velocityY
-              );
+            // Calculate relative velocity
+            const relativeVelocity = new THREE.Vector2(
+              obj1.physics.velocityX - obj2.physics.velocityX,
+              obj1.physics.velocityY - obj2.physics.velocityY
+            );
               
-              // Project relative velocity onto collision normal
-              const relVelDotNormal = relativeVelocity.x * collisionNormal.x + relativeVelocity.y * collisionNormal.y;
+            // Project relative velocity onto collision normal
+            const relVelDotNormal = relativeVelocity.x * collisionNormal.x + relativeVelocity.y * collisionNormal.y;
               
-              // Only apply impulse if objects are moving toward each other
-              if (relVelDotNormal < 0) {
-                // Calculate impulse scalar
-                const impulseStrength = -relVelDotNormal * collisionRestitution;
+            // Only apply impulse if objects are moving toward each other
+            if (relVelDotNormal < 0) {
+              // Calculate impulse scalar
+              const impulseStrength = -relVelDotNormal * collisionRestitution;
                 
-                // Apply impulse to velocities
-                obj1.physics.velocityX += collisionNormal.x * impulseStrength;
-                obj1.physics.velocityY += collisionNormal.y * impulseStrength;
+              // Apply impulse to velocities
+              obj1.physics.velocityX += collisionNormal.x * impulseStrength;
+              obj1.physics.velocityY += collisionNormal.y * impulseStrength;
                 
-                obj2.physics.velocityX -= collisionNormal.x * impulseStrength;
-                obj2.physics.velocityY -= collisionNormal.y * impulseStrength;
+              obj2.physics.velocityX -= collisionNormal.x * impulseStrength;
+              obj2.physics.velocityY -= collisionNormal.y * impulseStrength;
                 
-                // Add some small random variations to make it more interesting
-                obj1.physics.velocityX += (Math.random() - 0.5) * 0.02;
-                obj1.physics.velocityY += (Math.random() - 0.5) * 0.02;
-                obj2.physics.velocityX += (Math.random() - 0.5) * 0.02;
-                obj2.physics.velocityY += (Math.random() - 0.5) * 0.02;
+              // Add some small random variations to make it more interesting
+              obj1.physics.velocityX += (Math.random() - 0.5) * 0.02;
+              obj1.physics.velocityY += (Math.random() - 0.5) * 0.02;
+              obj2.physics.velocityX += (Math.random() - 0.5) * 0.02;
+              obj2.physics.velocityY += (Math.random() - 0.5) * 0.02;
                 
-                // Separate the objects to prevent sticking
-                const overlap = 0.1; // Small extra separation to prevent immediate re-collision
-                obj1.mesh.position.x += collisionNormal.x * overlap;
-                obj1.mesh.position.y += collisionNormal.y * overlap;
-                obj2.mesh.position.x -= collisionNormal.x * overlap;
-                obj2.mesh.position.y -= collisionNormal.y * overlap;
+              // Separate the objects to prevent sticking
+              const overlap = 0.1; // Small extra separation to prevent immediate re-collision
+              obj1.mesh.position.x += collisionNormal.x * overlap;
+              obj1.mesh.position.y += collisionNormal.y * overlap;
+              obj2.mesh.position.x -= collisionNormal.x * overlap;
+              obj2.mesh.position.y -= collisionNormal.y * overlap;
                 
-                // Occasionally change rotation direction on collision
-                if (Math.random() > 0.5) {
-                  obj1.physics.rotationDir *= -1;
-                }
-                if (Math.random() > 0.5) {
-                  obj2.physics.rotationDir *= -1;
-                }
+              // Occasionally change rotation direction on collision
+              if (Math.random() > 0.5) {
+                obj1.physics.rotationDir *= -1;
+              }
+              if (Math.random() > 0.5) {
+                obj2.physics.rotationDir *= -1;
               }
             }
           }
         }
       }
       
-      // Update each object (top text)
-      if (topTextMesh) {
-        // Apply rotation based on direction
-        topTextMesh.rotation.x += rotationSpeed * topPhysics.rotationDir;
+      // Update each object individually
+      for (let i = 0; i < allObjects.length; i++) {
+        const obj = allObjects[i];
+        
+        // Apply rotation based on direction (different for prisms)
+        if (obj.mesh === topTextMesh || obj.mesh === bottomTextMesh) {
+          obj.mesh.rotation.x += rotationSpeed * obj.physics.rotationDir;
+        } else {
+          // This is a prism - rotate around Y axis
+          obj.mesh.rotation.y += rotationSpeed * obj.physics.rotationDir * 0.5;
+        }
         
         // Apply movement
-        topTextMesh.position.x += topPhysics.velocityX;
-        topTextMesh.position.y += topPhysics.velocityY;
+        obj.mesh.position.x += obj.physics.velocityX;
+        obj.mesh.position.y += obj.physics.velocityY;
         
         // Check boundaries and bounce
-        const topBounds = new THREE.Box3().setFromObject(topTextMesh);
+        const bounds = new THREE.Box3().setFromObject(obj.mesh);
         
-        if (topBounds.min.x < boundaries.left) {
-          topTextMesh.position.x += (boundaries.left - topBounds.min.x);
-          topPhysics.velocityX = Math.abs(topPhysics.velocityX) * bounceStrength;
-        } else if (topBounds.max.x > boundaries.right) {
-          topTextMesh.position.x -= (topBounds.max.x - boundaries.right);
-          topPhysics.velocityX = -Math.abs(topPhysics.velocityX) * bounceStrength;
+        if (bounds.min.x < boundaries.left) {
+          obj.mesh.position.x += (boundaries.left - bounds.min.x);
+          obj.physics.velocityX = Math.abs(obj.physics.velocityX) * bounceStrength;
+        } else if (bounds.max.x > boundaries.right) {
+          obj.mesh.position.x -= (bounds.max.x - boundaries.right);
+          obj.physics.velocityX = -Math.abs(obj.physics.velocityX) * bounceStrength;
         }
         
-        if (topBounds.min.y < boundaries.bottom) {
-          topTextMesh.position.y += (boundaries.bottom - topBounds.min.y);
-          topPhysics.velocityY = Math.abs(topPhysics.velocityY) * bounceStrength;
-        } else if (topBounds.max.y > boundaries.top) {
-          topTextMesh.position.y -= (topBounds.max.y - boundaries.top);
-          topPhysics.velocityY = -Math.abs(topPhysics.velocityY) * bounceStrength;
-        }
-      }
-      
-      // Update each object (bottom text)
-      if (bottomTextMesh) {
-        // Apply rotation based on direction
-        bottomTextMesh.rotation.x += rotationSpeed * bottomPhysics.rotationDir;
-        
-        // Apply movement
-        bottomTextMesh.position.x += bottomPhysics.velocityX;
-        bottomTextMesh.position.y += bottomPhysics.velocityY;
-        
-        // Check boundaries and bounce
-        const bottomBounds = new THREE.Box3().setFromObject(bottomTextMesh);
-        
-        if (bottomBounds.min.x < boundaries.left) {
-          bottomTextMesh.position.x += (boundaries.left - bottomBounds.min.x);
-          bottomPhysics.velocityX = Math.abs(bottomPhysics.velocityX) * bounceStrength;
-        } else if (bottomBounds.max.x > boundaries.right) {
-          bottomTextMesh.position.x -= (bottomBounds.max.x - boundaries.right);
-          bottomPhysics.velocityX = -Math.abs(bottomPhysics.velocityX) * bounceStrength;
-        }
-        
-        if (bottomBounds.min.y < boundaries.bottom) {
-          bottomTextMesh.position.y += (boundaries.bottom - bottomBounds.min.y);
-          bottomPhysics.velocityY = Math.abs(bottomPhysics.velocityY) * bounceStrength;
-        } else if (bottomBounds.max.y > boundaries.top) {
-          bottomTextMesh.position.y -= (bottomBounds.max.y - boundaries.top);
-          bottomPhysics.velocityY = -Math.abs(bottomPhysics.velocityY) * bounceStrength;
-        }
-      }
-      
-      // Update emoji - make it always face the camera (billboard effect)
-      if (emojiMesh) {
-        // Remove any rotation-based animation for the emoji
-        // Instead, make it face the camera while still allowing position changes
-        
-        // Get the emoji's current position
-        const emojiPos = emojiMesh.position.clone();
-        
-        // Reset rotation
-        emojiMesh.rotation.set(0, 0, 0);
-        
-        // Look at the camera (billboard effect)
-        emojiMesh.lookAt(camera.position);
-        
-        // Apply movement
-        emojiMesh.position.x += emojiPhysics.velocityX;
-        emojiMesh.position.y += emojiPhysics.velocityY;
-        
-        // Add a small oscillation to make it look alive
-        emojiMesh.position.y += Math.sin(Date.now() * 0.002) * 0.05;
-        
-        // Check boundaries and bounce
-        const emojiBounds = new THREE.Box3().setFromObject(emojiMesh);
-        
-        if (emojiBounds.min.x < boundaries.left) {
-          emojiMesh.position.x += (boundaries.left - emojiBounds.min.x);
-          emojiPhysics.velocityX = Math.abs(emojiPhysics.velocityX) * bounceStrength;
-        } else if (emojiBounds.max.x > boundaries.right) {
-          emojiMesh.position.x -= (emojiBounds.max.x - boundaries.right);
-          emojiPhysics.velocityX = -Math.abs(emojiPhysics.velocityX) * bounceStrength;
-        }
-        
-        if (emojiBounds.min.y < boundaries.bottom) {
-          emojiMesh.position.y += (boundaries.bottom - emojiBounds.min.y);
-          emojiPhysics.velocityY = Math.abs(emojiPhysics.velocityY) * bounceStrength;
-        } else if (emojiBounds.max.y > boundaries.top) {
-          emojiMesh.position.y -= (emojiBounds.max.y - boundaries.top);
-          emojiPhysics.velocityY = -Math.abs(emojiPhysics.velocityY) * bounceStrength;
+        if (bounds.min.y < boundaries.bottom) {
+          obj.mesh.position.y += (boundaries.bottom - bounds.min.y);
+          obj.physics.velocityY = Math.abs(obj.physics.velocityY) * bounceStrength;
+        } else if (bounds.max.y > boundaries.top) {
+          obj.mesh.position.y -= (bounds.max.y - boundaries.top);
+          obj.physics.velocityY = -Math.abs(obj.physics.velocityY) * bounceStrength;
         }
       }
       
@@ -427,6 +530,9 @@
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     }, false);
+
+    // Add a console message to help with debugging
+    console.log("404 Error Page - Looking for images at:", imagePaths);
   </script>
 </body>
 </html>
