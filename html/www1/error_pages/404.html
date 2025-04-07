@@ -134,152 +134,45 @@
         return texture;
       }
       
-      // 1. Cylinder prism with Rufus image
+      // Common sphere size for all spheres
+      const sphereRadius = 3;
+      const sphereSegments = 32;
+      
+      // 1. Sphere with Rufus image
       const rufusTexture = loadTextureWithFallback(imagePaths.rufus, '#770000');
-      const cylinderGeometry = new THREE.CylinderGeometry(3, 3, 1, 32);
-      const cylinderMaterial = [
-        new THREE.MeshPhongMaterial({ color: 0x888888 }), // side
-        new THREE.MeshPhongMaterial({ map: rufusTexture }), // top
-        new THREE.MeshPhongMaterial({ map: rufusTexture })  // bottom
-      ];
-      const cylinderMesh = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
-      cylinderMesh.position.set(-15, -10, 0);
-      cylinderMesh.rotation.x = Math.PI / 2; // Rotate to show the textured face
-      scene.add(cylinderMesh);
-      prismMeshes.push(cylinderMesh);
+      const rufusSphereGeometry = new THREE.SphereGeometry(sphereRadius, sphereSegments, sphereSegments);
+      const rufusSphereMaterial = new THREE.MeshPhongMaterial({ 
+        map: rufusTexture,
+        bumpScale: 0.02
+      });
+      const rufusSphereMesh = new THREE.Mesh(rufusSphereGeometry, rufusSphereMaterial);
+      rufusSphereMesh.position.set(-15, -10, 0);
+      scene.add(rufusSphereMesh);
+      prismMeshes.push(rufusSphereMesh);
       
-      // 2. Triangular prism with Laurent image - completely rebuilt
+      // 2. Sphere with Laurent image
       const laurentTexture = loadTextureWithFallback(imagePaths.laurent, '#0077FF');
+      const laurentSphereGeometry = new THREE.SphereGeometry(sphereRadius, sphereSegments, sphereSegments);
+      const laurentSphereMaterial = new THREE.MeshPhongMaterial({ 
+        map: laurentTexture,
+        bumpScale: 0.02
+      });
+      const laurentSphereMesh = new THREE.Mesh(laurentSphereGeometry, laurentSphereMaterial);
+      laurentSphereMesh.position.set(5, 10, 0);
+      scene.add(laurentSphereMesh);
+      prismMeshes.push(laurentSphereMesh);
       
-      // Create a simple triangular prism using a buffer geometry with custom faces
-      const prism = new THREE.Group();
-      
-      // Define the side length as an accessible variable
-      const triangleSideLength = 8; // Length of each side of the equilateral triangle
-      const triangleHeight = (triangleSideLength * Math.sqrt(3)) / 2; // Height of the equilateral triangle
-      const prismDepth = 1; // Depth of the prism
-      
-      // Calculate vertices positions for perfect equilateral triangle
-      const vertices = [
-        // Front face (triangle)
-        0, (2/3) * triangleHeight, prismDepth/2,           // top front
-        -triangleSideLength/2, -triangleHeight/3, prismDepth/2,     // bottom left front
-        triangleSideLength/2, -triangleHeight/3, prismDepth/2,      // bottom right front
-        
-        // Back face (triangle)
-        0, (2/3) * triangleHeight, -prismDepth/2,          // top back
-        -triangleSideLength/2, -triangleHeight/3, -prismDepth/2,    // bottom left back
-        triangleSideLength/2, -triangleHeight/3, -prismDepth/2      // bottom right back
-      ];
-      
-      // Create textured triangles for front and back
-      const frontGeometry = new THREE.BufferGeometry();
-      frontGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
-        vertices[0], vertices[1], vertices[2],   // top front
-        vertices[3], vertices[4], vertices[5],   // bottom left front
-        vertices[6], vertices[7], vertices[8]    // bottom right front
-      ], 3));
-      frontGeometry.setAttribute('uv', new THREE.Float32BufferAttribute([
-        0.5, 1,    // top - flipped vertically (was 0.5, 0)
-        0, 0,      // bottom left - flipped vertically (was 0, 1)
-        1, 0       // bottom right - flipped vertically (was 1, 1)
-      ], 2));
-      frontGeometry.computeVertexNormals();
-      
-      const backGeometry = new THREE.BufferGeometry();
-      backGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
-        vertices[9], vertices[10], vertices[11],    // top back
-        vertices[15], vertices[16], vertices[17],   // bottom right back
-        vertices[12], vertices[13], vertices[14]    // bottom left back
-      ], 3));
-      backGeometry.setAttribute('uv', new THREE.Float32BufferAttribute([
-        0.5, 1,    // top - flipped vertically (was 0.5, 0)
-        1, 0,      // bottom right - flipped vertically (was 1, 1)
-        0, 0       // bottom left - flipped vertically (was 0, 1)
-      ], 2));
-      backGeometry.computeVertexNormals();
-      
-      // Create the triangular faces with the image texture
-      const frontTriangle = new THREE.Mesh(
-        frontGeometry,
-        new THREE.MeshPhongMaterial({ map: laurentTexture })
-      );
-      prism.add(frontTriangle);
-      
-      const backTriangle = new THREE.Mesh(
-        backGeometry,
-        new THREE.MeshPhongMaterial({ map: laurentTexture })
-      );
-      prism.add(backTriangle);
-      
-      // Create the three rectangular sides with gray material
-      const sideMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
-      
-      // Bottom side (rectangle)
-      const bottomGeometry = new THREE.BufferGeometry();
-      bottomGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
-        vertices[3], vertices[4], vertices[5],    // bottom left front
-        vertices[6], vertices[7], vertices[8],    // bottom right front
-        vertices[12], vertices[13], vertices[14], // bottom left back
-        vertices[15], vertices[16], vertices[17]  // bottom right back
-      ], 3));
-      bottomGeometry.setIndex([0, 2, 1, 0, 3, 2]);
-      bottomGeometry.computeVertexNormals();
-      
-      const bottomSide = new THREE.Mesh(bottomGeometry, sideMaterial);
-      prism.add(bottomSide);
-      
-      // Left side (rectangle)
-      const leftGeometry = new THREE.BufferGeometry();
-      leftGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
-        vertices[0], vertices[1], vertices[2],    // top front
-        vertices[3], vertices[4], vertices[5],    // bottom left front
-        vertices[9], vertices[10], vertices[11],  // top back
-        vertices[12], vertices[13], vertices[14]  // bottom left back
-      ], 3));
-      leftGeometry.setIndex([0, 2, 1, 1, 2, 3]);
-      leftGeometry.computeVertexNormals();
-      
-      const leftSide = new THREE.Mesh(leftGeometry, sideMaterial);
-      prism.add(leftSide);
-      
-      // Right side (rectangle)
-      const rightGeometry = new THREE.BufferGeometry();
-      rightGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
-        vertices[0], vertices[1], vertices[2],    // top front
-        vertices[6], vertices[7], vertices[8],    // bottom right front
-        vertices[9], vertices[10], vertices[11],  // top back
-        vertices[15], vertices[16], vertices[17]  // bottom right back
-      ], 3));
-      rightGeometry.setIndex([0, 1, 2, 1, 3, 2]);
-      rightGeometry.computeVertexNormals();
-      
-      const rightSide = new THREE.Mesh(rightGeometry, sideMaterial);
-      prism.add(rightSide);
-      
-      // Position and add to scene
-      prism.position.set(5, 10, 0);
-      prism.rotation.y = Math.PI / 6; // Rotate slightly for better visibility
-      scene.add(prism);
-      prismMeshes.push(prism);
-      
-      // 3. Square prism (cube) with Emily image
+      // 3. Sphere with Emily image
       const emilyTexture = loadTextureWithFallback(imagePaths.emily, '#00AA77');
-      // Create materials for each face of the cube
-      const cubeMaterials = [
-        new THREE.MeshPhongMaterial({ color: 0x888888 }), // right
-        new THREE.MeshPhongMaterial({ color: 0x888888 }), // left
-        new THREE.MeshPhongMaterial({ color: 0x888888 }), // top
-        new THREE.MeshPhongMaterial({ color: 0x888888 }), // bottom
-        new THREE.MeshPhongMaterial({ map: emilyTexture }), // front
-        new THREE.MeshPhongMaterial({ map: emilyTexture })  // back
-      ];
-      
-      const cubeGeometry = new THREE.BoxGeometry(6, 6, 1);
-      const cubeMesh = new THREE.Mesh(cubeGeometry, cubeMaterials);
-      cubeMesh.position.set(15, -8, 0);
-      scene.add(cubeMesh);
-      prismMeshes.push(cubeMesh);
+      const emilySphereGeometry = new THREE.SphereGeometry(sphereRadius, sphereSegments, sphereSegments);
+      const emilySphereMaterial = new THREE.MeshPhongMaterial({ 
+        map: emilyTexture,
+        bumpScale: 0.02
+      });
+      const emilySphereMesh = new THREE.Mesh(emilySphereGeometry, emilySphereMaterial);
+      emilySphereMesh.position.set(15, -8, 0);
+      scene.add(emilySphereMesh);
+      prismMeshes.push(emilySphereMesh);
     }
 
     // Add mouse event listeners
