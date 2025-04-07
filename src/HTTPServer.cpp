@@ -45,39 +45,36 @@ PollfdsVector pollfds;
 vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
+vector<ServerData> configs_ = Config::getServerData();
+
 
 int run(std::string configFile) {
-
+  
   struct sockaddr_in server_addr;
   bool skip_to_next_iteration = false;
 
-  vector<ServerData> configs_ = Config::getServerData();
-  vector<int> serverSockets;
   SocketUtils::initialize();
 
   if (configs_.empty()) {
     debuglog(RED, "No configuration data found");
     throw std::runtime_error("Error: config with empty ports");
   }
+
   createServerSockets(configs_, serverSockets);
 
   while (1) {
-      long long currentTime = Parser::getCurrentTimeMillis();
-      if (currentTime - Parser::starttime > 5000) {
-          debuglog(GREEN, "Reloading configuration file %s\n\n", configFile.c_str());
-          Parser::starttime = currentTime;
-        try {
-              reloadConfigFile(configFile, serverSockets, configs_);
-            } 
-            catch (const std::exception& e) {
-              debuglog(RED, "Error reloading configuration: %s", e.what());
-            break;
-        }
-      }
-    
+
+	//when autoreload is 1 then reload the config file
+	long long currentTime = Parser::getCurrentTimeMillis();
+    if(Constants::autoReload) {
+	  if (!reload(configFile, currentTime)) {
+		exit(1);
+	  }
+	}
+     
     int poll_result = poll(&pollfds[0], static_cast<nfds_t>(pollfds.size()),
                            10000); 
-	// debug("poll result %d", poll_result);
+	
     if (poll_result < 0) {
       if (errno != EINTR) { 
         perror("poll failed");
@@ -527,6 +524,16 @@ void cleanup_upload(HTTPConnxData &conn) {
   }
 }
 
+void send_immediate_error(int fd, int code) {
+    std::string response = 
+        "HTTP/1.1 " + Utils::to_string(code) + " " + Constants::statusMessages[code] + "\r\n"
+        "Connection: close\r\n"
+        "Content-Length: 0\r\n"
+        "\r\n";
+    
+    send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
+}
+
 void createServerSockets(const vector<ServerData>& configs, vector<int>& serverSockets) {
   for (size_t i = 0; i < configs.size(); i++) {
     for (size_t j = 0; j < configs[i].ports.size(); j++) {
@@ -569,15 +576,20 @@ void reloadConfigFile(std::string configFile, vector<int>&serverSockets, vector<
 
 }
 
+bool reload(string configFile, long long currentTime) {
 
-void send_immediate_error(int fd, int code) {
-    std::string response = 
-        "HTTP/1.1 " + Utils::to_string(code) + " " + Constants::statusMessages[code] + "\r\n"
-        "Connection: close\r\n"
-        "Content-Length: 0\r\n"
-        "\r\n";
-    
-    send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
+	if (currentTime - Parser::starttime > 5000) {
+		debuglog(GREEN, "Reloading configuration file %s\n\n", configFile.c_str());
+		Parser::starttime = currentTime;
+		try {
+			reloadConfigFile(configFile, HTTPServer::serverSockets, HTTPServer::configs_);
+		} 
+		catch (const std::exception& e) {
+			debuglog(RED, "Error reloading configuration: %s", e.what());
+			return false;
+		}
+	}
+	return true;
 }
 
 } // namespace HTTPServer
