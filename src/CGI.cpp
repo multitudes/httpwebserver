@@ -37,7 +37,7 @@ int prepareCGI(HTTPConnxData& conn) {
 
     // If execve fails
     perror("Failed to execute CGI script");
-    exit(1);
+    exit(EXIT_FAILURE);
   } else {
     // Parent process
     // conn.poll_stdin_idx = SocketUtils::add_to_poll(conn.child_stdin_pipe[1], POLLOUT);

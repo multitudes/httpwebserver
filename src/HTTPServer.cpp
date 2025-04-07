@@ -68,7 +68,7 @@ int run(std::string configFile) {
 	long long currentTime = Parser::getCurrentTimeMillis();
     if(Constants::autoReload) {
 	  if (!reload(configFile, currentTime)) {
-		exit(1);
+		exit(EXIT_FAILURE);
 	  }
 	}
      

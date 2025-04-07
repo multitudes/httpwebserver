@@ -70,26 +70,40 @@ void initialize() {
   setSignalHandlers();
   Constants::initStatusMessageMap();
   Constants::initMimeTypes();
-  // for performance reasons, I reserve space in the vectors
+  // for performance reasons, I reserve space in the vectors first
+  // so that they do not have to be resized
   HTTPServer::serverSockets.reserve(10);
   HTTPServer::pollfds.reserve(100);
 }
 
 void setSignalHandlers() {
+// SIGINT is ctrl+c
+// SIGQUIT is ctrl+\
+// SIGTERM is kill
+// SIGHUP is terminal hangup
+// SIGPIPE is write to a socket that has been closed
+// SIGCHLD is child process terminated
   signal(SIGINT, handleSignal);
   signal(SIGQUIT, handleSignal);
   signal(SIGTERM, handleSignal);
   signal(SIGHUP, handleHangup);
   signal(SIGPIPE, handlePipe);
+
+
   struct sigaction sa;
   sa.sa_handler = handleChild;
   sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; // Critical flags
+  /*
+  - SA_RESTART flag, interrupted system calls (e.g., read, write, accept) 
+  	will automatically restart instead of failing with EINTR. 
+  - SA_NOCLDSTOP: Prevents the signal from being triggered when
+  	child processes stop or continue (only triggers on termination). */
+  sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; 
 
   if (sigaction(SIGCHLD, &sa, NULL) == -1) {
     perror("sigaction");
 	shutdownServer();
-	debuglog(RED, "Error setting up SIGCHLD handler");
+	debuglog(RED, "Error setting up SIGCHLD handler - exiting");
     exit(EXIT_FAILURE);
   }
 }
@@ -102,7 +116,7 @@ void handleSignal(int signal) {
     debuglog(YELLOW, "Caught signal %d - Shutting down the server", signal);
     shutdownServer();
     Config::cleanup();
-    std::exit(0);
+    std::exit(EXIT_SUCCESS);
   }
 }
 
