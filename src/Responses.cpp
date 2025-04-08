@@ -48,11 +48,13 @@ namespace Responses {
         // Check if a custom error page is defined for this status code
         if (connection.urlMatcherData.config->error_pages.find(statusCode) != connection.urlMatcherData.config->error_pages.end())
         {
-            auto it = connection.urlMatcherData.config->error_pages.find(statusCode);
-            if (it != connection.urlMatcherData.config->error_pages.end()) {
+            // Replace 'auto' with the explicit iterator type
+            std::map<int, std::string>::const_iterator it = connection.urlMatcherData.config->error_pages.find(statusCode);
+            if (it != connection.urlMatcherData.config->error_pages.end())
+            {
                 string errorPagePath = it->second;
                 debuglog(GREEN, "Custom error page found: %s", errorPagePath.c_str());
-                
+
                 // Use the URLMatcher helper function to serve the custom error page
                 if (serveCustomErrorPage(connection, errorPagePath, statusCode))
                 {
@@ -68,7 +70,6 @@ namespace Responses {
         // If no custom error page is found or couldn't be read, generate a simple HTML response
         generatedHTMLResponse(connection, statusCode);
     }
-
 
     void generatedHTMLResponse(HTTPConnxData &connection, int statusCode)
     {
