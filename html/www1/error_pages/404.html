@@ -1,19 +1,431 @@
 <!DOCTYPE html>
-<html lang = "en">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>404 Not Found</title>
-		<link rel="icon" href="../favicon/favicon.ico" type="image/x-icon">
-		<link rel="stylesheet" type="text/css" href="../css/style.css">
-	</head>
-	<body>
-		<div class="rectangle">
-			<div class="circle">
-				<h1>404</h1>
-				<p>Page Not Found</p>
-			</div>
-			<p>The address you were looking for cannot be found or is not valid</p>
-		</div>
-	</body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>404 Not Found</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <!-- Include Three.js and the necessary example scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://threejs.org/examples/js/loaders/FontLoader.js"></script>
+  <script src="https://threejs.org/examples/js/geometries/TextGeometry.js"></script>
+  <script>
+    // Update these variables to change the error messages
+    var topMessage = "404";
+    var bottomMessage = "NOT FOUND";
+
+    // Image paths - updated with full relative paths and fallback handling
+    var imagePaths = {
+      rufus: '../error_pages/rufus.png',
+      laurent: '../error_pages/laurent.png',
+      emily: '../error_pages/emily.png'
+    };
+    
+    // Debug flag to help troubleshoot image loading
+    var debug = true;
+
+    // Rotation and movement settings
+    var rotationSpeed = 0.01;
+    var offsetDegrees = 270;
+    var moveSpeed = 0.03;
+    var bounceStrength = 0.8;
+    var nudgeStrength = 1.0;
+    var collisionRestitution = 0.9;
+
+    // Variables to store the meshes and their physics properties
+    var topTextMesh, bottomTextMesh;
+    var prismMeshes = [];
+    var topPhysics = {
+      rotationDir: Math.random() > 0.5 ? 1 : -1,
+      velocityX: (Math.random() - 0.5) * moveSpeed,
+      velocityY: (Math.random() - 0.5) * moveSpeed
+    };
+    var bottomPhysics = {
+      rotationDir: Math.random() > 0.5 ? 1 : -1,
+      velocityX: (Math.random() - 0.5) * moveSpeed,
+      velocityY: (Math.random() - 0.5) * moveSpeed
+    };
+    var prismPhysics = [
+      {
+        rotationDir: Math.random() > 0.5 ? 1 : -1,
+        velocityX: (Math.random() - 0.5) * moveSpeed * 0.7,
+        velocityY: (Math.random() - 0.5) * moveSpeed * 0.7
+      },
+      {
+        rotationDir: Math.random() > 0.5 ? 1 : -1,
+        velocityX: (Math.random() - 0.5) * moveSpeed * 0.7,
+        velocityY: (Math.random() - 0.5) * moveSpeed * 0.7
+      },
+      {
+        rotationDir: Math.random() > 0.5 ? 1 : -1,
+        velocityX: (Math.random() - 0.5) * moveSpeed * 0.7,
+        velocityY: (Math.random() - 0.5) * moveSpeed * 0.7
+      }
+    ];
+
+    // Mouse position tracking
+    var mouse = new THREE.Vector2();
+    var raycaster = new THREE.Raycaster();
+    
+    // Set up the scene, camera, and renderer
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 50;
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Add ambient and point lighting
+    var ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    var pointLight = new THREE.PointLight(0xffffff, 1);
+    pointLight.position.set(50, 50, 50);
+    scene.add(pointLight);
+
+    // Function to create prisms with image textures
+    function createImagePrisms() {
+      const textureLoader = new THREE.TextureLoader();
+      
+      // Add error handling for texture loading
+      textureLoader.setCrossOrigin('');
+      
+      // Helper function to load textures with error handling
+      function loadTextureWithFallback(path, fallbackColor) {
+        const texture = new THREE.Texture();
+        texture.generateMipmaps = false;
+        texture.minFilter = THREE.LinearFilter;
+        
+        textureLoader.load(
+          path, 
+          // Success callback
+          function(loadedTexture) {
+            texture.image = loadedTexture.image;
+            texture.needsUpdate = true;
+            if (debug) console.log(`Successfully loaded texture: ${path}`);
+          },
+          // Progress callback
+          undefined,
+          // Error callback
+          function(err) {
+            if (debug) console.error(`Failed to load texture: ${path}`, err);
+            // Create a canvas with fallback color and text
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = fallbackColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Image not found', canvas.width/2, canvas.height/2);
+            ctx.fillText(path, canvas.width/2, canvas.height/2 + 30);
+            
+            texture.image = canvas;
+            texture.needsUpdate = true;
+          }
+        );
+        
+        return texture;
+      }
+      
+      // Common sphere size for all spheres
+      const sphereRadius = 3;
+      const sphereSegments = 32;
+      
+      // 1. Sphere with Rufus image
+      const rufusTexture = loadTextureWithFallback(imagePaths.rufus, '#770000');
+      const rufusSphereGeometry = new THREE.SphereGeometry(sphereRadius, sphereSegments, sphereSegments);
+      const rufusSphereMaterial = new THREE.MeshPhongMaterial({ 
+        map: rufusTexture,
+        bumpScale: 0.02
+      });
+      const rufusSphereMesh = new THREE.Mesh(rufusSphereGeometry, rufusSphereMaterial);
+      rufusSphereMesh.position.set(-15, -10, 0);
+      scene.add(rufusSphereMesh);
+      prismMeshes.push(rufusSphereMesh);
+      
+      // 2. Sphere with Laurent image
+      const laurentTexture = loadTextureWithFallback(imagePaths.laurent, '#0077FF');
+      const laurentSphereGeometry = new THREE.SphereGeometry(sphereRadius, sphereSegments, sphereSegments);
+      const laurentSphereMaterial = new THREE.MeshPhongMaterial({ 
+        map: laurentTexture,
+        bumpScale: 0.02
+      });
+      const laurentSphereMesh = new THREE.Mesh(laurentSphereGeometry, laurentSphereMaterial);
+      laurentSphereMesh.position.set(5, 10, 0);
+      scene.add(laurentSphereMesh);
+      prismMeshes.push(laurentSphereMesh);
+      
+      // 3. Sphere with Emily image
+      const emilyTexture = loadTextureWithFallback(imagePaths.emily, '#00AA77');
+      const emilySphereGeometry = new THREE.SphereGeometry(sphereRadius, sphereSegments, sphereSegments);
+      const emilySphereMaterial = new THREE.MeshPhongMaterial({ 
+        map: emilyTexture,
+        bumpScale: 0.02
+      });
+      const emilySphereMesh = new THREE.Mesh(emilySphereGeometry, emilySphereMaterial);
+      emilySphereMesh.position.set(15, -8, 0);
+      scene.add(emilySphereMesh);
+      prismMeshes.push(emilySphereMesh);
+    }
+
+    // Add mouse event listeners
+    document.addEventListener('mousedown', onMouseDown, false);
+    
+    function onMouseDown(event) {
+      // Calculate mouse position in normalized device coordinates
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      
+      // Update the raycaster
+      raycaster.setFromCamera(mouse, camera);
+      
+      // Calculate objects intersecting the ray (now including prisms)
+      var allObjects = [topTextMesh, bottomTextMesh, ...prismMeshes].filter(Boolean);
+      var intersects = raycaster.intersectObjects(allObjects, true); // true for recursive (child objects)
+      
+      if (intersects.length > 0) {
+        // Object was clicked
+        const clickedMesh = intersects[0].object;
+        let physics;
+        
+        if (clickedMesh === topTextMesh) {
+          physics = topPhysics;
+        } else if (clickedMesh === bottomTextMesh) {
+          physics = bottomPhysics;
+        } else {
+          // Check if it's one of the prisms
+          for (let i = 0; i < prismMeshes.length; i++) {
+            if (clickedMesh === prismMeshes[i] || clickedMesh.parent === prismMeshes[i]) {
+              physics = prismPhysics[i];
+              break;
+            }
+          }
+        }
+        
+        if (physics) {
+          // Apply a random nudge in the direction of the mouse
+          physics.velocityX += (mouse.x * nudgeStrength);
+          physics.velocityY += (mouse.y * nudgeStrength);
+          
+          // Randomly change rotation direction sometimes
+          if (Math.random() > 0.7) {
+            physics.rotationDir *= -1;
+          }
+        }
+      }
+    }
+
+    // Load the font and create the 3D text geometries
+    var loader = new THREE.FontLoader();
+    loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function(font) {
+      // Create the top text geometry and mesh
+      var topGeometry = new THREE.TextGeometry(topMessage, {
+        font: font,
+        size: 5,
+        height: 1,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.5,
+        bevelSize: 0.3,
+        bevelOffset: 0,
+        bevelSegments: 5
+      });
+      topGeometry.computeBoundingBox();
+      var topCenterOffset = -0.5 * (topGeometry.boundingBox.max.x - topGeometry.boundingBox.min.x);
+      var topMaterial = new THREE.MeshPhongMaterial({ color: 0x770000 });
+      topTextMesh = new THREE.Mesh(topGeometry, topMaterial);
+      topTextMesh.position.x = topCenterOffset;
+      topTextMesh.position.y = 4; // Position above center
+      // Set initial rotation to random value
+      topTextMesh.rotation.x = Math.random() * Math.PI * 2;
+      scene.add(topTextMesh);
+
+      // Create the bottom text geometry and mesh
+      var bottomGeometry = new THREE.TextGeometry(bottomMessage, {
+        font: font,
+        size: 2,
+        height: 1,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.5,
+        bevelSize: 0.3,
+        bevelOffset: 0,
+        bevelSegments: 5
+      });
+      bottomGeometry.computeBoundingBox();
+      var bottomCenterOffset = -0.5 * (bottomGeometry.boundingBox.max.x - bottomGeometry.boundingBox.min.x);
+      var bottomMaterial = new THREE.MeshPhongMaterial({ color: 0xFFA500 }); // Orange color
+      bottomTextMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
+      bottomTextMesh.position.x = bottomCenterOffset;
+      bottomTextMesh.position.y = -3; // Position below center
+      // Set initial rotation with offset plus random component
+      bottomTextMesh.rotation.x = (offsetDegrees * (Math.PI / 180)) + (Math.random() * Math.PI);
+      scene.add(bottomTextMesh);
+      
+      // Create the image prisms
+      createImagePrisms();
+    });
+
+    // Calculate boundaries based on viewport size
+    function getViewportBoundaries() {
+      const frustumHeight = 2 * Math.tan(camera.fov * Math.PI / 360) * camera.position.z;
+      const frustumWidth = frustumHeight * camera.aspect;
+      return {
+        left: -frustumWidth / 2,
+        right: frustumWidth / 2,
+        top: frustumHeight / 2,
+        bottom: -frustumHeight / 2
+      };
+    }
+
+    // Animation loop with physics and boundary checks
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      const boundaries = getViewportBoundaries();
+      
+      // Create an array of all objects and their physics
+      let allObjects = [];
+      
+      if (topTextMesh) {
+        allObjects.push({ mesh: topTextMesh, physics: topPhysics });
+      }
+      
+      if (bottomTextMesh) {
+        allObjects.push({ mesh: bottomTextMesh, physics: bottomPhysics });
+      }
+      
+      // Add prisms to the objects array
+      for (let i = 0; i < prismMeshes.length; i++) {
+        if (prismMeshes[i]) {
+          allObjects.push({ mesh: prismMeshes[i], physics: prismPhysics[i] });
+        }
+      }
+      
+      // Check collisions between all pairs of objects
+      for (let i = 0; i < allObjects.length; i++) {
+        for (let j = i + 1; j < allObjects.length; j++) {
+          const obj1 = allObjects[i];
+          const obj2 = allObjects[j];
+          
+          const bounds1 = new THREE.Box3().setFromObject(obj1.mesh);
+          const bounds2 = new THREE.Box3().setFromObject(obj2.mesh);
+          
+          if (bounds1.intersectsBox(bounds2)) {
+            // Objects are colliding, calculate collision response
+              
+            // Find centers of each object
+            const center1 = new THREE.Vector3();
+            bounds1.getCenter(center1);
+              
+            const center2 = new THREE.Vector3();
+            bounds2.getCenter(center2);
+              
+            // Calculate collision normal (direction from obj2 to obj1)
+            const collisionNormal = new THREE.Vector3().subVectors(center1, center2).normalize();
+              
+            // Calculate relative velocity
+            const relativeVelocity = new THREE.Vector2(
+              obj1.physics.velocityX - obj2.physics.velocityX,
+              obj1.physics.velocityY - obj2.physics.velocityY
+            );
+              
+            // Project relative velocity onto collision normal
+            const relVelDotNormal = relativeVelocity.x * collisionNormal.x + relativeVelocity.y * collisionNormal.y;
+              
+            // Only apply impulse if objects are moving toward each other
+            if (relVelDotNormal < 0) {
+              // Calculate impulse scalar
+              const impulseStrength = -relVelDotNormal * collisionRestitution;
+                
+              // Apply impulse to velocities
+              obj1.physics.velocityX += collisionNormal.x * impulseStrength;
+              obj1.physics.velocityY += collisionNormal.y * impulseStrength;
+                
+              obj2.physics.velocityX -= collisionNormal.x * impulseStrength;
+              obj2.physics.velocityY -= collisionNormal.y * impulseStrength;
+                
+              // Add some small random variations to make it more interesting
+              obj1.physics.velocityX += (Math.random() - 0.5) * 0.02;
+              obj1.physics.velocityY += (Math.random() - 0.5) * 0.02;
+              obj2.physics.velocityX += (Math.random() - 0.5) * 0.02;
+              obj2.physics.velocityY += (Math.random() - 0.5) * 0.02;
+                
+              // Separate the objects to prevent sticking
+              const overlap = 0.1; // Small extra separation to prevent immediate re-collision
+              obj1.mesh.position.x += collisionNormal.x * overlap;
+              obj1.mesh.position.y += collisionNormal.y * overlap;
+              obj2.mesh.position.x -= collisionNormal.x * overlap;
+              obj2.mesh.position.y -= collisionNormal.y * overlap;
+                
+              // Occasionally change rotation direction on collision
+              if (Math.random() > 0.5) {
+                obj1.physics.rotationDir *= -1;
+              }
+              if (Math.random() > 0.5) {
+                obj2.physics.rotationDir *= -1;
+              }
+            }
+          }
+        }
+      }
+      
+      // Update each object individually
+      for (let i = 0; i < allObjects.length; i++) {
+        const obj = allObjects[i];
+        
+        // Apply rotation based on direction (different for prisms)
+        if (obj.mesh === topTextMesh || obj.mesh === bottomTextMesh) {
+          obj.mesh.rotation.x += rotationSpeed * obj.physics.rotationDir;
+        } else {
+          // This is a prism - rotate around Y axis
+          obj.mesh.rotation.y += rotationSpeed * obj.physics.rotationDir * 0.5;
+        }
+        
+        // Apply movement
+        obj.mesh.position.x += obj.physics.velocityX;
+        obj.mesh.position.y += obj.physics.velocityY;
+        
+        // Check boundaries and bounce
+        const bounds = new THREE.Box3().setFromObject(obj.mesh);
+        
+        if (bounds.min.x < boundaries.left) {
+          obj.mesh.position.x += (boundaries.left - bounds.min.x);
+          obj.physics.velocityX = Math.abs(obj.physics.velocityX) * bounceStrength;
+        } else if (bounds.max.x > boundaries.right) {
+          obj.mesh.position.x -= (bounds.max.x - boundaries.right);
+          obj.physics.velocityX = -Math.abs(obj.physics.velocityX) * bounceStrength;
+        }
+        
+        if (bounds.min.y < boundaries.bottom) {
+          obj.mesh.position.y += (boundaries.bottom - bounds.min.y);
+          obj.physics.velocityY = Math.abs(obj.physics.velocityY) * bounceStrength;
+        } else if (bounds.max.y > boundaries.top) {
+          obj.mesh.position.y -= (bounds.max.y - boundaries.top);
+          obj.physics.velocityY = -Math.abs(obj.physics.velocityY) * bounceStrength;
+        }
+      }
+      
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Adjust camera and renderer on window resize
+    window.addEventListener('resize', function(){
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }, false);
+
+    // Add a console message to help with debugging
+    console.log("404 Error Page - Looking for images at:", imagePaths);
+  </script>
+</body>
 </html>

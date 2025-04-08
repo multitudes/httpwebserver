@@ -12,22 +12,14 @@
 <body>
     <h1>File Upload with CGI</h1>
     <div class="box">
-        <form action="/cgi-bin/hello.py" method="POST" enctype="multipart/form-data">
+        <form action="/cgi-bin/fileupload.py" method="POST" enctype="multipart/form-data">
             <label for="file">Select file:</label>
             <input type="file" id="file" name="file">
             <button type="submit">Upload</button>
         </form>
         <p>Supported file types: .jpg, .png, .pdf, .txt</p>
     </div>
-    <h1>File Upload with standard upload</h1>
-    <div class="box">
-        <form action="/uploads" method="POST" enctype="multipart/form-data">
-            <label for="file">Select file:</label>
-            <input type="file" id="file" name="file">
-            <button type="submit">Upload</button>
-        </form>
-        <p>Supported file types: .jpg, .png, .pdf, .txt</p>
-    </div> 
+
 
    <div class="file-list">
         <h2>Uploaded Files</h2>

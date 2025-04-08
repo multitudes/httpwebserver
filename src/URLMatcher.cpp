@@ -5,8 +5,9 @@
 #include "DirectoryListing.hpp"
 #include "HTTPConnxData.hpp"
 #include "HTTPServer.hpp"
-#include "SimpleResponse.hpp"
+#include "Responses.hpp"
 #include "debug.h"
+#include "Utils.hpp"
 #include <fcntl.h>
 #include <string>
 #include <sys/socket.h>
@@ -84,12 +85,12 @@ namespace URLMatcher
       return false;
     }
 
-  //   debuglog(MAGENTA, "Parsed connection data: %s",
-  //    conn.formatConnectionDataLong(conn.data).c_str());
-  debugcolor(MAGENTA, "Parsed whole connection data: %s",
-             conn.data.request.c_str());
-  return true;
-}
+    //   debuglog(MAGENTA, "Parsed connection data: %s",
+    //    conn.formatConnectionDataLong(conn.data).c_str());
+    debugcolor(MAGENTA, "Parsed whole connection data: %s",
+               conn.data.request.c_str());
+    return true;
+  }
 
   /**
    * @brief Gets configuration and constructs the target path
@@ -103,8 +104,7 @@ namespace URLMatcher
     if (!conn.urlMatcherData.config)
     {
       debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
-      SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
-      conn.state = CONN_SIMPLE_RESPONSE;
+      Responses::htmlErrorResponse(conn, 500); // Internal Server Error
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -120,8 +120,7 @@ namespace URLMatcher
     {
       debuglog(RED, "URLMatcher: Directory traversal attempt detected: %s",
                conn.data.target.c_str());
-      SimpleResponse::htmlErrorResponse(conn, 400); // Bad Request
-      conn.state = CONN_SIMPLE_RESPONSE;
+      Responses::htmlErrorResponse(conn, 400); // Bad Request
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -131,7 +130,6 @@ namespace URLMatcher
     conn.urlMatcherData.autoindex = conn.urlMatcherData.config->autoindex;
     conn.urlMatcherData.acceptedMethods = conn.urlMatcherData.config->acceptedMethods;
     conn.urlMatcherData.file_upload_dir = conn.urlMatcherData.config->upload_dir;
-
 
     // Adjust path_for_stat: remove trailing slash unless it's just the root path
     if (conn.urlMatcherData.path_for_stat.length() > conn.urlMatcherData.config->root.length() + 1 &&
@@ -215,9 +213,7 @@ namespace URLMatcher
     if (conn.file_fd < 0)
     {
       perror("URLMatcher: Failed to open file");
-      SimpleResponse::htmlErrorResponse(conn,
-                                        403); // Forbidden is a common reason
-      conn.state = CONN_SIMPLE_RESPONSE;
+      Responses::htmlErrorResponse(conn, 403); // Forbidden is a common reason
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -226,7 +222,7 @@ namespace URLMatcher
     conn.state = CONN_FILE_REQUEST;
 
     // Use the overloaded version that doesn't need the content type parameter
-    SimpleResponse::prepareFileResponse(conn, conn.file_size);
+    Responses::prepareFileResponse(conn, conn.file_size);
 
     debuglog(GREEN,
              "URLMatcher: Set state to CONN_FILE_REQUEST for fd %d, size %ld",
@@ -252,8 +248,7 @@ namespace URLMatcher
     if (conn.file_fd < 0)
     {
       perror("URLMatcher: Failed to open existing index file");
-      SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
-      conn.state = CONN_SIMPLE_RESPONSE;
+      Responses::htmlErrorResponse(conn, 500); // Internal Server Error
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -265,7 +260,7 @@ namespace URLMatcher
     conn.state = CONN_FILE_REQUEST;
 
     // Use the overloaded version that doesn't need the content type parameter
-    SimpleResponse::prepareFileResponse(conn, conn.file_size);
+    Responses::prepareFileResponse(conn, conn.file_size);
 
     debuglog(
         GREEN,
@@ -285,8 +280,7 @@ namespace URLMatcher
     if (!conn.urlMatcherData.autoindex)
     {
       debuglog(RED, "URLMatcher: Autoindex is disabled.");
-      SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden to list directory
-      conn.state = CONN_SIMPLE_RESPONSE;
+      Responses::htmlErrorResponse(conn, 404); // index not found
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -309,8 +303,7 @@ namespace URLMatcher
                "URLMatcher: getDIRListing returned false for fd %d (likely "
                "opendir error).",
                conn.client_fd);
-      SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
-      conn.state = CONN_SIMPLE_RESPONSE;
+      Responses::htmlErrorResponse(conn, 500); // Internal Server Error
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -340,19 +333,16 @@ namespace URLMatcher
       debuglog(BLUE, "URLMatcher: Updated full path to CGI: '%s'",
                conn.urlMatcherData.full_path.c_str());
 
-    //   conn.state = CONN_SIMPLE_RESPONSE;
-    //   SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
-    //   SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
-		conn.state = CONN_CGI;
-		debug("CGI request detected");
-		// Start CGI process for this connection
-		if (CGI::prepareCGI(conn) < 0) {
-			conn.reset();
-			conn.state = CONN_SIMPLE_RESPONSE;
-      		SimpleResponse::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
-      		SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
-			return false;
-		}
+      conn.state = CONN_CGI;
+      debug("CGI request detected");
+      // Start CGI process for this connection
+      if (CGI::prepareCGI(conn) < 0)
+      {
+        conn.reset();
+        Responses::createResponse(conn, "text/plain", "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
+        SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+        return false;
+      }
       return true;
     }
     else
@@ -364,24 +354,34 @@ namespace URLMatcher
 
   void updateWithLocationBlockConfig(HTTPConnxData &conn)
   {
+    // Check if the server config has any location blocks defined
     if (conn.urlMatcherData.config->has_locations)
     {
+      debuglog(YELLOW, "URLMatcher: Checking %lu location blocks for URI '%s'", 
+               conn.urlMatcherData.config->location_blocks.size(), conn.data.target.c_str());
+      
+      // Loop through all location blocks to find a matching one
       for (std::map<std::string, Location>::const_iterator location_pair =
                conn.urlMatcherData.config->location_blocks.begin();
            location_pair != conn.urlMatcherData.config->location_blocks.end(); ++location_pair)
       {
+        debuglog(YELLOW, "URLMatcher: Checking location '%s' against target '%s'",
+                location_pair->first.c_str(), conn.data.target.c_str());
+                
+        // Check if the target URL starts with this location path
         if (conn.data.target.find(location_pair->first) == 0)
-        { // found location
+        { 
+          // Found a matching location block
           Location location = location_pair->second;
-          debuglog(RED, "URLMatcher: Found location block for '%s'",
+          debuglog(GREEN, "URLMatcher: Found matching location block for '%s'",
                    location_pair->first.c_str());
-          debuglog(RED, "URLMatcher: Location root is '%s' wlocation_pairh length %zu",
-                   location.root.c_str(), location.root.length());
+          debuglog(GREEN, "URLMatcher: Location root is '%s'",
+                   location.root.c_str());
 
           // Only update paths if location's root is different from the server's root
           if (location.root != conn.urlMatcherData.config->root)
           {
-			debugcolor(RED, "overriding path with location block");
+            debuglog(RED, "URLMatcher: Overriding path with location block root");
             // Override paths only if root is different from server root
             conn.urlMatcherData.full_path = location.root + conn.data.target.substr(location_pair->first.length());
             conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
@@ -391,72 +391,50 @@ namespace URLMatcher
           else
             debuglog(RED, "URLMatcher: Location root is same as server root, using default paths");
 
-          // set autoindex
+          // Set autoindex flag from location block
           conn.urlMatcherData.autoindex = location.autoindex;
           debuglog(YELLOW, "URLMatcher: Location block autoindex is %s",
                    conn.urlMatcherData.autoindex ? "enabled" : "disabled");
 
-          // set accepted methods
+          // Set accepted methods from location block
           conn.urlMatcherData.acceptedMethods = location.acceptedMethods;
           debuglog(YELLOW, "URLMatcher: accepted methods updated to Location block accepted methods");
 
-          // check for return directive
+          // Check for return directive in location block
           if (location.return_directive.first != 0)
           {
             conn.urlMatcherData.return_directive = true;
-            debuglog(YELLOW, "URLMatcher: Location block return directive found");
-            SimpleResponse::createResponse(conn, "text/plain", location.return_directive.second, location.return_directive.first);
-            conn.state = CONN_SIMPLE_RESPONSE;
+            debuglog(YELLOW, "URLMatcher: Location block return directive found: %d %s", 
+                     location.return_directive.first, location.return_directive.second.c_str());
+            Responses::createResponse(conn, "text/plain", location.return_directive.second, 
+                                          location.return_directive.first);
             SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
             return;
-          } else 
-		  {
-			debuglog(YELLOW, "URLMatcher: Location block return directive not found");
-		  }
+          }
 
-		  // check for error pages
-		  if (!location.error_pages.empty())
-		  {
-			conn.urlMatcherData.error_pages = location.error_pages;
-			debuglog(YELLOW, "URLMatcher: Location block error pages found");
-		  }
-		  else
-		  {
-			debuglog(YELLOW, "URLMatcher: Location block error pages not found");
-		  }
-
-		  // check for file upload
-		  if (location.upload_dir != "")
-		  {
-			conn.urlMatcherData.file_upload = true;
-			conn.urlMatcherData.file_upload_dir = location.upload_dir;
-			debuglog(YELLOW, "URLMatcher: Location block file upload is enabled");
-		  }
-		  else 
-		  {
-			debugcolor(RED, "no upload dir found in location block");
-		  }
-		  if (location.upload_dir != "")
-		  {
-			conn.urlMatcherData.file_upload = true;
-			conn.urlMatcherData.file_upload_dir = location.upload_dir;
-			debuglog(YELLOW, "URLMatcher: upload dir found %s",
-					 location.upload_dir.c_str());
-		  }
-		  else
-		  {
-			debugcolor(RED, "no upload dir found in location block");
-		  }
-          if (location.file_upload)
+          // Check for file upload settings in location block
+          if (location.file_upload && !location.upload_dir.empty())
           {
             conn.urlMatcherData.file_upload = true;
             conn.urlMatcherData.file_upload_dir = location.upload_dir;
-            debuglog(YELLOW, "URLMatcher: file upload is enabled");
-          } 
+            debuglog(YELLOW, "URLMatcher: File upload enabled with directory: %s",
+                     location.upload_dir.c_str());
+          }
 
-          break;
+          // We found a match, so stop looking through location blocks
+          debuglog(GREEN, "URLMatcher: Applied configuration from location block '%s'",
+                  location_pair->first.c_str());
+          return;
         }
       }
+      
+      // If we reach here, no matching location block was found
+      debuglog(YELLOW, "URLMatcher: No matching location block found for '%s'", 
+               conn.data.target.c_str());
+    }
+    else
+    {
+      debuglog(YELLOW, "URLMatcher: Server has no location blocks defined");
     }
   }
 
@@ -483,6 +461,11 @@ namespace URLMatcher
     if (conn.urlMatcherData.return_directive)
       return;
 
+    // Debug log to verify location blocks are being checked
+    debuglog(MAGENTA, "URLMatcher: After location check - path_for_stat: '%s', autoindex: %s", 
+             conn.urlMatcherData.path_for_stat.c_str(),
+             conn.urlMatcherData.autoindex ? "true" : "false");
+
     // check if the request method is accepted (GET POST etc)
     if (std::find(conn.urlMatcherData.acceptedMethods.begin(),
                   conn.urlMatcherData.acceptedMethods.end(),
@@ -490,13 +473,13 @@ namespace URLMatcher
     {
       debuglog(RED, "URLMatcher: Method '%s' not allowed in location '%s'",
                conn.data.method.c_str(), conn.urlMatcherData.full_path.c_str());
-      SimpleResponse::htmlErrorResponse(conn, 405); // Method Not Allowed
-      conn.state = CONN_SIMPLE_RESPONSE;
+      Responses::htmlErrorResponse(conn, 405); // Method Not Allowed
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return;
     }
-	debug("accepted method found: %s", conn.data.method.c_str());
-    
+    debug("accepted method found: %s", conn.data.method.c_str());
+
+
     
     if (conn.data.method == "POST" && conn.data.content_length > 0)
     { 
@@ -508,19 +491,17 @@ namespace URLMatcher
 		debug("file upload not allowed");
         debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
                  conn.urlMatcherData.full_path.c_str());
-        SimpleResponse::htmlErrorResponse(conn, 403); // Forbidden
-        conn.state = CONN_SIMPLE_RESPONSE;
+        Responses::htmlErrorResponse(conn, 403); // Forbidden
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
-      } 
-	  debugcolor(MAGENTA, "opening file for upload: %s",
-			 conn.urlMatcherData.full_path.c_str());
+      }
+      debugcolor(MAGENTA, "opening file for upload: %s",
+                 conn.urlMatcherData.full_path.c_str());
       conn.file_fd = open(conn.urlMatcherData.full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
       if (conn.file_fd < 0)
       {
         perror("URLMatcher: Failed to open file for upload");
-        SimpleResponse::htmlErrorResponse(conn, 500); // Internal Server Error
-        conn.state = CONN_SIMPLE_RESPONSE;
+        Responses::htmlErrorResponse(conn, 500); // Internal Server Error
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
@@ -537,16 +518,14 @@ namespace URLMatcher
       return;
     } // end POST
 
+
     if (conn.data.method == "GET")
     {
       struct stat path_stat;
       if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0)
       {
         perror("URLMatcher: stat failed");
-        // debuglog(RED, "URLMatcher: Path not found or inaccessible '%s'",
-        // conn.path_for_stat.c_str());
-        conn.state = CONN_SIMPLE_RESPONSE;
-        SimpleResponse::htmlErrorResponse(conn, 404); // Not Found
+        Responses::htmlErrorResponse(conn, 404); // Not Found
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
       }
@@ -596,11 +575,10 @@ namespace URLMatcher
       {
         debuglog(RED, "URLMatcher: Path '%s' is not a regular file or directory.",
                  conn.urlMatcherData.path_for_stat.c_str());
-        SimpleResponse::htmlErrorResponse(
-            conn, 403); // Forbidden - don't serve unusual file types
-        conn.state = CONN_SIMPLE_RESPONSE;
+        Responses::htmlErrorResponse(conn, 415); // Unsupported Media Type
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       }
     } // end GET
   } // end of validateRequest
+ 
 } // end of namespace URLMatcher
