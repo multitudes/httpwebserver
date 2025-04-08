@@ -129,7 +129,7 @@ namespace URLMatcher
     conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
     conn.urlMatcherData.autoindex = conn.urlMatcherData.config->autoindex;
     conn.urlMatcherData.acceptedMethods = conn.urlMatcherData.config->acceptedMethods;
-    conn.urlMatcherData.file_upload_dir = conn.urlMatcherData.config->upload_dir;
+    //conn.urlMatcherData.file_upload_dir = conn.urlMatcherData.config->upload_dir;
 
     // Adjust path_for_stat: remove trailing slash unless it's just the root path
     if (conn.urlMatcherData.path_for_stat.length() > conn.urlMatcherData.config->root.length() + 1 &&
@@ -413,12 +413,16 @@ namespace URLMatcher
           }
 
           // Check for file upload settings in location block
-          if (location.file_upload && !location.upload_dir.empty())
+          if (location.file_upload) //&& !location.upload_dir.empty())
           {
             conn.urlMatcherData.file_upload = true;
-            conn.urlMatcherData.file_upload_dir = location.upload_dir;
-            debuglog(YELLOW, "URLMatcher: File upload enabled with directory: %s",
-                     location.upload_dir.c_str());
+            debuglog(YELLOW, "URLMatcher: File upload enabled in location block %s",
+                     location_pair->first.c_str());
+            //conn.urlMatcherData.file_upload_dir = location.upload_dir;
+            // debug("file upload enabled in directory: %s",
+            //       location.upload_dir.c_str());
+            // debuglog(YELLOW, "URLMatcher: File upload enabled with directory: %s",
+            //          location.upload_dir.c_str());
           }
 
           // We found a match, so stop looking through location blocks
@@ -481,6 +485,51 @@ namespace URLMatcher
 
 
     
+      //handle DELETE request
+    if (conn.data.method == "DELETE")
+    {
+      debuglog(YELLOW, "URLMatcher: DELETE request detected for path '%s'",
+               conn.urlMatcherData.full_path.c_str());
+      
+      // Check if file upload is enabled for this location
+      if (conn.urlMatcherData.file_upload)
+      {
+        debuglog(GREEN, "URLMatcher: File upload is enabled, attempting to delete the file");
+        
+        // Delete the file directly using the full path without checking upload directory
+        int result = unlink(conn.urlMatcherData.full_path.c_str());
+        if (result == 0) {
+          debuglog(GREEN, "URLMatcher: Successfully deleted file '%s'", 
+                  conn.urlMatcherData.full_path.c_str());
+          Responses::createResponse(conn, "text/plain", "File deleted", 200);
+        } else {
+          // Log the error if delete failed
+          debuglog(RED, "URLMatcher: Failed to delete file '%s': %s", 
+                   conn.urlMatcherData.full_path.c_str(), strerror(errno));
+          
+          // Check if file exists but can't be deleted, or doesn't exist
+          if (errno == ENOENT) {
+            Responses::htmlErrorResponse(conn, 404); // Not Found
+          } else {
+            Responses::createResponse(conn, "text/plain", 
+                                     "Failed to delete file: " + std::string(strerror(errno)), 500);
+          }
+        }
+        SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+        return;
+      } else {
+        debuglog(RED, "URLMatcher: File upload is not enabled for this location");
+      }
+      
+      debuglog(RED, "URLMatcher: DELETE request not allowed for path '%s'",
+               conn.urlMatcherData.full_path.c_str());
+      Responses::htmlErrorResponse(conn, 403); // Forbidden
+      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+      return;
+    }
+    
+
+    // Check if the request is a POST request with a payload
     if (conn.data.method == "POST" && conn.data.content_length > 0)
     { 
 		debug("POST request detected");
