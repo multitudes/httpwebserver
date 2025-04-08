@@ -19,22 +19,36 @@ import requests
 
 @pytest.fixture(scope="function")
 def webserver_normal_config():
-    server = subprocess.Popen(["./webserv", "config/test.conf"])
-    time.sleep(1)
+    server = subprocess.Popen(["./webserv", "tests/config/test.conf"])
+    time.sleep(0.2)
     yield
     server.terminate()
 
 @pytest.fixture(scope="function")
 def webserver_empty_config():
-    server = subprocess.Popen(["./webserv", "config/empty.conf"])
-    time.sleep(1)
+    server = subprocess.Popen(["./webserv", "tests/config/empty.conf"])
+    time.sleep(0.2)
     yield
     server.terminate()
 
-def test_normal_config(webserver_normal_config):
-    response = requests.get("http://localhost:4244")
-    assert response.status_code == 200
+@pytest.fixture(scope="function")
+def webserver_empty_config2():
+    server = subprocess.Popen(["./webserv", "tests/config/empty2.conf"])
+    time.sleep(0.2)
+    yield
+    server.terminate()
+    
+@pytest.fixture(scope="function")
+def webserver_empty_config3():
+    server = subprocess.Popen(["./webserv", "tests/config/empty3.conf"])
+    time.sleep(0.2)
+    yield
+    server.terminate()
+    
+@pytest.fixture(scope="function")
+def webserver_empty_config4():
+    server = subprocess.Popen(["./webserv", "tests/config/empty4.conf"])
+    time.sleep(0.2)
+    yield
+    server.terminate()
 
-def test_empty_config(webserver_empty_config):
-    response = requests.get("http://localhost:4244")
-    assert response.status_code == 500

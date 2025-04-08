@@ -61,7 +61,7 @@ namespace HTTPServer {
 	void createServerSockets(const vector<ServerData>& configs, vector<int>& serverSockets);
 	void reloadConfigFile(std::string configFile, vector<int>&serverSockets, vector<ServerData> &configs_);
 	bool reload(string configFile, long long currentTime);
-	
+	bool checkPollErrors(pollfd fd);	
 
 } // namespace HTTPServer
 

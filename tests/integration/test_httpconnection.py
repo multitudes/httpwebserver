@@ -44,7 +44,40 @@ def test_normal_config_upload(webserver_normal_config):
 def test_empty_config_startup():
     """Test that the server fails to start with an empty config"""
     result = subprocess.run(
-        ["./webserv", "config/empty.conf"],
+        ["./webserv", "tests/config/empty.conf"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    # Assert that the exit code is non-zero (indicating an error)
+    assert result.returncode != 0, f"Server started with empty config: {result.stdout.decode()}\n{result.stderr.decode()}"
+    
+# Tests for EMPTY config (empty.conf)
+def test_empty_config2_startup():
+    """Test that the server fails to start with an empty config"""
+    result = subprocess.run(
+        ["./webserv", "tests/config/empty2.conf"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    # Assert that the exit code is non-zero (indicating an error)
+    assert result.returncode != 0, f"Server started with empty config: {result.stdout.decode()}\n{result.stderr.decode()}"
+    
+# Tests for EMPTY config (empty.conf)
+def test_empty_config3_startup():
+    """Test that the server fails to start with an empty config"""
+    result = subprocess.run(
+        ["./webserv", "tests/config/empty3.conf"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    # Assert that the exit code is non-zero (indicating an error)
+    assert result.returncode != 0, f"Server started with empty config: {result.stdout.decode()}\n{result.stderr.decode()}"
+
+# Tests for EMPTY config (empty.conf)
+def test_empty_config4_startup():
+    """Test that the server fails to start with an empty config"""
+    result = subprocess.run(
+        ["./webserv", "tests/config/empty4.conf"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
