@@ -24,6 +24,9 @@ def test_normal_config_ports(webserver_normal_config):
         except requests.ConnectionError:
             pytest.fail(f"Port {port} not responding")
 
+
+# test for UPLOAD and DELETE, first in default uploads, then in a folder with return directive
+#first 2 tests are for the default upload folder
 def test_normal_config_upload(webserver_normal_config):
     """Test file upload (only works with normal config)"""
     test_file = 'tests/uploadtest.txt'
@@ -39,6 +42,44 @@ def test_normal_config_upload(webserver_normal_config):
     downloaded = requests.get(upload_url)
     with open(test_file, 'rb') as f:
         assert downloaded.content == f.read()
+
+#check if  DELETE request can delete the file from previous test
+def test_normal_config_delete(webserver_normal_config):
+    """Test file deletion (only works with normal config)"""
+    delete_url = 'http://localhost:4244/upload/test.txt' # must be the same as upload_url above
+    response = requests.delete(delete_url)
+    assert response.status_code == 200
+    # Check if the file is deleted
+    response = requests.get(delete_url)
+    assert response.status_code == 404
+
+# Test for upload and delete in a folder with return directive
+def test_redirect_upload(webserver_normal_config):
+    """Test file upload (only works with normal config)"""
+    test_file = 'tests/uploadtest.txt'
+    upload_url = 'http://localhost:4244/43/test.txt'
+    with open(test_file, 'rb') as f:
+        response = requests.post(
+            upload_url,
+            data=f,
+            headers={'Content-Type': 'text/plain'},
+            timeout=1
+        )
+    assert response.status_code in [200, 201]
+    downloaded = requests.get(upload_url)
+    with open(test_file, 'rb') as f:
+        assert downloaded.content == f.read()
+
+#check if  DELETE request can delete the file from previous test
+def test_redirect_delete(webserver_normal_config):
+    """Test file deletion (only works with normal config)"""
+    delete_url = 'http://localhost:4244/43/test.txt' # must be the same as upload_url above
+    response = requests.delete(delete_url)
+    assert response.status_code == 200
+    # Check if the file is deleted
+    response = requests.get(delete_url)
+    assert response.status_code == 404
+# end of UPLOAD and DELETE tests
 
 # Tests for EMPTY config (empty.conf)
 def test_empty_config_startup():
