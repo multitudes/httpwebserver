@@ -16,6 +16,10 @@
     // Update these variables to change the error messages
     var topMessage = "404";
     var bottomMessage = "NOT FOUND";
+    
+    // Sphere orientation settings
+    var sphereBaseRotation = 6/4*Math.PI; // 90 degrees (π/2), adjust this value to find the sweet spot
+    var sphereRotationLimit = 55; // +/- 45 degrees of rotation allowed
 
     // Image paths - updated with full relative paths and fallback handling
     var imagePaths = {
@@ -147,6 +151,8 @@
       });
       const rufusSphereMesh = new THREE.Mesh(rufusSphereGeometry, rufusSphereMaterial);
       rufusSphereMesh.position.set(-15, -10, 0);
+      // Set initial rotation using the configurable base rotation
+      rufusSphereMesh.rotation.y = sphereBaseRotation;
       scene.add(rufusSphereMesh);
       prismMeshes.push(rufusSphereMesh);
       
@@ -159,6 +165,8 @@
       });
       const laurentSphereMesh = new THREE.Mesh(laurentSphereGeometry, laurentSphereMaterial);
       laurentSphereMesh.position.set(5, 10, 0);
+      // Set initial rotation using the configurable base rotation
+      laurentSphereMesh.rotation.y = sphereBaseRotation;
       scene.add(laurentSphereMesh);
       prismMeshes.push(laurentSphereMesh);
       
@@ -171,6 +179,8 @@
       });
       const emilySphereMesh = new THREE.Mesh(emilySphereGeometry, emilySphereMaterial);
       emilySphereMesh.position.set(15, -8, 0);
+      // Set initial rotation using the configurable base rotation
+      emilySphereMesh.rotation.y = sphereBaseRotation;
       scene.add(emilySphereMesh);
       prismMeshes.push(emilySphereMesh);
     }
@@ -381,12 +391,33 @@
       for (let i = 0; i < allObjects.length; i++) {
         const obj = allObjects[i];
         
-        // Apply rotation based on direction (different for prisms)
+        // Apply rotation based on direction (different for text vs spheres)
         if (obj.mesh === topTextMesh || obj.mesh === bottomTextMesh) {
           obj.mesh.rotation.x += rotationSpeed * obj.physics.rotationDir;
         } else {
-          // This is a prism - rotate around Y axis
-          obj.mesh.rotation.y += rotationSpeed * obj.physics.rotationDir * 0.5;
+          // This is a sphere - rotate around Y axis with limited angle
+          
+          // Calculate the new rotation
+          const newRotationY = obj.mesh.rotation.y + (rotationSpeed * obj.physics.rotationDir * 0.5);
+          
+          // Convert to degrees for easier understanding (relative to the base rotation)
+          const rotationDegrees = ((newRotationY - sphereBaseRotation) * 180 / Math.PI) % 360;
+          
+          // Normalize to range -180 to 180 for easier comparison
+          const normalizedDegrees = rotationDegrees > 180 ? rotationDegrees - 360 : 
+                                  (rotationDegrees < -180 ? rotationDegrees + 360 : rotationDegrees);
+          
+          // Limit rotation to +/- specified degrees from center (base rotation)
+          if (normalizedDegrees > sphereRotationLimit) {
+            // Too far right, reverse direction
+            obj.physics.rotationDir = -1;
+          } else if (normalizedDegrees < -sphereRotationLimit) {
+            // Too far left, reverse direction
+            obj.physics.rotationDir = 1;
+          } else {
+            // Within acceptable range, apply rotation
+            obj.mesh.rotation.y = newRotationY;
+          }
         }
         
         // Apply movement
