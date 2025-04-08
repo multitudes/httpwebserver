@@ -280,7 +280,7 @@ namespace URLMatcher
     if (!conn.urlMatcherData.autoindex)
     {
       debuglog(RED, "URLMatcher: Autoindex is disabled.");
-      Responses::htmlErrorResponse(conn, 403); // Forbidden to list directory
+      Responses::htmlErrorResponse(conn, 404); // index not found
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return false;
     }
@@ -479,6 +479,8 @@ namespace URLMatcher
     }
     debug("accepted method found: %s", conn.data.method.c_str());
 
+
+    
     if (conn.data.method == "POST" && conn.data.content_length > 0)
     { 
 		debug("POST request detected");
@@ -515,6 +517,7 @@ namespace URLMatcher
 	  debug("setting state to CONN_UPLOAD");
       return;
     } // end POST
+
 
     if (conn.data.method == "GET")
     {
