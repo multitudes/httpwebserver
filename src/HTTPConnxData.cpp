@@ -6,6 +6,8 @@
 #include <string>
 #include <unistd.h>
 #include <cstring>
+#include <ctime>
+#include <iomanip>
 
 using std::map;
 using std::string;
@@ -409,4 +411,48 @@ string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
   oss << " }";
 
   return oss.str();
+}
+
+// SESSION MANAGEMENT FUNCTIONS---------------------------------Rufus
+
+// Generate a unique session ID using timestamp
+string HTTPConnxData::generateSessionId() {
+  // Get current time
+  time_t now = time(NULL);  
+  // Convert to hex string with padding
+  std::stringstream ss;
+  ss << std::hex << std::setfill('0') << std::setw(16) << now;  
+  // Add process ID for additional uniqueness
+  ss << "_" << std::hex << getpid();
+  debuglog(YELLOW, "Generated session ID: %s", ss.str().c_str());  
+  return ss.str();
+}
+
+// Create a new session for the current connection
+void HTTPConnxData::createSession() {
+  data.session_id = generateSessionId();
+  data.has_session = true;
+  data.session_created = time(NULL);
+  data.session_last_accessed = time(NULL);  
+  // Reset any previous session data
+  data.session_data.clear();  
+  // Add session cookie to response headers
+  string cookie = "Set-Cookie: sessionid=" + data.session_id + 
+                  "; Path=/; HttpOnly\r\n";
+  data.response_headers += cookie;
+}
+
+// Try to retrieve session from cookies
+bool HTTPConnxData::retrieveSession() {
+  // Look for session cookie
+  std::map<std::string, std::string>::iterator it = data.cookies.find("sessionid");
+  if (it != data.cookies.end() && !it->second.empty()) {
+    // Found a session cookie
+    data.session_id = it->second;
+    data.has_session = true;
+    data.session_last_accessed = time(NULL);
+    return true;
+  }
+  // end SESSION MANAGEMENT FUNCTIONS---------------------------------Rufus
+  return false;
 }
