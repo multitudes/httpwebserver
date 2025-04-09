@@ -1,7 +1,6 @@
 webserv
 request_*.txt
 ComparisonServers/apache/www/cgi-bin/__pycache__/test_cgi_form.cpython-313-pytest-8.3.5.pyc
-.vscode/settings.json
 venv/*
 .DS_Store
 tests/integration/__pycache__/*

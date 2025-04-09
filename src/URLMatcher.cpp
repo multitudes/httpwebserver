@@ -27,7 +27,7 @@ namespace URLMatcher
    */
   bool receiveAndParseRequest(HTTPConnxData &conn)
   {
-	debug("Entered function");
+	debug("checking the request");
     char buffer[BUFFER_SIZE + 1];
 
     // Ensure BUFFER_SIZE > 0 for recv
@@ -39,6 +39,11 @@ namespace URLMatcher
       {
         debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.",
                  conn.client_fd);
+		SocketUtils::remove_from_poll(conn.client_fd);
+		close(conn.client_fd);
+		conn.reset();
+		HTTPServer::connections.erase(conn.client_fd);
+		return false;
       }
       else
       {
@@ -449,7 +454,6 @@ namespace URLMatcher
    */
   void validateRequest(HTTPConnxData &conn)
   {
-	debug("entering function");
     if (!receiveAndParseRequest(conn))
       return; // Request handling complete or failed
 

@@ -175,10 +175,8 @@ int run(std::string configFile) {
         // continue;
       }
 
-	
-
 	  if (pollfds[i].revents & POLLIN && conn.state == CONN_INCOMING) {
-		  debug("CONN_PARSING_HEADER fd %d", conn.client_fd);
+		  debug("got CONN_INCOMING fd %d", conn.client_fd);
 		  lastActivityTime[pollfds[i].fd] = std::time(NULL);
 		  URLMatcher::validateRequest(conn);
 		  continue;
