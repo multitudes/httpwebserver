@@ -3,20 +3,6 @@ import time
 import pytest
 import requests
 
-# # Single fixture to start/stop server (just like you have)
-# @pytest.fixture(scope="session", autouse=True)
-# def webserver():
-#     server = subprocess.Popen(["./webserv", "config/test.conf"])
-#     time.sleep(1)  # Give server time to start (all ports)
-#     yield
-#     server.terminate()
-#     server.wait()
-
-# @pytest.fixture
-# def base_url():
-#     return "http://localhost:4244"  # Default port
-
-
 @pytest.fixture(scope="function")
 def webserver_normal_config():
     server = subprocess.Popen(["./webserv", "tests/config/test.conf"])
@@ -52,3 +38,9 @@ def webserver_empty_config4():
     yield
     server.terminate()
 
+@pytest.fixture(scope="function")
+def webserver_redir_config():
+    server = subprocess.Popen(["./webserv", "tests/config/redirections.conf"])
+    time.sleep(0.2)
+    yield
+    server.terminate()

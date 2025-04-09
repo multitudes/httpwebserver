@@ -124,3 +124,4 @@ def test_empty_config4_startup():
     )
     # Assert that the exit code is non-zero (indicating an error)
     assert result.returncode != 0, f"Server started with empty config: {result.stdout.decode()}\n{result.stderr.decode()}"
+
