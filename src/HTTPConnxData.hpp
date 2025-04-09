@@ -116,18 +116,22 @@ struct HTTPConnxData {
 	string buffer;
 	bool is_sending;
 	bool is_receiving;
+	string path_info;
+	string query_string;
 	// CGI process ID
 	pid_t child_pid;
 	std::map<std::string, std::string> env;
 
 	CGIData()
-		: buffer(""), is_sending(false), is_receiving(true), child_pid(-1) {
+		: buffer(""), is_sending(false), is_receiving(true), child_pid(-1), path_info(""), query_string(), env() { 
 			env["SERVER_SOFTWARE"] = "VibeServer/1.0";
 			env["REMOTE_HOST"] = "";
 			env["REMOTE_USER"] = "";
 			env["GATEWAY_INTERFACE"] = "CGI/1.1";
 			env["AUTH_TYPE"] = "";
 			env["TRANSFER_ENCODING"] = "";
+			env["PATH_INFO"] = "";
+			env["PATH_TRANSLATED"] = "/";
 		}
   };
   // Connection state and metadata
