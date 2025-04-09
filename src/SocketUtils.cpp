@@ -379,13 +379,14 @@ void checkForIdleConnections() {
     for (size_t j = 0; j < HTTPServer::pollfds.size(); ++j) {
       if (HTTPServer::pollfds[j].fd == fd) {
         debuglog(YELLOW, "Closing client socket %d", fd);
-        close(fd);
         // TODO send a 408 Request Timeout response to the client before closing
         remove_from_poll(fd);
+		HTTPServer::connections.erase(fd);
+        close(fd);
         break;
+		HTTPServer::lastActivityTime.erase(fd);
       }
     }
-    HTTPServer::lastActivityTime.erase(fd);
   }
   idleConnections.clear();
 }

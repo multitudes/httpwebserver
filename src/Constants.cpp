@@ -8,8 +8,8 @@ namespace Constants {
 	const char* default_config_file = "config/default.conf";
 
 	int maxConnections = 200;
-    int requestTimeout = 60;
-    int responseTimeout = 60;
+    int requestTimeout = 10;
+    int responseTimeout = 10;
     int keepalive_timeout = 10;
 	bool autoReload = false;
 

@@ -69,7 +69,7 @@ int run(std::string configFile) {
 
   createServerSockets(configs_, serverSockets);
 
-  while (1) {
+  while (true) {
 
 	//when autoreload is 1 then reload the config file
 	long long currentTime = Parser::getCurrentTimeMillis();
@@ -171,18 +171,23 @@ int run(std::string configFile) {
       HTTPConnxData &conn = connections[current_fd];
       if (conn.client_fd == -1) {
         debuglog(RED, "Connection fd %d not found in connections", current_fd);
-        continue;
+		throw std::runtime_error("Connection not found");
+        // continue;
       }
+
+	
 
 	  if (pollfds[i].revents & POLLIN && conn.state == CONN_INCOMING) {
 		  debug("CONN_PARSING_HEADER fd %d", conn.client_fd);
-			  URLMatcher::validateRequest(conn);
-			  continue;
-			}
+		  lastActivityTime[pollfds[i].fd] = std::time(NULL);
+		  URLMatcher::validateRequest(conn);
+		  continue;
+	  }
 		
-		
+
 		if (pollfds[i].revents & POLLIN && conn.state == CONN_PARSING_HEADER) {
 			 debug("CONN_PARSING_HEADER fd %d", conn.client_fd);
+			 lastActivityTime[pollfds[i].fd] = std::time(NULL);
 			// here only if the previous validate request could not parse the whole headers
 		
 				// debug("CONN_PARSING_HEADER fd %d", conn.client_fd);
@@ -199,6 +204,7 @@ int run(std::string configFile) {
 			debug("CONN_SIMPLE_RESPONSE fd %d", conn.client_fd);
 			debuglog(YELLOW, "Connection fd %d in state SIMPLE_RESPONSE",
 				conn.client_fd);
+				lastActivityTime[pollfds[i].fd] = std::time(NULL);
 				// check if the response is ready to be sent
 				// if not set to CONN_CLOSING
 				// else send the response
@@ -226,7 +232,7 @@ int run(std::string configFile) {
 		debug("CONN_FILE_REQUEST fd %d", conn.client_fd);
 		debuglog(YELLOW, "Handling write event for connection fd %d",
 			conn.client_fd);
-			
+			lastActivityTime[pollfds[i].fd] = std::time(NULL);
 			// Use original send_headers/send_file approach
 			if (!conn.headers_sent) {
 				if (send_headers(conn) < 0) {
@@ -262,11 +268,9 @@ int run(std::string configFile) {
 	  */
 	 if (conn.state == CONN_UPLOAD) {
 		 debug("CONN_UPLOAD fd %d", conn.client_fd);
-		 
-		 
-		 debug("CONN_UPLOAD fd %d", conn.client_fd);
 		 // First handle any buffered payload data left over from header parsing
 		 if (!conn.data.response.empty()) {
+			lastActivityTime[pollfds[i].fd] = std::time(NULL);
 			 debuglog(YELLOW, "HTTPServer - first writing leftover payload for connection %d",
 				conn.client_fd);
 				ssize_t bytes_written =
@@ -296,6 +300,7 @@ int run(std::string configFile) {
 			debuglog(YELLOW, "HTTPServer - Handling upload event for connection %d",
 					 conn.client_fd);
 		  debug("read from client %d", conn.client_fd);
+		  lastActivityTime[pollfds[i].fd] = std::time(NULL);
           char buffer[BUFFER_SIZE];
           ssize_t bytes_read = recv(conn.client_fd, buffer, sizeof(buffer), MSG_DONTWAIT);
 
@@ -336,6 +341,7 @@ int run(std::string configFile) {
 	  
 	} else if (conn.state == CONN_CGI) {
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
+		lastActivityTime[pollfds[i].fd] = std::time(NULL);
         // check if the cgi is ready to be sent
         // if not set to CONN_CLOSING
         // else send the cgi
@@ -411,9 +417,11 @@ int run(std::string configFile) {
         continue;
       }
     }
-    // after every loop i check for idle connections
-    SocketUtils::checkForIdleConnections();
+	// should i put it here?
+	SocketUtils::checkForIdleConnections();
   }
+  
+ 
   // Cleanup
   // TODO
   return 0;
