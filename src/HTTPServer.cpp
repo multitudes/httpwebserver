@@ -175,11 +175,12 @@ int run(std::string configFile) {
 
 	if (pollfds[i].revents & POLLOUT && conn.state == CONN_FILE_REQUEST) {
 		debug("CONN_FILE_REQUEST fd %d", conn.client_fd);
-		debuglog(YELLOW, "Handling write event for connection fd %d",
-			conn.client_fd);
+		// debuglog(YELLOW, "Handling write event for connection fd %d",
+		// 	// conn.client_fd);
 			lastActivityTime[pollfds[i].fd] = std::time(NULL);
 			// Use original send_headers/send_file approach
 			if (!conn.headers_sent) {
+				debug("Sending buffer headers for connection %d", conn.client_fd);
 				if (send_headers(conn) < 0) {
 					conn.reset();
 				}
@@ -187,18 +188,13 @@ int run(std::string configFile) {
 				int result = send_file(conn);
 				if (result < 0) {
 					conn.reset();
+					//send error?
 				} else if (result == 0) {
 					// File sent completely - reset for next request
-					if (conn.file_fd != -1) {
-						close(conn.file_fd);
-						conn.file_fd = -1;
-					}
 					conn.reset();
 					
 					// Switch back to POLLIN for the next request
 					SocketUtils::update_poll_events(current_fd, POLLIN);
-					conn.state = CONN_INCOMING;
-					
 					debuglog(YELLOW, "Switched connection %d fd back to POLLIN",
 						conn.client_fd);
 					}

@@ -383,8 +383,8 @@ void checkForIdleConnections() {
         remove_from_poll(fd);
 		HTTPServer::connections.erase(fd);
         close(fd);
-        break;
 		HTTPServer::lastActivityTime.erase(fd);
+        break;
       }
     }
   }

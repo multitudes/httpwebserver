@@ -19,8 +19,8 @@ using std::vector;
 void HTTPConnxData::reset() {
   state = CONN_INCOMING;
   data = ConnectionData();
-  is_sending = 0;
-  is_receiving = 0;
+  cgiData = CGIData();
+  urlMatcherData = URLMatcherData();
   headers_sent = false;
   cgi_processing = false;
   bytes_received = 0;

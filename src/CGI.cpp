@@ -1,11 +1,15 @@
 #include "CGI.hpp"
 #include "HTTPServer.hpp"
+#include "Utils.hpp"
+#include "debug.h"
 
 namespace CGI {
 
 // Start a CGI process for a connection
 int prepareCGI(HTTPConnxData& conn) {
 	std::map<std::string, std::string> env;
+
+	setCGIEnv(conn);
 
 
   // Create pipes
@@ -88,12 +92,33 @@ int prepareCGI(HTTPConnxData& conn) {
 
 			// Write the request body to the child's stdin
 	conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
-	
+	debug("CGI request body: %s", conn.cgiData.buffer.c_str());
     conn.cgiData.child_pid = pid;
     debug("Started CGI process with PID %d", pid);
     return 0;
   }
 }
 
+void setCGIEnv(HTTPConnxData& conn) {
+  // Set environment variables for CGI
+  conn.cgiData.env["SERVER_SOFTWARE"] = "VibeServer/1.0";
+  conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
+  conn.cgiData.env["REMOTE_USER"] = "";
+  conn.cgiData.env["GATEWAY_INTERFACE"] = "CGI/1.1";
+  conn.cgiData.env["AUTH_TYPE"] = "";
+  conn.cgiData.env["TRANSFER_ENCODING"] = "";
+  conn.cgiData.env["REQUEST_METHOD"] = conn.data.method;
+  conn.cgiData.env["SCRIPT_NAME"] = conn.urlMatcherData.full_path;
+  conn.cgiData.env["PATH_INFO"] = "";
+  conn.cgiData.env["PATH_TRANSLATED"] = "/";
+
+  std::string query_string = conn.data.target;
+  if (conn.data.is_get_request) {
+	query_string = conn.data.target.substr(conn.data.target.find('?') + 1);
+  }
+  conn.cgiData.env["QUERY_STRING"] = query_string;
+  conn.cgiData.env["CONTENT_TYPE"] = conn.data.headers["Content-Type"];
+  conn.cgiData.env["CONTENT_LENGTH"] = Utils::to_string(conn.data.content_length);
+}
 
 } // namespace CGI
