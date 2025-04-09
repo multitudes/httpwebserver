@@ -45,11 +45,18 @@ PollfdsVector pollfds;
 vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
-vector<ServerData> configs_ = Config::getServerData();
+vector<ServerData> configs_;
 
-
+/**
+ * @brief Entrypoint for the HTTP server
+ * 
+ * The configs_ need to be initialized when starting the function
+ * and they will be available subsequently in the name space but since
+ * it is a singleton and there is no performance issue they will be
+ * always available calling Config::getServerData();
+ */
 int run(std::string configFile) {
-  
+  configs_ = Config::getServerData();
   struct sockaddr_in server_addr;
   bool skip_to_next_iteration = false;
 
@@ -347,7 +354,7 @@ int run(std::string configFile) {
               conn.reset();
               continue;
             }
-            printf("Received %ld bytes from client\n", bytes_read);
+            debug("Received %ld bytes from client\n", bytes_read);
           } else {
             memcpy(buffer, conn.data.request.c_str(), conn.data.request.size());
             bytes_read = static_cast<ssize_t>(conn.data.request.size());

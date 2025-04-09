@@ -10,8 +10,8 @@ namespace Constants {
 	int maxConnections = 200;
     int requestTimeout = 60;
     int responseTimeout = 60;
-    int keepalive_timeout = 30;
-	bool autoReload = true;
+    int keepalive_timeout = 10;
+	bool autoReload = false;
 
     void initStatusMessageMap() {
 		debuglog(YELLOW, "Initializing status code to status text mapping");

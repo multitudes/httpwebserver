@@ -6,11 +6,22 @@ namespace CGI {
 // Start a CGI process for a connection
 int prepareCGI(HTTPConnxData& conn) {
   // Create pipes
-  if (pipe(conn.child_stdin_pipe) < 0 || pipe(conn.child_stdout_pipe) < 0) {
+  debug("create pipes");
+  if (pipe(conn.child_stdin_pipe) < 0) {
     perror("Failed to create pipes");
     return -1;
   }
-
+  if (pipe(conn.child_stdout_pipe) < 0) {
+	perror("Failed to create pipes");
+	close(conn.child_stdin_pipe[0]);
+	close(conn.child_stdin_pipe[1]);
+	return -1;
+  }
+  debug("values in the pipes now %d", conn.child_stdin_pipe[0]);
+  debug("values in the pipes now %d", conn.child_stdin_pipe[1]);
+  debug("values in the pipes now %d", conn.child_stdout_pipe[0]);
+  debug("values in the pipes now %d", conn.child_stdout_pipe[1]);
+  // Set the pipes to non-blocking mode
   // Create child process
   pid_t pid = fork();
 
