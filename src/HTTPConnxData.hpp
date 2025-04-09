@@ -55,7 +55,7 @@ struct HTTPConnxData {
     // Connection info
     string host;
     uint16_t port;
-	  char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
+	char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
 	
 
     string request;
@@ -111,6 +111,25 @@ struct HTTPConnxData {
     std::vector<std::string> acceptedMethods;
     URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), file_upload_dir(""), autoindex(false), return_directive(false), file_upload(false), acceptedMethods() {}
   };
+
+  struct CGIData {
+	string buffer;
+	bool is_sending;
+	bool is_receiving;
+	// CGI process ID
+	pid_t child_pid;
+	std::map<std::string, std::string> env;
+
+	CGIData()
+		: buffer(""), is_sending(false), is_receiving(true), child_pid(-1) {
+			env["SERVER_SOFTWARE"] = "VibeServer/1.0";
+			env["REMOTE_HOST"] = "";
+			env["REMOTE_USER"] = "";
+			env["GATEWAY_INTERFACE"] = "CGI/1.1";
+			env["AUTH_TYPE"] = "";
+			env["TRANSFER_ENCODING"] = "";
+		}
+  };
   // Connection state and metadata
   ConnectionState state;
 
@@ -147,6 +166,7 @@ struct HTTPConnxData {
 
   // New fields for paths, config, and content type
   URLMatcherData urlMatcherData;
+  CGIData cgiData;
 
   HTTPConnxData()
       : state(CONN_INCOMING), data(), client_fd(-1), indexServerConf(-1),
