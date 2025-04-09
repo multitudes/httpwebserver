@@ -62,6 +62,12 @@ namespace HTTPServer {
 	void reloadConfigFile(std::string configFile, vector<int>&serverSockets, vector<ServerData> &configs_);
 	bool reload(string configFile, long long currentTime);
 	bool checkPollErrors(pollfd fd);	
+	bool gotServerSocketAddNewConnx(int fd);
+	void acceptNewClient(int server_fd);
+	void setSendRecTimeout(int clientfd);
+	bool maxConnectionsCheck(int clientfd);
+	bool printLocalAddress(int clientfd);
+	const char* custom_inet_ntop(int af, const void* src, char* dst, socklen_t size);
 
 } // namespace HTTPServer
 
