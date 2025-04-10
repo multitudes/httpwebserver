@@ -31,17 +31,18 @@ namespace URLMatcher
     char buffer[BUFFER_SIZE + 1];
 
     // Ensure BUFFER_SIZE > 0 for recv
-    ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, MSG_DONTWAIT);
+    ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
 
     if (bytes_read <= 0)
     {
       if (bytes_read == 0)
       {
+
         debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.",
                  conn.client_fd);
 		SocketUtils::remove_from_poll(conn.client_fd);
 		close(conn.client_fd);
-		conn.reset();
+		// conn.reset();
 		HTTPServer::connections.erase(conn.client_fd);
 		return false;
       }
