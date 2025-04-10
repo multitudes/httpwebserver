@@ -19,8 +19,8 @@ using std::vector;
 void HTTPConnxData::reset() {
   state = CONN_INCOMING;
   data = ConnectionData();
-  is_sending = 0;
-  is_receiving = 0;
+  cgiData = CGIData();
+  urlMatcherData = URLMatcherData();
   headers_sent = false;
   cgi_processing = false;
   bytes_received = 0;
@@ -100,6 +100,36 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
   }
 
   data.is_get_request = (data.method == "GET");
+
+	// Parse target into path and query string
+	size_t query_pos = data.target.find('?');
+	if (query_pos != string::npos) {
+		cgiData.query_string = data.target.substr(query_pos + 1);
+		debug("Query string: %s", cgiData.query_string.c_str());
+		data.target = data.target.substr(0, query_pos);
+	} else {
+		cgiData.query_string.clear();
+	}
+
+	if (data.is_get_request) {
+		// Find the last dot in the target (file extension)
+		size_t last_dot = data.target.find_last_of('.');
+		if (last_dot != string::npos) {
+			// Find the next slash after the extension
+			size_t slash_after_ext = data.target.find('/', last_dot);
+			if (slash_after_ext != string::npos) {
+				// Everything after the slash is path_info
+				cgiData.path_info = data.target.substr(slash_after_ext);
+				debug("Path info: %s", cgiData.path_info.c_str());
+				// Everything before is the actual target
+				data.target = data.target.substr(0, slash_after_ext);
+			}
+		}
+	}
+
+
+
+
   return PARSE_SUCCESS;
 }
 
