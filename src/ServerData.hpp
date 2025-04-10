@@ -25,6 +25,7 @@ struct Location {
 	bool autoindex;
 	bool file_upload;
 	bool internal;
+  bool cookie;
   std::string root;
   std::vector<std::string> acceptedMethods;
   std::pair<int, std::string> return_directive;
@@ -35,6 +36,7 @@ struct Location {
     autoindex(false),  // 4 same priority because different
     file_upload(false), // 4 same priority because different
     internal(false),
+    cookie(false),
 	  acceptedMethods(),  // 2 if post then could be upload - if not could be autoindex
     return_directive(),  // 1st - return immediately 
     root(""), // 5 check for new root yes no
