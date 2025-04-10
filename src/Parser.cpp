@@ -48,7 +48,7 @@ namespace Parser {
             port_map_[servers[i].ports[j]] = &servers[i];
             }
         }
-        //debugprintConfigs(servers, port_map_);
+        debugprintConfigs(servers, port_map_);
         return ;
     }
 
@@ -490,6 +490,27 @@ void parseLocationBlock(const std::string &locationContent,
             }
         }
     } 
+    else if(trimmedLine.find("cookie") == 0)
+    {
+        size_t valueStart = trimmedLine.find_first_not_of(" \t", 6);
+        size_t valueEnd = trimmedLine.find(';', valueStart);
+
+        if (valueEnd != std::string::npos) {
+            std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
+            if (value == "on") {
+                location.cookie = true;
+                debuglog(GREEN, "Location cookie: on");
+            } 
+            else if (value == "off") {
+                location.cookie = false;
+                debuglog(GREEN, "Location cookie: off");
+            } 
+            else {
+                debuglog(YELLOW, "Warning: Invalid cookie value: %s", value.c_str());
+            }
+        }
+    }
+
     else if (trimmedLine.find("internal") == 0) {
         location.internal = true;
         debuglog(GREEN, "Location internal: true");
@@ -837,6 +858,7 @@ void debugprintConfigs(std::vector<ServerData>& servers, std::map<uint16_t, Serv
                         debuglog(BLUE, "    Error Page: %d %s", it->first,
                         it->second.c_str());
                     }
+                    debuglog(BLUE, "\n\n    Cookie: %s\n\n", loc.cookie ? "on" : "off");
             }
         }
 
