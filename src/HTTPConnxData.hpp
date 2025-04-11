@@ -117,11 +117,12 @@ struct HTTPConnxData {
     string file_upload_dir;             // Directory for file uploads
     bool autoindex;
     bool return_directive;         // Flag for return directive
-    bool file_upload;           // Flag for file upload
+    bool file_upload;
+    bool cookie;         // Flag for file upload
 	
     
     std::vector<std::string> acceptedMethods;
-    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), file_upload_dir(""), autoindex(false), return_directive(false), file_upload(false), acceptedMethods() {}
+    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), file_upload_dir(""), autoindex(false), return_directive(false), file_upload(false), cookie(false), acceptedMethods() {}
   };
 
   struct CGIData {

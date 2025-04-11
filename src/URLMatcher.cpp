@@ -40,11 +40,11 @@ namespace URLMatcher
 
         debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.",
                  conn.client_fd);
-		SocketUtils::remove_from_poll(conn.client_fd);
-		close(conn.client_fd);
-		// conn.reset();
-		HTTPServer::connections.erase(conn.client_fd);
-		return false;
+        SocketUtils::remove_from_poll(conn.client_fd);
+        close(conn.client_fd);
+        // conn.reset();
+        HTTPServer::connections.erase(conn.client_fd);
+        return false;
       }
       else
       {
@@ -431,26 +431,6 @@ namespace URLMatcher
             //           location.upload_dir.c_str());
           }
 
-          // check for if cookies are required and if we have an active session
-          if (location.cookie && !conn.retrieveSession()) // if cookies required and no session create session
-          {
-            debuglog(MAGENTA, "URLMatcher: Cookies required, creating session for location block %s",
-                     location_pair->first.c_str());
-            conn.data.cookies["sessionid"] = conn.generateSessionId();
-            conn.data.has_session = true;
-            conn.data.session_created = time(NULL);
-            conn.data.session_last_accessed = time(NULL);
-            conn.data.session_data.clear();
-            conn.data.session_id = conn.data.cookies["sessionid"];
-            debuglog(MAGENTA, "URLMatcher: Session ID generated: %s",
-                     conn.data.session_id.c_str());
-            // Add session cookie to response headers
-            string cookie = "Set-Cookie: sessionid=" + conn.data.session_id +
-                            "; Path=/; HttpOnly\r\n";
-            conn.data.response_headers += cookie;
-            debuglog(MAGENTA, "URLMatcher: Session cookie added to response headers");
-          }
-
           // We found a match, so stop looking through location blocks
           debuglog(GREEN, "URLMatcher: Applied configuration from location block '%s'",
                    location_pair->first.c_str());
@@ -470,63 +450,59 @@ namespace URLMatcher
 
   bool handleCookieUpdateRequest(HTTPConnxData &conn)
   {
-    // Check if this is a cookie API request
     if (conn.data.target.find("/api/update-cookie/") == 0 &&
         (conn.data.method == "PUT" || conn.data.method == "POST"))
     {
-        // Extract the cookie name and value
+        debuglog(YELLOW, "Cookie update request received: %s", conn.data.target.c_str());
+
+        // Create or retrieve session when cookie update is requested
+        if (!conn.data.has_session) {
+            debuglog(MAGENTA, "Creating new session for cookie update request");
+            conn.data.session_id = conn.generateSessionId();
+            conn.data.has_session = true;
+            conn.data.session_created = time(NULL);
+            conn.data.session_last_accessed = time(NULL);
+            conn.data.session_data.clear();
+            
+            debuglog(GREEN, "New session created with ID: %s", conn.data.session_id.c_str());
+            
+            // Add session cookie to response headers
+            conn.data.response_headers += "Set-Cookie: sessionid=" + 
+                conn.data.session_id + "; Path=/; HttpOnly\r\n";
+        }
+
+        // Update session last accessed time
+        conn.data.session_last_accessed = time(NULL);
+
+        // Extract the cookie name and value before cookie check
         string path = conn.data.target.substr(18); // Remove "/api/update-cookie/"
         size_t separator = path.find("/");
 
-        if (separator == string::npos)
-        {
-            Responses::simpleStatusResponse(conn, 400); // Bad Request
+        if (separator == string::npos) {
+            debuglog(RED, "Invalid cookie update request format");
+            Responses::simpleStatusResponse(conn, 400);
             return true;
         }
 
-        // since we are doing only client side state management we do not store these values
-        // in the session data, but we can use them to update the cookie on the client
         string cookieName = path.substr(0, separator);
         string cookieValue = path.substr(separator + 1);
 
-        debuglog(YELLOW, "Cookie update request: %s = %s", cookieName.c_str(), cookieValue.c_str());
+        debuglog(YELLOW, "Attempting to update cookie: %s = %s", 
+                cookieName.c_str(), cookieValue.c_str());
 
-        // Check if the session is active
-        if (conn.data.has_session)
-        {
-            time_t now = time(NULL);
-            time_t sessionExpiry = conn.data.session_last_accessed + (30); // 30 seconds expiry
-
-            if (now > sessionExpiry)
-            {
-                debuglog(RED, "Session expired. Clearing session.");
-                conn.data.has_session = false;
-                conn.data.session_id.clear();
-                conn.data.session_data.clear();
-                conn.data.response_headers += "Set-Cookie: sessionid=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 UTC;\r\n"; 
-                // setting to a past time is a standard way of deleting a cookie
-                Responses::createResponse(conn, "application/json", "{\"status\":\"session_expired\"}", 401);
-                SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
-                return true;
-            }
-
-            // Update the session_last_accessed time
-            conn.data.session_last_accessed = now;
-            debuglog(GREEN, "Session last accessed time updated to %ld", now);
-        }
-
-        // Add a Set-Cookie header to response_headers
+        // Add cookie to response headers
         string cookieHeader = "Set-Cookie: " + cookieName + "=" +
-                              cookieValue + "; Path=/\r\n";
+                            cookieValue + "; Path=/\r\n";
         conn.data.response_headers += cookieHeader;
 
-        // Create a minimal 200 response
+        // Create success response
         Responses::createResponse(conn, "application/json", "{\"status\":\"success\"}", 200);
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+        debuglog(GREEN, "Cookie update request completed successfully");
         return true;
     }
 
-    return false; // Not a cookie API request
+    return false;
   }
 
   /**
