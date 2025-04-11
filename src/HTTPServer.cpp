@@ -538,7 +538,7 @@ bool checkPollErrors(pollfd currentfd) {
 		int error = 0;
 		socklen_t len = sizeof(error);
 
-		if (getsockopt(currentfd.fd, SOL_SOCKET, SO_ERROR, &error, &len) ==
+		if (::getsockopt(currentfd.fd, SOL_SOCKET, SO_ERROR, &error, &len) ==
 			0) {
 			debug("Socket error on fd %d: %s", currentfd.fd, strerror(error));
 					// Explicitly handle EPIPE (Broken pipe)
@@ -577,7 +577,7 @@ void acceptNewClient(int server_fd) {
 	socklen_t client_len = sizeof(client_addr);
 
 	while (true) {
-		client_fd = accept(server_fd,  reinterpret_cast<struct sockaddr *>(&client_addr), &client_len);
+		client_fd = ::accept(server_fd,  reinterpret_cast<struct sockaddr *>(&client_addr), &client_len);
 	  if (client_fd == -1) {
 		// because we use non blocking sockets if i get EWOULDBLOCK it is
 		// not an error - it just means there are no more connections to accept
@@ -645,7 +645,7 @@ void setSendRecTimeout(int clientfd) {
 	struct timeval tv;
 	tv.tv_sec = Constants::requestTimeout;
 	tv.tv_usec = 0;
-	if (setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+	if (::setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
 	  debug("setsockopt SO_RCVTIMEO failed");
 	//   NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
 	  close(clientfd);
@@ -653,7 +653,7 @@ void setSendRecTimeout(int clientfd) {
   
 	// Set send timeout
 	tv.tv_sec = Constants::responseTimeout;
-	if (setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+	if (::setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
 	  debug("setsockopt SO_SNDTIMEO failed"); // todo check if this works in cgi
 	//   NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
 	  close(clientfd);
@@ -693,7 +693,7 @@ bool maxConnectionsCheck(int clientfd) {
 bool printLocalAddress(int clientfd) {
 	struct sockaddr_in local_addr;
 	socklen_t addr_len = sizeof(local_addr);
-	if (getsockname(clientfd, (struct sockaddr*)&local_addr, &addr_len) == -1) {
+	if (::getsockname(clientfd, (struct sockaddr*)&local_addr, &addr_len) == -1) {
 	  debug("[Server] getsockname error: %s\n", strerror(errno));
 	//   NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
 	  return false;

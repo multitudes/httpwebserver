@@ -232,7 +232,7 @@ int createBindSocket(uint16_t port) {
   sa.sin_port = htons(port);
 
 #ifdef __linux__
-  int server_socket = socket(sa.sin_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+  int server_socket = ::socket(sa.sin_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
   if (server_socket == -1) {
     debug("Error - server socket: %s\n", strerror(errno));
     return -1;
@@ -240,7 +240,7 @@ int createBindSocket(uint16_t port) {
 #endif
 
 #ifdef __APPLE__
-  int server_socket = socket(sa.sin_family, SOCK_STREAM, 0);
+  int server_socket = ::socket(sa.sin_family, SOCK_STREAM, 0);
   if (server_socket == -1) {
     debug("Error - server socket: %s\n", strerror(errno));
     return -1;
@@ -249,10 +249,10 @@ int createBindSocket(uint16_t port) {
 
   // avoiding the address already in use error with SO_REUSEADDR
   int optval = 1;
-  if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval,
+  if (::setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval,
                  sizeof(optval)) == -1) {
     debug("Error - server setsockopt: %s\n", strerror(errno));
-    close(server_socket); // TODO should i close all server sockets?
+    ::close(server_socket); // TODO should i close all server sockets?
     return -1;
   }
   debug("Created server socket fd: %d on port %d\n", server_socket, port);
@@ -260,17 +260,17 @@ int createBindSocket(uint16_t port) {
 // as per subject this code is for macos only
 // Sets the server socket to non-blocking mode - retrieve the flags
 #ifdef __APPLE__
-  int flags = fcntl(server_socket, F_GETFL, 0);
+  int flags = ::fcntl(server_socket, F_GETFL, 0);
   if (flags == -1) {
     debug("Error - fcntl F_GETFL: %s\n", strerror(errno));
-    close(server_socket);
+    ::close(server_socket);
     return -1;
   }
 
   // so we set the flags so the socket to non-blocking
-  if (fcntl(server_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+  if (::fcntl(server_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
     debug("Error - fcntl F_SETFL: %s\n", strerror(errno));
-    close(server_socket);
+    ::close(server_socket);
     return -1;
   }
 
@@ -278,22 +278,22 @@ int createBindSocket(uint16_t port) {
   int fd_flags = fcntl(server_socket, F_GETFD);
   if (fd_flags == -1) {
     debug("Error - fcntl F_GETFD: %s\n", strerror(errno));
-    close(server_socket);
+    ::close(server_socket);
     return -1;
   }
 
-  if (fcntl(server_socket, F_SETFD, fd_flags | FD_CLOEXEC) == -1) {
+  if (::fcntl(server_socket, F_SETFD, fd_flags | FD_CLOEXEC) == -1) {
     debug("Error - fcntl F_SETFD: %s\n", strerror(errno));
-    close(server_socket);
+    ::close(server_socket);
     return -1;
   }
 #endif
 
-  int status = bind(server_socket, (struct sockaddr *)&sa, sizeof sa);
+  int status = ::bind(server_socket, (struct sockaddr *)&sa, sizeof sa);
   if (status != 0) {
     debug("Error - bind port:%d socket %d - %s\n", port, server_socket,
           strerror(errno));
-    close(server_socket);
+    ::close(server_socket);
     return -1;
   }
   debug("Bound server_socket [%d] to localhost port %d\n", server_socket, port);
@@ -308,10 +308,10 @@ int createBindSocket(uint16_t port) {
  */
 bool listenSocket(int server_socket) {
   int backlog = 10;
-  int status = listen(server_socket, backlog);
+  int status = ::listen(server_socket, backlog);
   if (status != 0) {
     debug("listen error: %s\n", strerror(errno));
-    close(server_socket);
+    ::close(server_socket);
     return false;
   }
   debug("Listening on localhost server fd %d\n", server_socket);
@@ -333,14 +333,14 @@ bool setSendRecTimeout(int clientfd) {
   struct timeval tv;
   tv.tv_sec = Constants::requestTimeout;
   tv.tv_usec = 0;
-  if (setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+  if (::setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
     debuglog(RED, "setsockopt SO_RCVTIMEO failed");
     return false;
   }
 
   // Set send timeout
   tv.tv_sec = Constants::responseTimeout;
-  if (setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+  if (::setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
     debuglog(RED, "setsockopt SO_SNDTIMEO failed"); // will not work in cgi
     return false;
   }
@@ -382,7 +382,7 @@ void checkForIdleConnections() {
         // TODO send a 408 Request Timeout response to the client before closing
         remove_from_poll(fd);
 		HTTPServer::connections.erase(fd);
-        close(fd);
+        ::close(fd);
 		HTTPServer::lastActivityTime.erase(fd);
         break;
       }
