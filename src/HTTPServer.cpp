@@ -36,8 +36,10 @@ namespace HTTPServer {
 
 /*
 curl -X POST --data-binary @uploadtest.txt http://localhost:4244/upload/test.txt
-
+this will work on the mac - simulate slow connx
+curl --limit-rate 1 --verbose http://localhost:4244
 */
+
 // pollfd is an array of pollfd which contain
 // the file descriptors to poll and the events we want to monitor
 
@@ -99,7 +101,6 @@ int run(std::string configFile) {
     SocketUtils::checkForIdleConnections();
 
     // Process events on file descriptors
-    // debug("here?");
     for (size_t i = 0; i < pollfds.size(); i++) {
 
       if (checkPollErrors(pollfds[i])) {
@@ -108,7 +109,7 @@ int run(std::string configFile) {
 
       int current_fd = pollfds[i].fd;
 
-      // incoming connection
+      // incoming connection - server socket
       if ((pollfds[i].revents & POLLIN) != 0) {
         // handle connx request to server socket - server will accept the connx
         // and create and add new fd to pool - no need for state for server
@@ -118,11 +119,12 @@ int run(std::string configFile) {
         }
       }
 
+      // creates a state for clients
       HTTPConnxData &conn = connections[current_fd];
-      if (conn.client_fd == -1) {
-        debuglog(RED, "Connection fd %d not found in connections", current_fd);
-        throw std::runtime_error("Connection not found");
-        // continue;
+
+      // Update activity time ONLY when I/O actually happens
+      if (pollfds[i].revents & (POLLIN | POLLOUT)) {
+        lastActivityTime[current_fd] = std::time(NULL);
       }
 
       if (pollfds[i].revents & POLLIN && conn.state == CONN_INCOMING) {
@@ -138,7 +140,7 @@ int run(std::string configFile) {
         // here only if the previous validate request could not parse the whole
         // headers
 
-        // debug("CONN_PARSING_HEADER fd %d", conn.client_fd);
+        debug("CONN_PARSING_HEADER fd %d", conn.client_fd);
         // parse header
         // if header complete, set state
         // else continue parsing
