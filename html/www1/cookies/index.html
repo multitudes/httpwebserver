@@ -59,14 +59,23 @@
             return null;
         }
 
+        let countdownInterval = null; // Variable to store the interval ID
+
         // Function to calculate and display the countdown
         function startCountdown(expiryTime) {
-            const interval = setInterval(() => {
+            // Clear any existing timer
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+
+            // Start a new timer
+            countdownInterval = setInterval(() => {
                 const now = new Date().getTime();
                 const timeLeft = expiryTime - now;
 
                 if (timeLeft <= 0) {
-                    clearInterval(interval);
+                    clearInterval(countdownInterval); // Clear the timer when it expires
+                    countdownInterval = null; // Reset the interval ID
                     expiryMessage.textContent = 'Cookie has expired.';
                     button.classList.remove('clicked');
                     statusMessage.textContent = 'Button has not been clicked yet';
