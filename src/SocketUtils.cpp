@@ -43,19 +43,6 @@ void remove_from_poll(int fd) {
   }
 }
 
-// Update events for an existing fd
-// Returns true if found and updated, false otherwise
-bool update_poll_events(int fd, short events) {
-  for (HTTPServer::PollfdsVector::iterator it = HTTPServer::pollfds.begin();
-       it != HTTPServer::pollfds.end(); ++it) {
-    if (it->fd == fd) {
-      it->events = events;
-      return true; // Found and updated
-    }
-  }
-  return false; // FD not found
-}
-
 /**
  * @brief Initialize the webserver
  *

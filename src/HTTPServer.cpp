@@ -1,5 +1,6 @@
 
 #include "HTTPServer.hpp"
+#include "SocketUtils.hpp"
 #include "Constants.hpp"
 #include "DirectoryListing.hpp"
 #include "Parser.hpp"
@@ -168,9 +169,7 @@ int run(std::string configFile) {
         debug("Sent response to client %d", conn.client_fd);
 
         conn.reset();
-        SocketUtils::update_poll_events(current_fd, POLLIN | POLLOUT);
-        debuglog(YELLOW, "Switched connection %d fd back to POLLIN|POLLOUT",
-                 conn.client_fd);
+
         continue;
       }
 
@@ -196,7 +195,6 @@ int run(std::string configFile) {
             conn.reset();
 
             // Switch back to POLLIN for the next request
-            SocketUtils::update_poll_events(current_fd, POLLIN);
             debuglog(YELLOW, "Switched connection %d fd back to POLLIN",
                      conn.client_fd);
           }
@@ -320,9 +318,7 @@ int run(std::string configFile) {
             close(conn.cgiData.child_stdin_pipe[1]);
             conn.is_sending = 0;
             conn.is_receiving = 1;
-            SocketUtils::update_poll_events(conn.cgiData.child_stdin_pipe[1],
-                                            0); // Remove POLLOUT
-            SocketUtils::update_poll_events(conn.cgiData.child_stdout_pipe[0], POLLIN);
+        
           }
         }
         // Handle data from CGI process (ready to write to client from cgi)
@@ -432,7 +428,7 @@ void finish_upload(HTTPConnxData &conn) {
            conn.data.bytes_sent, conn.filename);
   close(conn.file_fd);
   conn.upload_completed = true;
-  SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+   
   Responses::createResponse(conn, "text/plain", "File uploaded successfully.",
                             201);
   conn.state = CONN_SIMPLE_RESPONSE;

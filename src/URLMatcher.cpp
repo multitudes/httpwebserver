@@ -1,10 +1,11 @@
 #include "URLMatcher.hpp"
+#include "SocketUtils.hpp"
+#include "HTTPServer.hpp"
 #include "CGI.hpp"
 #include "Config.hpp" // For Config::getConfigByPort()
 #include "Constants.hpp"
 #include "DirectoryListing.hpp"
 #include "HTTPConnxData.hpp"
-#include "HTTPServer.hpp"
 #include "Responses.hpp"
 #include "Utils.hpp"
 #include "debug.h"
@@ -97,7 +98,6 @@ bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
   if (!conn.urlMatcherData.config) {
     debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
     Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
     return false;
   }
 
@@ -111,7 +111,7 @@ bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
     debuglog(RED, "URLMatcher: Directory traversal attempt detected: %s",
              conn.data.target.c_str());
     Responses::htmlErrorResponse(conn, 400); // Bad Request
-    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+     
     return false;
   }
 
@@ -201,7 +201,7 @@ bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat,
   if (conn.file_fd < 0) {
     perror("URLMatcher: Failed to open file");
     Responses::htmlErrorResponse(conn, 403); // Forbidden is a common reason
-    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+     
     return false;
   }
 
@@ -214,7 +214,7 @@ bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat,
   debuglog(GREEN,
            "URLMatcher: Set state to CONN_FILE_REQUEST for fd %d, size %ld",
            conn.client_fd, conn.file_size);
-  SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+   
   return true;
 }
 
@@ -234,7 +234,7 @@ bool handleIndexFile(HTTPConnxData &conn, const string &index_file_path,
   if (conn.file_fd < 0) {
     perror("URLMatcher: Failed to open existing index file");
     Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+     
     return false;
   }
 
@@ -251,7 +251,7 @@ bool handleIndexFile(HTTPConnxData &conn, const string &index_file_path,
       GREEN,
       "URLMatcher: Set state to CONN_FILE_REQUEST for index fd %d, size %ld",
       conn.client_fd, conn.file_size);
-  SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+   
   return true;
 }
 
@@ -264,7 +264,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
   if (!conn.urlMatcherData.autoindex) {
     debuglog(RED, "URLMatcher: Autoindex is disabled.");
     Responses::htmlErrorResponse(conn, 404); // index not found
-    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+     
     return false;
   }
 
@@ -276,7 +276,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
     debuglog(GREEN,
              "URLMatcher: getDIRListing prepared listing response for fd %d.",
              conn.client_fd);
-    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+     
     return true;
   } else {
     debuglog(RED,
@@ -284,7 +284,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
              "opendir error).",
              conn.client_fd);
     Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+     
     return false;
   }
 }
@@ -320,7 +320,7 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
       Responses::createResponse(
           conn, "text/plain",
           "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
-      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+       
       return false;
     }
     return true;
@@ -389,7 +389,7 @@ void updateWithLocationBlockConfig(HTTPConnxData &conn) {
           Responses::createResponse(conn, "text/plain",
                                     location.return_directive.second,
                                     location.return_directive.first);
-          SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+           
           return;
         }
 
@@ -460,7 +460,7 @@ void validateRequest(HTTPConnxData &conn) {
     debuglog(RED, "URLMatcher: Method '%s' not allowed in location '%s'",
              conn.data.method.c_str(), conn.urlMatcherData.full_path.c_str());
     Responses::htmlErrorResponse(conn, 405); // Method Not Allowed
-    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+     
     return;
   }
   debug("accepted method found: %s", conn.data.method.c_str());
@@ -497,7 +497,7 @@ void validateRequest(HTTPConnxData &conn) {
               "Failed to delete file: " + std::string(strerror(errno)), 500);
         }
       }
-      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+       
       return;
     } else {
       debuglog(RED, "URLMatcher: File upload is not enabled for this location");
@@ -506,7 +506,7 @@ void validateRequest(HTTPConnxData &conn) {
     debuglog(RED, "URLMatcher: DELETE request not allowed for path '%s'",
              conn.urlMatcherData.full_path.c_str());
     Responses::htmlErrorResponse(conn, 403); // Forbidden
-    SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+     
     return;
   }
 
@@ -520,7 +520,7 @@ void validateRequest(HTTPConnxData &conn) {
       debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
                conn.urlMatcherData.full_path.c_str());
       Responses::htmlErrorResponse(conn, 403); // Forbidden
-      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+       
       return;
     }
     debugcolor(MAGENTA, "opening file for upload: %s",
@@ -530,7 +530,7 @@ void validateRequest(HTTPConnxData &conn) {
     if (conn.file_fd < 0) {
       perror("URLMatcher: Failed to open file for upload");
       Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+       
       return;
     }
 
@@ -550,7 +550,7 @@ void validateRequest(HTTPConnxData &conn) {
     if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0) {
       perror("URLMatcher: stat failed");
       Responses::htmlErrorResponse(conn, 404); // Not Found
-      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+       
       return;
     }
 
@@ -594,7 +594,7 @@ void validateRequest(HTTPConnxData &conn) {
       debuglog(RED, "URLMatcher: Path '%s' is not a regular file or directory.",
                conn.urlMatcherData.path_for_stat.c_str());
       Responses::htmlErrorResponse(conn, 415); // Unsupported Media Type
-      SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+       
     }
   } // end GET
 } // end of validateRequest

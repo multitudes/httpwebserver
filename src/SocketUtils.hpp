@@ -23,7 +23,6 @@ bool setSendRecTimeout(int clientfd);
 void checkForIdleConnections();
 void add_to_poll(int fd, short events);
 void remove_from_poll(int fd);
-bool update_poll_events(int fd, short events);
 void shutdownServer();
 
 } // namespace SocketUtils
