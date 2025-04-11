@@ -79,3 +79,14 @@ def test_normal_config_upload2(webserver_normal_config):
     assert downloaded.status_code == 200, f"Download failed with status code {downloaded.status_code}"
     with open(test_file, 'rb') as f:
         assert downloaded.content == f.read(), "Uploaded content does not match the original file"
+        
+
+#check if  DELETE request can delete the file from previous test
+def test_redirect_delete(webserver_normal_config):
+    """Test file deletion (only works with normal config)"""
+    delete_url = 'http://localhost:4244/upload/egyptiancatsuploadtest.jpeg' # must be the same as upload_url above
+    response = requests.delete(delete_url)
+    assert response.status_code == 200
+    # Check if the file is deleted
+    response = requests.get(delete_url)
+    assert response.status_code == 404
