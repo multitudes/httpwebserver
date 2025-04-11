@@ -1,14 +1,14 @@
 #pragma once
 
+#include "Parser.hpp"
+#include "ServerData.hpp"
+#include <exception>
+#include <map>
 #include <netdb.h>
 #include <pthread.h>
 #include <stdint.h> // C-style header because stdint is C++11>
-#include "ServerData.hpp"
-#include <map>
 #include <string>
 #include <vector>
-#include <exception>
-#include "Parser.hpp"
 
 /**
  * @brief Server configuration provider
@@ -23,16 +23,15 @@
  */
 class Config {
 public:
-  static void initialize(std::string& config_file);
-  static const std::vector<ServerData>& getServerData();
-  static const std::vector<ServerData>& getServerData(char *config_file);
-  static const ServerData* getConfigByPort(uint16_t port); 
+  static void initialize(std::string &config_file);
+  static const std::vector<ServerData> &getServerData();
+  static const std::vector<ServerData> &getServerData(char *config_file);
+  static const ServerData *getConfigByPort(uint16_t port);
   static void cleanup();
 
-  //static void debugprintConfigs();
-  
+  // static void debugprintConfigs();
 
-  private:
+private:
   // Private constructor to prevent instantiation
   Config(std::string filename);
   Config(const Config &);
@@ -42,9 +41,8 @@ public:
   // better and clearer to have a func to validate acc to a set of rules
   static bool validate();
 
-  static std::map<uint16_t, ServerData*> port_map_;
+  static std::map<uint16_t, ServerData *> port_map_;
   static std::vector<ServerData> servers;
   static Config *instance_;
   static std::string _filename;
 };
-
