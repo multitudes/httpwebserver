@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Click Button Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            text-align: center;
+        }
+        
+        #statusButton {
+            background-color: #f0f0f0;
+            border: none;
+            border-radius: 4px;
+            color: #333;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 12px 24px;
+            transition: background-color 0.3s ease;
+        }
+        
+        #statusButton.clicked {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        #statusMessage {
+            margin-top: 20px;
+            color: #666;
+        }
+
+        #expiryMessage {
+            margin-top: 10px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <h1>Click the Button</h1>
+    
+    <button id="statusButton">Click Me!</button>
+    
+    <div id="statusMessage">Button has not been clicked yet</div>
+    <div id="expiryMessage"></div>
+    
+    <script>
+        const button = document.getElementById('statusButton');
+        const statusMessage = document.getElementById('statusMessage');
+        const expiryMessage = document.getElementById('expiryMessage');
+
+        // Function to get a cookie by name
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+
+        let countdownInterval = null; // Variable to store the interval ID
+
+        // Function to calculate and display the countdown
+        function startCountdown(expiryTime) {
+            // Clear any existing timer
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+
+            // Start a new timer
+            countdownInterval = setInterval(() => {
+                const now = new Date().getTime();
+                const timeLeft = expiryTime - now;
+
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval); // Clear the timer when it expires
+                    countdownInterval = null; // Reset the interval ID
+                    expiryMessage.textContent = 'Cookie has expired.';
+                    button.classList.remove('clicked');
+                    statusMessage.textContent = 'Button has not been clicked yet';
+                    document.cookie = "buttonClicked=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+                } else {
+                    const secondsLeft = Math.floor(timeLeft / 1000);
+                    expiryMessage.textContent = `Cookie will expire in ${secondsLeft} seconds.`;
+                }
+            }, 1000);
+        }
+
+        // If the button was clicked in a previous session, show it as clicked
+        if (getCookie('buttonClicked') === 'true') {
+            button.classList.add('clicked');
+            statusMessage.textContent = 'Button was clicked previously';
+
+            // Calculate expiry time (30 seconds from when the cookie was set)
+            const expiryTime = new Date().getTime() + 30 * 1000;
+            startCountdown(expiryTime);
+        }
+
+        // Add click event listener
+        button.addEventListener('click', function() {
+            button.classList.add('clicked');
+            statusMessage.textContent = 'Button clicked! Updating server...';
+
+            // Use Fetch API to make the PUT request
+            fetch('/api/update-cookie/buttonClicked/true', {
+                method: 'PUT'
+            })
+            .then(response => {
+                if (response.ok) {
+                    statusMessage.textContent = 'Cookie updated successfully!';
+                    
+                    // Set the cookie locally with a 30-second expiry
+                    const expiryTime = new Date().getTime() + 30 * 1000;
+                    document.cookie = `buttonClicked=true; path=/; expires=${new Date(expiryTime).toUTCString()};`;
+
+                    // Start the countdown
+                    startCountdown(expiryTime);
+                } else {
+                    statusMessage.textContent = 'Failed to update cookie on server.';
+                    console.error('Error:', response.status);
+                }
+            })
+            .catch(error => {
+                statusMessage.textContent = 'An error occurred while updating the cookie.';
+                console.error('Fetch error:', error);
+            });
+        });
+    </script>
+</body>
+</html>

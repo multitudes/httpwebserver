@@ -71,6 +71,8 @@ struct HTTPConnxData {
     string boundary;
     size_t headers_end;
 
+
+
     // Response data
     int response_status;
     string response;
@@ -83,6 +85,13 @@ struct HTTPConnxData {
     enum ParseStatus { PARSE_SUCCESS, PARSE_INCOMPLETE, PARSE_ERROR };
     ParseStatus parse_status;
 
+    // Session management for Cookies -------------------Rufus
+    string session_id;
+    bool has_session;
+    time_t session_created;
+    time_t session_last_accessed;
+    map<string, string> session_data;
+
     ConnectionData()
         : method(""), target(""), version(""), host(""), port(4244),
           request(""), content_length(0), headers(), cookies(),
@@ -90,9 +99,12 @@ struct HTTPConnxData {
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_sent(false), sending_response(false), response_sent(false),
-          parse_status(PARSE_INCOMPLETE) {
-      memset(client_ip, 0, sizeof(client_ip));
-    }
+          parse_status(PARSE_INCOMPLETE),
+          session_id(""), has_session(false), // for session management
+          session_created(0), session_last_accessed(0), session_data() // for session management
+          {
+			memset(client_ip, 0, sizeof(client_ip)); 
+		  }
   };
 
   struct URLMatcherData {
@@ -196,4 +208,9 @@ struct HTTPConnxData {
   ParseStatus extractPortFromHost(std::string &host, uint16_t &port);
   string formatConnectionData(const ConnectionData &data);
   string formatConnectionDataLong(const ConnectionData &data);
+
+  // Session management methods -------------------------------------Rufus
+  string generateSessionId();
+  void createSession();
+  bool retrieveSession();
 };
