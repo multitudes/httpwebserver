@@ -4,6 +4,7 @@
 #include "HTTPServer.hpp"
 #include "ServerData.hpp"
 #include "debug.h"
+#include <algorithm>
 #include <csignal>
 #include <cstring>
 #include <errno.h>
@@ -17,45 +18,43 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <algorithm>
 
 using std::signal;
 namespace SocketUtils {
 
 // Add a file descriptor to the poll array
 void add_to_poll(int fd, short events) {
-	struct pollfd pfd;
-	memset(&pfd, 0, sizeof(pfd));
-	pfd.fd = fd;
-	pfd.events = events;
-	HTTPServer::pollfds.push_back(pfd);
+  struct pollfd pfd;
+  memset(&pfd, 0, sizeof(pfd));
+  pfd.fd = fd;
+  pfd.events = events;
+  HTTPServer::pollfds.push_back(pfd);
+}
+
+// Remove a fd by swapping with last element (O(1))
+void remove_from_poll(int fd) {
+  for (HTTPServer::PollfdsVector::iterator it = HTTPServer::pollfds.begin();
+       it != HTTPServer::pollfds.end(); ++it) {
+    if (it->fd == fd) {
+      *it = HTTPServer::pollfds.back();
+      HTTPServer::pollfds.pop_back();
+      return;
+    }
   }
-  
-  // Remove a fd by swapping with last element (O(1))
-  void remove_from_poll(int fd) {
-	for (HTTPServer::PollfdsVector::iterator it = HTTPServer::pollfds.begin(); it != HTTPServer::pollfds.end();
-		 ++it) {
-	  if (it->fd == fd) {
-		*it = HTTPServer::pollfds.back();
-		HTTPServer::pollfds.pop_back();
-		return;
-	  }
-	}
+}
+
+// Update events for an existing fd
+// Returns true if found and updated, false otherwise
+bool update_poll_events(int fd, short events) {
+  for (HTTPServer::PollfdsVector::iterator it = HTTPServer::pollfds.begin();
+       it != HTTPServer::pollfds.end(); ++it) {
+    if (it->fd == fd) {
+      it->events = events;
+      return true; // Found and updated
+    }
   }
-  
-  // Update events for an existing fd
-  // Returns true if found and updated, false otherwise
-  bool update_poll_events(int fd, short events) {
-	for (HTTPServer::PollfdsVector::iterator it = HTTPServer::pollfds.begin(); it != HTTPServer::pollfds.end();
-		 ++it) {
-	  if (it->fd == fd) {
-		it->events = events;
-		return true; // Found and updated
-	  }
-	}
-	return false; // FD not found
-  }
-  
+  return false; // FD not found
+}
 
 /**
  * @brief Initialize the webserver
@@ -77,33 +76,32 @@ void initialize() {
 }
 
 void setSignalHandlers() {
-// SIGINT is ctrl+c
-// SIGQUIT is ctrl+\
+  // SIGINT is ctrl+c
+  // SIGQUIT is ctrl+\
 // SIGTERM is kill
-// SIGHUP is terminal hangup
-// SIGPIPE is write to a socket that has been closed
-// SIGCHLD is child process terminated
+  // SIGHUP is terminal hangup
+  // SIGPIPE is write to a socket that has been closed
+  // SIGCHLD is child process terminated
   signal(SIGINT, handleSignal);
   signal(SIGQUIT, handleSignal);
   signal(SIGTERM, handleSignal);
   signal(SIGHUP, handleHangup);
   signal(SIGPIPE, handlePipe);
 
-
   struct sigaction sa;
   sa.sa_handler = handleChild;
   sigemptyset(&sa.sa_mask);
   /*
-  - SA_RESTART flag, interrupted system calls (e.g., read, write, accept) 
-  	will automatically restart instead of failing with EINTR. 
+  - SA_RESTART flag, interrupted system calls (e.g., read, write, accept)
+        will automatically restart instead of failing with EINTR.
   - SA_NOCLDSTOP: Prevents the signal from being triggered when
-  	child processes stop or continue (only triggers on termination). */
-  sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; 
+        child processes stop or continue (only triggers on termination). */
+  sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
 
   if (sigaction(SIGCHLD, &sa, NULL) == -1) {
     perror("sigaction");
-	shutdownServer();
-	debuglog(RED, "Error setting up SIGCHLD handler - exiting");
+    shutdownServer();
+    debuglog(RED, "Error setting up SIGCHLD handler - exiting");
     exit(EXIT_FAILURE);
   }
 }
@@ -176,45 +174,49 @@ void handleAlarm(int signal) {
  * sockets.
  */
 void shutdownServer() {
-    // Close all client connections first
-    for (HTTPServer::PollfdsVector::const_iterator it = HTTPServer::pollfds.begin(); it != HTTPServer::pollfds.end(); ++it) {
-        int fd = it->fd;
-        
-        // Skip server sockets (they'll be closed separately)
-        if (std::find(HTTPServer::serverSockets.begin(), HTTPServer::serverSockets.end(), fd) != HTTPServer::serverSockets.end()) {
-            continue;
-        }
+  // Close all client connections first
+  for (HTTPServer::PollfdsVector::const_iterator it =
+           HTTPServer::pollfds.begin();
+       it != HTTPServer::pollfds.end(); ++it) {
+    int fd = it->fd;
 
-        debuglog(YELLOW, "Closing client socket %d\n", fd);
-        
-        close(fd);
-        
-        // Clean up associated resources
-        if (HTTPServer::connections.find(fd) != HTTPServer::connections.end()) {
-            HTTPConnxData& conn = HTTPServer::connections[fd];
-            if (conn.file_fd != -1) {
-                ::close(conn.file_fd);
-            }
-            if (conn.cgiData.child_pid > 0) {
-                ::kill(conn.child_pid, SIGTERM);
-            }
-            HTTPServer::connections.erase(fd);
-        }
+    // Skip server sockets (they'll be closed separately)
+    if (std::find(HTTPServer::serverSockets.begin(),
+                  HTTPServer::serverSockets.end(),
+                  fd) != HTTPServer::serverSockets.end()) {
+      continue;
     }
 
-    // Close all server sockets
-    for (std::vector<int>::const_iterator it = HTTPServer::serverSockets.begin();
-         it != HTTPServer::serverSockets.end(); ++it) {
-        debuglog(YELLOW, "Closing server socket %d\n", *it);
-        shutdown(*it, SHUT_RDWR);
-        close(*it);
-    }
+    debuglog(YELLOW, "Closing client socket %d\n", fd);
 
-    // Clear all data structures
-    HTTPServer::pollfds.clear();
-    HTTPServer::serverSockets.clear();
-    HTTPServer::connections.clear();
-    HTTPServer::lastActivityTime.clear();
+    close(fd);
+
+    // Clean up associated resources
+    if (HTTPServer::connections.find(fd) != HTTPServer::connections.end()) {
+      HTTPConnxData &conn = HTTPServer::connections[fd];
+      if (conn.file_fd != -1) {
+        ::close(conn.file_fd);
+      }
+      if (conn.cgiData.child_pid > 0) {
+        ::kill(conn.child_pid, SIGTERM);
+      }
+      HTTPServer::connections.erase(fd);
+    }
+  }
+
+  // Close all server sockets
+  for (std::vector<int>::const_iterator it = HTTPServer::serverSockets.begin();
+       it != HTTPServer::serverSockets.end(); ++it) {
+    debuglog(YELLOW, "Closing server socket %d\n", *it);
+    shutdown(*it, SHUT_RDWR);
+    close(*it);
+  }
+
+  // Clear all data structures
+  HTTPServer::pollfds.clear();
+  HTTPServer::serverSockets.clear();
+  HTTPServer::connections.clear();
+  HTTPServer::lastActivityTime.clear();
 }
 
 /**
@@ -250,7 +252,7 @@ int createBindSocket(uint16_t port) {
   // avoiding the address already in use error with SO_REUSEADDR
   int optval = 1;
   if (::setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval,
-                 sizeof(optval)) == -1) {
+                   sizeof(optval)) == -1) {
     debug("Error - server setsockopt: %s\n", strerror(errno));
     ::close(server_socket); // TODO should i close all server sockets?
     return -1;
@@ -356,22 +358,23 @@ bool setSendRecTimeout(int clientfd) {
  * TODO send a 408 Request Timeout response to the client before closing
  */
 void SocketUtils::checkForIdleConnections() {
-    std::time_t now = std::time(NULL);
-    std::map<int, std::time_t>::iterator it = HTTPServer::lastActivityTime.begin();
-    
-    while (it != HTTPServer::lastActivityTime.end()) {
-        if (now - it->second > Constants::keepalive_timeout) {
-            int fd = it->first;
-            debuglog(YELLOW, "Closing idle connection (fd %d)", fd);
+  std::time_t now = std::time(NULL);
+  std::map<int, std::time_t>::iterator it =
+      HTTPServer::lastActivityTime.begin();
 
-            HTTPServer::connections.erase(fd);
-            remove_from_poll(fd);
-            close(fd);
-            HTTPServer::lastActivityTime.erase(it++);
-        } else {
-            ++it;
-        }
+  while (it != HTTPServer::lastActivityTime.end()) {
+    if (now - it->second > Constants::keepalive_timeout) {
+      int fd = it->first;
+      debuglog(YELLOW, "Closing idle connection (fd %d)", fd);
+
+      HTTPServer::connections.erase(fd);
+      remove_from_poll(fd);
+      close(fd);
+      HTTPServer::lastActivityTime.erase(it++);
+    } else {
+      ++it;
     }
+  }
 }
 
 } // namespace SocketUtils

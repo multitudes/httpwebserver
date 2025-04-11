@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Config.hpp"
+#include <cstring>
 #include <iomanip>
 #include <map>
 #include <sstream>
@@ -8,8 +10,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <vector>
-#include "Config.hpp"
-#include <cstring>
 
 using std::map;
 using std::string;
@@ -55,8 +55,8 @@ struct HTTPConnxData {
     // Connection info
     string host;
     uint16_t port;
-	char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
-	
+    char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
+
     string request;
     size_t content_length;
 
@@ -91,47 +91,50 @@ struct HTTPConnxData {
           response_headers(""), response_body(""), bytes_sent(0),
           headers_sent(false), sending_response(false), response_sent(false),
           parse_status(PARSE_INCOMPLETE) {
-			memset(client_ip, 0, sizeof(client_ip)); 
-		  }
+      memset(client_ip, 0, sizeof(client_ip));
+    }
   };
 
   struct URLMatcherData {
 
-    const ServerData* config;      
-    string full_path;              // Full path to the requested resource
-    string path_for_stat;          // Path adjusted for stat() calls
-    string content_type;           // Content type (MIME type) for the response
-    string file_upload_dir;             // Directory for file uploads
+    const ServerData *config;
+    string full_path;       // Full path to the requested resource
+    string path_for_stat;   // Path adjusted for stat() calls
+    string content_type;    // Content type (MIME type) for the response
+    string file_upload_dir; // Directory for file uploads
     bool autoindex;
-    bool return_directive;         // Flag for return directive
-    bool file_upload;           // Flag for file upload
-	
-    
+    bool return_directive; // Flag for return directive
+    bool file_upload;      // Flag for file upload
+
     std::vector<std::string> acceptedMethods;
-    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), file_upload_dir(""), autoindex(false), return_directive(false), file_upload(false), acceptedMethods() {}
+    URLMatcherData()
+        : config(NULL), full_path(""), path_for_stat(""), content_type(""),
+          file_upload_dir(""), autoindex(false), return_directive(false),
+          file_upload(false), acceptedMethods() {}
   };
 
   struct CGIData {
-	string buffer;
-	bool is_sending;
-	bool is_receiving;
-	string path_info;
-	string query_string;
-	// CGI process ID
-	pid_t child_pid;
-	std::map<std::string, std::string> env;
+    string buffer;
+    bool is_sending;
+    bool is_receiving;
+    string path_info;
+    string query_string;
+    // CGI process ID
+    pid_t child_pid;
+    std::map<std::string, std::string> env;
 
-	CGIData()
-		: buffer(""), is_sending(false), is_receiving(true), child_pid(-1), path_info(""), query_string(), env() { 
-			env["SERVER_SOFTWARE"] = "VibeServer/1.0";
-			env["REMOTE_HOST"] = "";
-			env["REMOTE_USER"] = "";
-			env["GATEWAY_INTERFACE"] = "CGI/1.1";
-			env["AUTH_TYPE"] = "";
-			env["TRANSFER_ENCODING"] = "";
-			env["PATH_INFO"] = "";
-			env["PATH_TRANSLATED"] = "/";
-		}
+    CGIData()
+        : buffer(""), is_sending(false), is_receiving(true), child_pid(-1),
+          path_info(""), query_string(), env() {
+      env["SERVER_SOFTWARE"] = "VibeServer/1.0";
+      env["REMOTE_HOST"] = "";
+      env["REMOTE_USER"] = "";
+      env["GATEWAY_INTERFACE"] = "CGI/1.1";
+      env["AUTH_TYPE"] = "";
+      env["TRANSFER_ENCODING"] = "";
+      env["PATH_INFO"] = "";
+      env["PATH_TRANSLATED"] = "/";
+    }
   };
   // Connection state and metadata
   ConnectionState state;
@@ -190,7 +193,7 @@ struct HTTPConnxData {
   ParseStatus parseCookies(const string &cookieHeader);
   ParseStatus processContentHeaders();
   ParseStatus parseHeaders(HTTPConnxData &conn);
-  ParseStatus extractPortFromHost(std::string& host, uint16_t& port);
+  ParseStatus extractPortFromHost(std::string &host, uint16_t &port);
   string formatConnectionData(const ConnectionData &data);
   string formatConnectionDataLong(const ConnectionData &data);
 };

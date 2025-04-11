@@ -21,26 +21,26 @@ struct CGIData {
 };
 
 struct Location {
-	std::string upload_dir;
-	bool autoindex;
-	bool file_upload;
-	bool internal;
+  std::string upload_dir;
+  bool autoindex;
+  bool file_upload;
+  bool internal;
   bool cookie;
   std::string root;
   std::vector<std::string> acceptedMethods;
   std::pair<int, std::string> return_directive;
   std::map<int, std::string> error_pages;
 
-  Location() :
-    upload_dir(""), // 5 
-    autoindex(false),  // 4 same priority because different
-    file_upload(false), // 4 same priority because different
-    internal(false),
-    cookie(false),
-	  acceptedMethods(),  // 2 if post then could be upload - if not could be autoindex
-    return_directive(),  // 1st - return immediately 
-    root(""), // 5 check for new root yes no
-    error_pages() {}
+  Location()
+      : upload_dir(""),     // 5
+        autoindex(false),   // 4 same priority because different
+        file_upload(false), // 4 same priority because different
+        internal(false), cookie(false),
+        acceptedMethods(),  // 2 if post then could be upload - if not could be
+                            // autoindex
+        return_directive(), // 1st - return immediately
+        root(""),           // 5 check for new root yes no
+        error_pages() {}
 };
 
 struct BaseConf {
@@ -54,8 +54,8 @@ struct BaseConf {
   std::string upload_dir;
 
   BaseConf()
-      : maxBodySize(10000000), autoindex(false),
-        file_server(true), upload_dir("./www/upload"), parsedindex(false) {
+      : maxBodySize(10000000), autoindex(false), file_server(true),
+        upload_dir("./www/upload"), parsedindex(false) {
     defaultheaders["Content-Type"] = "text/html";
     defaultheaders["Server"] = "webserv/1.0";
     defaultheaders["Connection"] = "keep-alive";
@@ -79,16 +79,10 @@ struct ServerData : public BaseConf {
   bool cgi_exists;
   bool has_locations;
 
-  ServerData() :
-    serverListenAddress("localhost"),
-    index("index.html"),
-    root("www"),
-    parsedroot(false),
-    cgi_exists(false),
-    has_locations(false)
-    {};
+  ServerData()
+      : serverListenAddress("localhost"), index("index.html"), root("www"),
+        parsedroot(false), cgi_exists(false), has_locations(false) {};
 
   bool hasCGI() const { return cgi_exists; }
   bool hasDirectives() const { return has_locations; }
 };
-

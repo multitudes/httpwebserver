@@ -1,11 +1,11 @@
 #include "HTTPConnxData.hpp"
 #include "debug.h"
+#include <cstring>
 #include <sstream>
 #include <stdbool.h>
 #include <stdlib.h> // for strtoul
 #include <string>
 #include <unistd.h>
-#include <cstring>
 
 using std::map;
 using std::string;
@@ -101,34 +101,31 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
 
   data.is_get_request = (data.method == "GET");
 
-	// Parse target into path and query string
-	size_t query_pos = data.target.find('?');
-	if (query_pos != string::npos) {
-		cgiData.query_string = data.target.substr(query_pos + 1);
-		debug("Query string: %s", cgiData.query_string.c_str());
-		data.target = data.target.substr(0, query_pos);
-	} else {
-		cgiData.query_string.clear();
-	}
+  // Parse target into path and query string
+  size_t query_pos = data.target.find('?');
+  if (query_pos != string::npos) {
+    cgiData.query_string = data.target.substr(query_pos + 1);
+    debug("Query string: %s", cgiData.query_string.c_str());
+    data.target = data.target.substr(0, query_pos);
+  } else {
+    cgiData.query_string.clear();
+  }
 
-	if (data.is_get_request) {
-		// Find the last dot in the target (file extension)
-		size_t last_dot = data.target.find_last_of('.');
-		if (last_dot != string::npos) {
-			// Find the next slash after the extension
-			size_t slash_after_ext = data.target.find('/', last_dot);
-			if (slash_after_ext != string::npos) {
-				// Everything after the slash is path_info
-				cgiData.path_info = data.target.substr(slash_after_ext);
-				debug("Path info: %s", cgiData.path_info.c_str());
-				// Everything before is the actual target
-				data.target = data.target.substr(0, slash_after_ext);
-			}
-		}
-	}
-
-
-
+  if (data.is_get_request) {
+    // Find the last dot in the target (file extension)
+    size_t last_dot = data.target.find_last_of('.');
+    if (last_dot != string::npos) {
+      // Find the next slash after the extension
+      size_t slash_after_ext = data.target.find('/', last_dot);
+      if (slash_after_ext != string::npos) {
+        // Everything after the slash is path_info
+        cgiData.path_info = data.target.substr(slash_after_ext);
+        debug("Path info: %s", cgiData.path_info.c_str());
+        // Everything before is the actual target
+        data.target = data.target.substr(0, slash_after_ext);
+      }
+    }
+  }
 
   return PARSE_SUCCESS;
 }
@@ -168,50 +165,51 @@ ParseStatus HTTPConnxData::parseCookies(const string &cookieHeader) {
   return PARSE_SUCCESS;
 }
 
-ParseStatus HTTPConnxData::extractPortFromHost(std::string& host, uint16_t& port) {
-    size_t colon_pos = host.find(':');
-    
-    if (colon_pos == std::string::npos) {
-        debuglog(RED, "No port specified in Host header");
-        return PARSE_ERROR;
-    }
+ParseStatus HTTPConnxData::extractPortFromHost(std::string &host,
+                                               uint16_t &port) {
+  size_t colon_pos = host.find(':');
 
-    // Extract port substring
-    std::string port_str = host.substr(colon_pos + 1);
-    host = host.substr(0, colon_pos); // Remove port from host string
+  if (colon_pos == std::string::npos) {
+    debuglog(RED, "No port specified in Host header");
+    return PARSE_ERROR;
+  }
 
-    // Convert port
-    char* endptr;
-    long port_long = strtol(port_str.c_str(), &endptr, 10);
-    
-    // Validate conversion
-    if (*endptr != '\0') {
-        debuglog(RED, "Port contains non-numeric characters: %s", port_str.c_str());
-        return PARSE_ERROR;
-    }
-    
-    // Validate range
-    if (port_long < 1 || port_long > 65535) {  // Port 0 is reserved
-        debuglog(RED, "Port out of range (1-65535): %ld", port_long);
-        return PARSE_ERROR;
-    }
-    
-    port = static_cast<uint16_t>(port_long);
-	debuglog(YELLOW, "Extracted port: %u", port);
-    return PARSE_SUCCESS;
+  // Extract port substring
+  std::string port_str = host.substr(colon_pos + 1);
+  host = host.substr(0, colon_pos); // Remove port from host string
+
+  // Convert port
+  char *endptr;
+  long port_long = strtol(port_str.c_str(), &endptr, 10);
+
+  // Validate conversion
+  if (*endptr != '\0') {
+    debuglog(RED, "Port contains non-numeric characters: %s", port_str.c_str());
+    return PARSE_ERROR;
+  }
+
+  // Validate range
+  if (port_long < 1 || port_long > 65535) { // Port 0 is reserved
+    debuglog(RED, "Port out of range (1-65535): %ld", port_long);
+    return PARSE_ERROR;
+  }
+
+  port = static_cast<uint16_t>(port_long);
+  debuglog(YELLOW, "Extracted port: %u", port);
+  return PARSE_SUCCESS;
 }
 
 ParseStatus HTTPConnxData::processContentHeaders() {
   // Process Host header
   if (!checkHeader(*this, "Host", data.host)) {
-	debug("Missing Host header");
-	debuglog(RED, "Missing Host header");
+    debug("Missing Host header");
+    debuglog(RED, "Missing Host header");
     return PARSE_ERROR;
   }
 
   // Extract port (mandatory )
   if (extractPortFromHost(data.host, data.port) != PARSE_SUCCESS) {
-	debug("POrt extraction failed");
+    debug("POrt extraction failed");
     return PARSE_ERROR;
   }
 
@@ -227,8 +225,8 @@ ParseStatus HTTPConnxData::processContentHeaders() {
   if (checkHeader(*this, "Transfer-Encoding", transfer_encoding)) {
     data.chunked = (transfer_encoding == "chunked");
     if (data.chunked) {
-		debug("Chunked transfer encoding detected");
-        debuglog(YELLOW, "Chunked transfer encoding detected");
+      debug("Chunked transfer encoding detected");
+      debuglog(YELLOW, "Chunked transfer encoding detected");
     }
   }
 
@@ -261,7 +259,7 @@ ParseStatus HTTPConnxData::parseHeaders(HTTPConnxData &conn) {
 
   data.headers_end = data.request.find("\r\n\r\n");
   if (data.headers_end == string::npos) {
-	debug("Headers not complete");
+    debug("Headers not complete");
     return PARSE_INCOMPLETE;
   }
 
