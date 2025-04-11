@@ -193,10 +193,10 @@ void shutdownServer() {
         if (HTTPServer::connections.find(fd) != HTTPServer::connections.end()) {
             HTTPConnxData& conn = HTTPServer::connections[fd];
             if (conn.file_fd != -1) {
-                close(conn.file_fd);
+                ::close(conn.file_fd);
             }
             if (conn.cgiData.child_pid > 0) {
-                kill(conn.child_pid, SIGTERM);
+                ::kill(conn.child_pid, SIGTERM);
             }
             HTTPServer::connections.erase(fd);
         }
@@ -355,40 +355,23 @@ bool setSendRecTimeout(int clientfd) {
  * lastActivityTime map
  * TODO send a 408 Request Timeout response to the client before closing
  */
-void checkForIdleConnections() {
-  std::time_t now = std::time(NULL);
-  std::vector<int> idleConnections;
-  idleConnections.reserve(100);
-  // lastActivityTime is a map client_fd to the last time active
-  // so i get tthe serverConf for the client and check
-  for (std::map<int, time_t>::iterator it =
-           HTTPServer::lastActivityTime.begin();
-       it != HTTPServer::lastActivityTime.end(); ++it) {
+void SocketUtils::checkForIdleConnections() {
+    std::time_t now = std::time(NULL);
+    std::map<int, std::time_t>::iterator it = HTTPServer::lastActivityTime.begin();
+    
+    while (it != HTTPServer::lastActivityTime.end()) {
+        if (now - it->second > Constants::keepalive_timeout) {
+            int fd = it->first;
+            debuglog(YELLOW, "Closing idle connection (fd %d)", fd);
 
-    if (now - it->second > Constants::keepalive_timeout) {
-      debuglog(YELLOW,
-               "[Server] Detected idle connection %d for a keep-alive timeout "
-               "of % d ",
-               it->first, Constants::keepalive_timeout);
-      idleConnections.push_back(it->first);
+            HTTPServer::connections.erase(fd);
+            remove_from_poll(fd);
+            close(fd);
+            HTTPServer::lastActivityTime.erase(it++);
+        } else {
+            ++it;
+        }
     }
-  }
-
-  for (size_t i = 0; i < idleConnections.size(); ++i) {
-    int fd = idleConnections[i];
-    for (size_t j = 0; j < HTTPServer::pollfds.size(); ++j) {
-      if (HTTPServer::pollfds[j].fd == fd) {
-        debuglog(YELLOW, "Closing client socket %d", fd);
-        // TODO send a 408 Request Timeout response to the client before closing
-        remove_from_poll(fd);
-		HTTPServer::connections.erase(fd);
-        ::close(fd);
-		HTTPServer::lastActivityTime.erase(fd);
-        break;
-      }
-    }
-  }
-  idleConnections.clear();
 }
 
 } // namespace SocketUtils

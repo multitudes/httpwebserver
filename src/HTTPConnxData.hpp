@@ -57,7 +57,6 @@ struct HTTPConnxData {
     uint16_t port;
 	char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
 	
-
     string request;
     size_t content_length;
 
