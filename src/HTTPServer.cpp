@@ -58,7 +58,7 @@ vector<ServerData> configs_;
  */
 int run(std::string configFile) {
   configs_ = Config::getServerData();
-  struct sockaddr_in server_addr;
+
   bool skip_to_next_iteration = false;
 
   SocketUtils::initialize();
@@ -577,7 +577,7 @@ void acceptNewClient(int server_fd) {
 	socklen_t client_len = sizeof(client_addr);
 
 	while (true) {
-		client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+		client_fd = accept(server_fd,  reinterpret_cast<struct sockaddr *>(&client_addr), &client_len);
 	  if (client_fd == -1) {
 		// because we use non blocking sockets if i get EWOULDBLOCK it is
 		// not an error - it just means there are no more connections to accept
