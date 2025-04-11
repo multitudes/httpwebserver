@@ -17,6 +17,7 @@ CXX				= 	c++
 # CXXFLAGS        += -pedantic-errors
 CXXFLAGS		+= -std=c++98 
 CXXFLAGS 		+= -Wconversion -Wunreachable-code 
+CXXFLAGS		+= -g3
 
 
 

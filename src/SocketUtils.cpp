@@ -195,7 +195,7 @@ void shutdownServer() {
             if (conn.file_fd != -1) {
                 close(conn.file_fd);
             }
-            if (conn.child_pid > 0) {
+            if (conn.cgiData.child_pid > 0) {
                 kill(conn.child_pid, SIGTERM);
             }
             HTTPServer::connections.erase(fd);
@@ -383,8 +383,8 @@ void checkForIdleConnections() {
         remove_from_poll(fd);
 		HTTPServer::connections.erase(fd);
         close(fd);
-        break;
 		HTTPServer::lastActivityTime.erase(fd);
+        break;
       }
     }
   }

@@ -9,6 +9,7 @@
 #include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <algorithm>
 #include "Utils.hpp"
 #include "Parser.hpp"
 
@@ -102,71 +103,17 @@ int run(std::string configFile) {
 		
 		int current_fd = pollfds[i].fd;
 		
-		// Handle new connections on server socket
-		for (size_t j = 0; j < serverSockets.size(); j++) {
+		 // incoming connection
+		 if ((pollfds[i].revents & POLLIN) != 0) {
+			// handle connx request to server socket - server will accept the connx
+			// and create and add new fd to pool - no need for state for server sockets but 
+			// will be added for client sockets	
+			if (gotServerSocketAddNewConnx(pollfds[i].fd)) {
+				continue;
+			  } 
+		  }
 
-			int server_fd = serverSockets[j];
-			if (current_fd == server_fd && (pollfds[i].revents & POLLIN)) {
-				debug("server socket %d is ready to accept", server_fd);
-				struct sockaddr_in client_addr;
-				socklen_t client_len = sizeof(client_addr);
-				int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-				if (client_fd < 0) {
-					debug("accept failed %s", strerror(errno));
-					perror("Accept failed");
-					// cannot send error response because no client fd created
-					skip_to_next_iteration = true;
-					break;
-				}
-				// set the timeouts on the read write to client
-				if (!SocketUtils::setSendRecTimeout(client_fd)) {
-					perror("Failed to set send/receive timeout");
-					close(client_fd);
-					skip_to_next_iteration = true;
-					break;
-				}
-				if (pollfds.size() >= Constants::maxConnections) {
-					debuglog(RED,
-							"Maximum connections reached, rejecting new connection");
-					close(client_fd); // TODO
-					// sendErrorResponse(clientfd, 503, "Service Unavailable");
-					return false;
-				}
 
-				debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
-				ntohs(client_addr.sin_port));
-
-				HTTPConnxData &conn = connections[client_fd];
-				conn.client_fd = client_fd;
-				SocketUtils::add_to_poll(client_fd, POLLIN|POLLOUT);
-				conn.state = CONN_INCOMING;
-
-				// Store client IP address
-				inet_ntop(AF_INET, &client_addr.sin_addr, conn.data.client_ip,
-							sizeof(conn.data.client_ip));
-				uint16_t client_port = ntohs(client_addr.sin_port);
-
-				// add the timeout for the client
-				lastActivityTime[client_fd] = std::time(NULL);
-
-				debuglog(YELLOW, "Client connected from %s:%d", conn.data.client_ip,
-						client_port);
-
-				debuglog(
-					YELLOW,
-					"Connection data initialized in state INCOMING for client %d",
-					client_fd);
-				skip_to_next_iteration = true;
-			}
-		}
-
-		// go back to the while loop if we had an error - TODO remove it when i
-		// get the URLMatcher func
-		if (skip_to_next_iteration) {
-			debug("continue to next loop");
-			skip_to_next_iteration = false;
-			continue;
-		}
 
       HTTPConnxData &conn = connections[current_fd];
       if (conn.client_fd == -1) {
@@ -228,11 +175,12 @@ int run(std::string configFile) {
 
 	if (pollfds[i].revents & POLLOUT && conn.state == CONN_FILE_REQUEST) {
 		debug("CONN_FILE_REQUEST fd %d", conn.client_fd);
-		debuglog(YELLOW, "Handling write event for connection fd %d",
-			conn.client_fd);
+		// debuglog(YELLOW, "Handling write event for connection fd %d",
+		// 	// conn.client_fd);
 			lastActivityTime[pollfds[i].fd] = std::time(NULL);
 			// Use original send_headers/send_file approach
 			if (!conn.headers_sent) {
+				debug("Sending buffer headers for connection %d", conn.client_fd);
 				if (send_headers(conn) < 0) {
 					conn.reset();
 				}
@@ -240,18 +188,13 @@ int run(std::string configFile) {
 				int result = send_file(conn);
 				if (result < 0) {
 					conn.reset();
+					//send error?
 				} else if (result == 0) {
 					// File sent completely - reset for next request
-					if (conn.file_fd != -1) {
-						close(conn.file_fd);
-						conn.file_fd = -1;
-					}
 					conn.reset();
 					
 					// Switch back to POLLIN for the next request
 					SocketUtils::update_poll_events(current_fd, POLLIN);
-					conn.state = CONN_INCOMING;
-					
 					debuglog(YELLOW, "Switched connection %d fd back to POLLIN",
 						conn.client_fd);
 					}
@@ -612,6 +555,179 @@ bool checkPollErrors(pollfd currentfd) {
 		return true; 
 	}
 	return false; // No errors
+}
+
+// Function to check if the pollfd is a server socket and handle the connection
+bool gotServerSocketAddNewConnx(int fd) {
+	vector<int>::iterator it =
+		std::find(serverSockets.begin(), serverSockets.end(), fd);
+	if (it != serverSockets.end()) {
+	  // i got a server socket fd - *it is the fd and I get the index
+	  // in the server config array and accept that connection
+	  acceptNewClient(*it);
+	  return true;
+	}
+	return false;
+  }
+
+
+void acceptNewClient(int server_fd) {
+	int client_fd;
+	struct sockaddr_in client_addr;
+	socklen_t client_len = sizeof(client_addr);
+
+	while (true) {
+		client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+	  if (client_fd == -1) {
+		// because we use non blocking sockets if i get EWOULDBLOCK it is
+		// not an error - it just means there are no more connections to accept
+		if (errno != EWOULDBLOCK) {
+		  debug("[SERVER] accept error: %s\n", strerror(errno));
+		}
+		break;
+	  }
+	  // max connection check!
+	  if (!maxConnectionsCheck(client_fd)) {
+		close(client_fd);
+		continue;
+	  }
+  
+	  // set the timeout for the client socket on send and receive
+	//   setSendRecTimeout(client_fd);
+	if (!SocketUtils::setSendRecTimeout(client_fd)) {
+		perror("Failed to set send/receive timeout");
+		close(client_fd);
+		continue;
+	}
+	
+	  // Get the local address of the accepted socket and print it
+	  // for debugging purposes
+	  if (!printLocalAddress(client_fd)) {
+		close(client_fd);
+		continue;
+	  }
+  	debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+	HTTPConnxData &conn = connections[client_fd];
+	conn.client_fd = client_fd;
+	SocketUtils::add_to_poll(client_fd, POLLIN|POLLOUT);
+	conn.state = CONN_INCOMING;
+
+	// Store client IP address
+	inet_ntop(AF_INET, &client_addr.sin_addr, conn.data.client_ip,
+				sizeof(conn.data.client_ip));
+	uint16_t client_port = ntohs(client_addr.sin_port);
+
+	// add the timeout for the client
+	lastActivityTime[client_fd] = std::time(NULL);
+
+	debuglog(YELLOW, "Client connected from %s:%d", conn.data.client_ip,
+			client_port);
+
+	debuglog(
+		YELLOW,
+		"Connection data initialized in state INCOMING for client %d",
+		client_fd);
+	}
+  }
+  
+  /**
+ * @brief Set the send and receive timeouts for a client socket
+ * 
+ * @param conf The server configuration
+ * @param clientfd The client socket file descriptor
+ * 
+ * I use the values in the server configuration to set the send and receive timeouts
+ * for the client socket. This is useful for handling slow or unresponsive clients.
+ */
+void setSendRecTimeout(int clientfd) {
+	// connections timeout rcvd
+	struct timeval tv;
+	tv.tv_sec = Constants::requestTimeout;
+	tv.tv_usec = 0;
+	if (setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+	  debug("setsockopt SO_RCVTIMEO failed");
+	//   NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
+	  close(clientfd);
+	}
+  
+	// Set send timeout
+	tv.tv_sec = Constants::responseTimeout;
+	if (setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+	  debug("setsockopt SO_SNDTIMEO failed"); // todo check if this works in cgi
+	//   NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
+	  close(clientfd);
+	}
+  }
+
+
+/**
+ * @brief Max connection check
+ *
+ * @param clientfd The client socket file descriptor
+ * 
+ * In the server conf we have the max connections allowed for each server if specified
+ * or a default value. We dont allow new connections in the poll loop if the max
+ * connections are reached. 
+ */
+bool maxConnectionsCheck(int clientfd) {
+
+	if (pollfds.size() >= Constants::maxConnections) {
+		debug("Maximum connections reached, rejecting new connection");
+		// NetUtils::sendErrorResponse(clientfd, 503, "Service Unavailable");
+		return false;
+	}
+	return true;
+}
+
+/**
+ * @brief Print the local address of the client
+ *
+ * @param clientfd The client socket file descriptor
+ * @return bool True if the address was printed successfully, false otherwise
+ * 
+ * The local address refers to the IP address and port number assigned to the server's 
+ * socket on the local machine. 
+ * This is the address that the server uses to listen for incoming connections from clients.
+ */
+bool printLocalAddress(int clientfd) {
+	struct sockaddr_in local_addr;
+	socklen_t addr_len = sizeof(local_addr);
+	if (getsockname(clientfd, (struct sockaddr*)&local_addr, &addr_len) == -1) {
+	  debug("[Server] getsockname error: %s\n", strerror(errno));
+	//   NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
+	  return false;
+	}
+	uint16_t local_port = ntohs(local_addr.sin_port);
+	debug("[Server] Accepted new connection on client socket %d, port %d", clientfd, local_port);
+	return true;
+  }
+
+  /**
+ * @brief Custom inet_ntop implementation for IPv4 addresses
+ * 
+ * @param af The address family
+ * @param src The source address
+ * @param dst The destination buffer
+ * @param size The size of the buffer
+ * @return const char* The string representation of the address
+ * 
+ * This function is a custom implementation of inet_ntop for IPv4 addresses.
+ * It takes an address family, a source address, a destination buffer, and the
+ * size of the buffer. It returns the string representation of the address.
+ * The reason for this custom implementation is that inet_ntop is allowed in the
+ * subject for webserv and it is a simple function to implement. Also considering
+ * that we develop for linux and macos only.
+ */
+const char* custom_inet_ntop(int af, const void* src, char* dst, socklen_t size) {
+    if (af == AF_INET) {
+        const struct in_addr* addr = static_cast<const struct in_addr*>(src);
+        unsigned char* bytes = (unsigned char*)&addr->s_addr;
+        ::snprintf(dst, size, "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2], bytes[3]);
+        return dst;
+    }
+    errno = EAFNOSUPPORT;
+    return NULL;
 }
 
 } // namespace HTTPServer
