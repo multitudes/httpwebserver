@@ -155,7 +155,7 @@ int run(std::string configFile) {
         // if not set to CONN_CLOSING
         // else send the response
         ssize_t sent = ::send(conn.client_fd, conn.data.response.c_str(),
-                            conn.data.response.size(), 0);
+                              conn.data.response.size(), 0);
         if (sent < 0) {
           perror("Failed to send simple response");
           SocketUtils::remove_from_poll(conn.client_fd);
@@ -361,7 +361,7 @@ int run(std::string configFile) {
 int send_headers(HTTPConnxData &conn) {
   if (!conn.data.response.empty()) {
     if (::send(conn.client_fd, conn.data.response.c_str(),
-             conn.data.response.size(), 0) < 0) {
+               conn.data.response.size(), 0) < 0) {
       perror("Failed to send headers");
       return -1;
     }
@@ -457,6 +457,7 @@ void send_critical_error(int fd, int code) {
   // i dont check for errors here because the connection will be closed
   ::send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
   ::close(fd);
+  lastActivityTime.erase(fd);
   SocketUtils::remove_from_poll(fd);
   HTTPServer::connections.erase(fd);
 }
@@ -586,9 +587,8 @@ void acceptNewClient(int server_fd) {
     }
     // max connection check!
     if (!maxConnectionsCheck(client_fd)) {
-		send_critical_error(client_fd, 503);
-	  debug("Max connections reached, rejecting new connection");
-
+      send_critical_error(client_fd, 503);
+      debug("Max connections reached, rejecting new connection");
       continue;
     }
 
@@ -596,14 +596,16 @@ void acceptNewClient(int server_fd) {
     //   setSendRecTimeout(client_fd);
     if (!SocketUtils::setSendRecTimeout(client_fd)) {
       perror("Failed to set send/receive timeout");
-      ::close(client_fd);
+	  send_critical_error(client_fd, 500);
+	  debug("Failed to set send/receive timeout");
       continue;
     }
 
     // Get the local address of the accepted socket and print it
     // for debugging purposes
     if (!printLocalAddress(client_fd)) {
-      ::close(client_fd);
+	  send_critical_error(client_fd, 500);
+	  debug("Failed to get local address");
       continue;
     }
     debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
@@ -623,9 +625,8 @@ void acceptNewClient(int server_fd) {
     // add the timeout for the client
     lastActivityTime[client_fd] = std::time(NULL);
 
-    debuglog(YELLOW, "Client connected from %s:%d", conn.data.client_ip,
+    debuglog(YELLOW, "Incoming client connected from %s:%d", conn.data.client_ip,
              client_port);
-
     debuglog(YELLOW,
              "Connection data initialized in state INCOMING for client %d",
              client_fd);
@@ -724,6 +725,8 @@ HTTPConnxData &getConnectionData(int fd) {
     // Still not found? Throw exception
     if (conn_it == connections.end()) {
       debuglog(RED, "FD %d not found in connections", fd);
+	  send_critical_error(fd, 500);
+	  debug("FD %d not found in connections", fd);
       throw std::runtime_error("FD not found in connections");
     }
   }

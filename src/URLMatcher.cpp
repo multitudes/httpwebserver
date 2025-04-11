@@ -29,7 +29,6 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   debug("checking the request");
   char buffer[BUFFER_SIZE + 1];
 
-  // Ensure BUFFER_SIZE > 0 for recv
   ssize_t bytes_read = ::recv(conn.client_fd, buffer, BUFFER_SIZE, MSG_DONTWAIT);
 
   if (bytes_read <= 0) {
@@ -38,7 +37,6 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
                conn.client_fd);
       SocketUtils::remove_from_poll(conn.client_fd);
       close(conn.client_fd);
-      // conn.reset();
       HTTPServer::connections.erase(conn.client_fd);
       return false;
     } else {
@@ -47,12 +45,9 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
         return false;
       }
       debug("%s", strerror(errno));
-      // perror("URLMatcher: recv failed");
+	  HTTPServer::send_critical_error(conn.client_fd, 500);
+	  return false;
     }
-    SocketUtils::remove_from_poll(conn.client_fd);
-    close(conn.client_fd);
-    HTTPServer::connections.erase(conn.client_fd);
-    return false;
   }
 
   // Null-terminate buffer safely
@@ -73,8 +68,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     return false;
   case PARSE_ERROR:
     debuglog(RED, "Error parsing headers");
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.reset();
+    HTTPServer::send_critical_error(conn.client_fd, 400);
     conn.state = CONN_SIMPLE_RESPONSE;
     debuglog(RED, "Error parsing headers");
     return false;
