@@ -30,7 +30,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   char buffer[BUFFER_SIZE + 1];
 
   // Ensure BUFFER_SIZE > 0 for recv
-  ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, MSG_DONTWAIT);
+  ssize_t bytes_read = ::recv(conn.client_fd, buffer, BUFFER_SIZE, MSG_DONTWAIT);
 
   if (bytes_read <= 0) {
     if (bytes_read == 0) {

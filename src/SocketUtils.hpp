@@ -24,5 +24,7 @@ void checkForIdleConnections();
 void add_to_poll(int fd, short events);
 void remove_from_poll(int fd);
 void shutdownServer();
+const char *custom_inet_ntop(int af, const void *src, char *dst,
+	socklen_t size);
 
 } // namespace SocketUtils

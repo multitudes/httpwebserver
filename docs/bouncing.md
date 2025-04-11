@@ -30,7 +30,7 @@ void handleClientConnx
     char buffer[BUFSIZ + 1];
     ssize_t bytes_read;
     int clientfd = pollfds[i].fd;
-    bytes_read = recv(clientfd, buffer, BUFSIZ, 0);
+    bytes_read = ::recv(clientfd, buffer, BUFSIZ, 0);
     if (bytes_read <= 0) {
      [...]
     } else {

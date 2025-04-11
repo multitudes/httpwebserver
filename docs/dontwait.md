@@ -13,7 +13,7 @@ Here is an example of how you might use `MSG_DONTWAIT` with the `recv` function:
 #include <iostream>
 
 ssize_t receiveData(int socket_fd, char *buffer, size_t length) {
-    ssize_t bytes_received = recv(socket_fd, buffer, length, MSG_DONTWAIT);
+    ssize_t bytes_received = ::recv(socket_fd, buffer, length, MSG_DONTWAIT);
     if (bytes_received == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // No data available right now, try again later

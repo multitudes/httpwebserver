@@ -154,7 +154,7 @@ int run(std::string configFile) {
         // check if the response is ready to be sent
         // if not set to CONN_CLOSING
         // else send the response
-        ssize_t sent = send(conn.client_fd, conn.data.response.c_str(),
+        ssize_t sent = ::send(conn.client_fd, conn.data.response.c_str(),
                             conn.data.response.size(), 0);
         if (sent < 0) {
           perror("Failed to send simple response");
@@ -237,7 +237,7 @@ int run(std::string configFile) {
           debug("read from client %d", conn.client_fd);
           char buffer[BUFFER_SIZE];
           ssize_t bytes_read =
-              recv(conn.client_fd, buffer, sizeof(buffer), MSG_DONTWAIT);
+              ::recv(conn.client_fd, buffer, sizeof(buffer), MSG_DONTWAIT);
 
           if (bytes_read <= 0) {
             if (bytes_read == 0) {
@@ -284,7 +284,7 @@ int run(std::string configFile) {
           char buffer[BUFFER_SIZE];
           ssize_t bytes_read = 0;
           if (conn.data.request.empty()) {
-            bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+            bytes_read = ::recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
             if (bytes_read <= 0) {
               if (bytes_read == 0) {
                 debuglog(YELLOW, "Client disconnected");
@@ -334,7 +334,7 @@ int run(std::string configFile) {
             continue;
           }
           // Send CGI output back to client
-          ssize_t bytes_sent = send(conn.client_fd, buffer, bytes_read, 0);
+          ssize_t bytes_sent = ::send(conn.client_fd, buffer, bytes_read, 0);
           if (bytes_sent < 0) {
             perror("Send to client failed");
             conn.reset();
@@ -360,7 +360,7 @@ int run(std::string configFile) {
 // maybe it should be somewhere else?
 int send_headers(HTTPConnxData &conn) {
   if (!conn.data.response.empty()) {
-    if (send(conn.client_fd, conn.data.response.c_str(),
+    if (::send(conn.client_fd, conn.data.response.c_str(),
              conn.data.response.size(), 0) < 0) {
       perror("Failed to send headers");
       return -1;
@@ -391,7 +391,7 @@ int send_file(HTTPConnxData &conn) {
   }
 
   ssize_t bytes_sent =
-      send(conn.client_fd, buffer, static_cast<size_t>(bytes_read), 0);
+      ::send(conn.client_fd, buffer, static_cast<size_t>(bytes_read), 0);
   if (bytes_sent < 0) {
     perror("Failed to send data");
     return -1;
@@ -439,15 +439,26 @@ void cleanup_upload(HTTPConnxData &conn) {
   }
 }
 
-void send_immediate_error(int fd, int code) {
+/**
+ * @brief send error and close the connection
+ *
+ * include the Connection: close header in the response to inform the client.
+ *
+ */
+void send_critical_error(int fd, int code) {
   std::string response = "HTTP/1.1 " + Utils::to_string(code) + " " +
                          Constants::statusMessages[code] +
                          "\r\n"
                          "Connection: close\r\n"
                          "Content-Length: 0\r\n"
                          "\r\n";
-
-  send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
+  debug("Sending the error response %s", response.c_str());
+  debug("closing the connection %d", fd);
+  // i dont check for errors here because the connection will be closed
+  ::send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
+  ::close(fd);
+  SocketUtils::remove_from_poll(fd);
+  HTTPServer::connections.erase(fd);
 }
 
 void createServerSockets(const vector<ServerData> &configs,
@@ -569,13 +580,15 @@ void acceptNewClient(int server_fd) {
       // because we use non blocking sockets if i get EWOULDBLOCK it is
       // not an error - it just means there are no more connections to accept
       if (errno != EWOULDBLOCK) {
-        debug("[SERVER] accept error: %s\n", strerror(errno));
+        debug("accept error: %s\n", strerror(errno));
       }
       break;
     }
     // max connection check!
     if (!maxConnectionsCheck(client_fd)) {
-      close(client_fd);
+		send_critical_error(client_fd, 503);
+	  debug("Max connections reached, rejecting new connection");
+
       continue;
     }
 
@@ -583,14 +596,14 @@ void acceptNewClient(int server_fd) {
     //   setSendRecTimeout(client_fd);
     if (!SocketUtils::setSendRecTimeout(client_fd)) {
       perror("Failed to set send/receive timeout");
-      close(client_fd);
+      ::close(client_fd);
       continue;
     }
 
     // Get the local address of the accepted socket and print it
     // for debugging purposes
     if (!printLocalAddress(client_fd)) {
-      close(client_fd);
+      ::close(client_fd);
       continue;
     }
     debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
@@ -602,8 +615,9 @@ void acceptNewClient(int server_fd) {
     conn.state = CONN_INCOMING;
 
     // Store client IP address
-    inet_ntop(AF_INET, &client_addr.sin_addr, conn.data.client_ip,
-              sizeof(conn.data.client_ip));
+    SocketUtils::custom_inet_ntop(AF_INET, &client_addr.sin_addr,
+                                  conn.data.client_ip,
+                                  sizeof(conn.data.client_ip));
     uint16_t client_port = ntohs(client_addr.sin_port);
 
     // add the timeout for the client
@@ -692,60 +706,29 @@ bool printLocalAddress(int clientfd) {
   return true;
 }
 
-/**
- * @brief Custom inet_ntop implementation for IPv4 addresses
- *
- * @param af The address family
- * @param src The source address
- * @param dst The destination buffer
- * @param size The size of the buffer
- * @return const char* The string representation of the address
- *
- * This function is a custom implementation of inet_ntop for IPv4 addresses.
- * It takes an address family, a source address, a destination buffer, and the
- * size of the buffer. It returns the string representation of the address.
- * The reason for this custom implementation is that inet_ntop is allowed in the
- * subject for webserv and it is a simple function to implement. Also
- * considering that we develop for linux and macos only.
- */
-const char *custom_inet_ntop(int af, const void *src, char *dst,
-                             socklen_t size) {
-  if (af == AF_INET) {
-    const struct in_addr *addr = static_cast<const struct in_addr *>(src);
-    unsigned char *bytes = (unsigned char *)&addr->s_addr;
-    ::snprintf(dst, size, "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2],
-               bytes[3]);
-    return dst;
-  }
-  errno = EAFNOSUPPORT;
-  return NULL;
-}
+HTTPConnxData &getConnectionData(int fd) {
+  // First try to find as normal connection
+  std::map<int, HTTPConnxData>::iterator conn_it = connections.find(fd);
 
-
-HTTPConnxData& getConnectionData(int fd) {
-    // First try to find as normal connection
-    std::map<int, HTTPConnxData>::iterator conn_it = connections.find(fd);
-
-    // If not found, check for CGI pipes
-    if (conn_it == connections.end()) {
-        for (std::map<int, HTTPConnxData>::iterator it = connections.begin();
-             it != connections.end(); ++it) {
-            if (it->second.cgiData.cgi_stdin == fd || 
-                it->second.cgiData.cgi_stdout == fd) {
-                conn_it = it;
-                break;
-            }
-        }
-
-        // Still not found? Throw exception
-        if (conn_it == connections.end()) {
-            debuglog(RED, "FD %d not found in connections", fd);
-            throw std::runtime_error("FD not found in connections");
-        }
+  // If not found, check for CGI pipes
+  if (conn_it == connections.end()) {
+    for (std::map<int, HTTPConnxData>::iterator it = connections.begin();
+         it != connections.end(); ++it) {
+      if (it->second.cgiData.cgi_stdin == fd ||
+          it->second.cgiData.cgi_stdout == fd) {
+        conn_it = it;
+        break;
+      }
     }
 
-    return conn_it->second;
-}
+    // Still not found? Throw exception
+    if (conn_it == connections.end()) {
+      debuglog(RED, "FD %d not found in connections", fd);
+      throw std::runtime_error("FD not found in connections");
+    }
+  }
 
+  return conn_it->second;
+}
 
 } // namespace HTTPServer
