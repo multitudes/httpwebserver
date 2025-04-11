@@ -221,6 +221,34 @@ ParseStatus HTTPConnxData::processContentHeaders() {
     data.headers["boundary"] = data.boundary;
   }
 
+  // Process Cookies
+  string cookieHeader;
+  if (checkHeader(*this, "Cookie", cookieHeader)) {
+      debuglog(GREEN, "Found cookies in header: %s", cookieHeader.c_str());
+      
+      // Split cookies by semicolon
+      std::istringstream cookieStream(cookieHeader);
+      string cookiePair;
+      
+      while (std::getline(cookieStream, cookiePair, ';')) {
+          // Trim whitespace
+          size_t start = cookiePair.find_first_not_of(" \t");
+          if (start == string::npos) continue;
+          cookiePair = cookiePair.substr(start);
+          
+          // Split by equals sign
+          size_t equalPos = cookiePair.find('=');
+          if (equalPos != string::npos) {
+              string name = cookiePair.substr(0, equalPos);
+              string value = cookiePair.substr(equalPos + 1);
+              
+              // Store the cookie
+              data.cookies[name] = value;
+              debuglog(GREEN, "Parsed cookie: %s = %s", name.c_str(), value.c_str());
+          }
+      }
+  }
+
   return PARSE_SUCCESS;
 }
 
@@ -374,7 +402,7 @@ string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
       oss << "\"" << it->first << "\":\"" << it->second << "\"";
     }
     if (data.cookies.size() > 2) {
-      oss << ", ... (" << (data.cookies.size() - 2) << " more)";
+      oss << ", ... (" << data.cookies.size() - 2 << " more)";
     }
     oss << "]";
   }
@@ -444,15 +472,22 @@ void HTTPConnxData::createSession() {
 
 // Try to retrieve session from cookies
 bool HTTPConnxData::retrieveSession() {
-  // Look for session cookie
-  std::map<std::string, std::string>::iterator it = data.cookies.find("sessionid");
-  if (it != data.cookies.end() && !it->second.empty()) {
-    // Found a session cookie
-    data.session_id = it->second;
-    data.has_session = true;
-    data.session_last_accessed = time(NULL);
-    return true;
+  // Check if we already have a session for this connection
+  if (data.has_session && !data.session_id.empty()) {
+      debuglog(GREEN, "Session already loaded: %s", data.session_id.c_str());
+      return true;
   }
-  // end SESSION MANAGEMENT FUNCTIONS---------------------------------Rufus
+  
+  // Check if a sessionid cookie exists
+  if (data.cookies.find("sessionid") != data.cookies.end()) {
+      data.session_id = data.cookies["sessionid"];
+      data.has_session = true;
+      data.session_last_accessed = time(NULL);
+      debuglog(GREEN, "Session found in cookies: %s", data.session_id.c_str());
+      return true;
+  }
+  
+  debuglog(YELLOW, "No session cookie found");
   return false;
 }
+// end SESSION MANAGEMENT FUNCTIONS---------------------------------Rufus

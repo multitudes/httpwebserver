@@ -27,7 +27,7 @@ namespace URLMatcher
    */
   bool receiveAndParseRequest(HTTPConnxData &conn)
   {
-	debug("checking the request");
+    debug("checking the request");
     char buffer[BUFFER_SIZE + 1];
 
     // Ensure BUFFER_SIZE > 0 for recv
@@ -39,22 +39,22 @@ namespace URLMatcher
       {
         debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.",
                  conn.client_fd);
-		SocketUtils::remove_from_poll(conn.client_fd);
-		close(conn.client_fd);
-		conn.reset();
-		HTTPServer::connections.erase(conn.client_fd);
-		return false;
+        SocketUtils::remove_from_poll(conn.client_fd);
+        close(conn.client_fd);
+        conn.reset();
+        HTTPServer::connections.erase(conn.client_fd);
+        return false;
       }
       else
       {
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-		{
-			debug("No data available yet - keep in reading state");
-			return false;
-		}
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+          debug("No data available yet - keep in reading state");
+          return false;
+        }
 
-		//
-		debug("%s", strerror(errno));
+        //
+        debug("%s", strerror(errno));
         // perror("URLMatcher: recv failed");
       }
       SocketUtils::remove_from_poll(conn.client_fd);
@@ -92,7 +92,7 @@ namespace URLMatcher
 
     //   debuglog(MAGENTA, "Parsed connection data: %s",
     //    conn.formatConnectionDataLong(conn.data).c_str());
-    debugcolor(MAGENTA, "Parsed whole connection data: %s",
+    debugcolor(MAGENTA, "Parsed whole connection data:\n%s",
                conn.data.request.c_str());
     return true;
   }
@@ -134,7 +134,7 @@ namespace URLMatcher
     conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
     conn.urlMatcherData.autoindex = conn.urlMatcherData.config->autoindex;
     conn.urlMatcherData.acceptedMethods = conn.urlMatcherData.config->acceptedMethods;
-    //conn.urlMatcherData.file_upload_dir = conn.urlMatcherData.config->upload_dir;
+    // conn.urlMatcherData.file_upload_dir = conn.urlMatcherData.config->upload_dir;
 
     // Adjust path_for_stat: remove trailing slash unless it's just the root path
     if (conn.urlMatcherData.path_for_stat.length() > conn.urlMatcherData.config->root.length() + 1 &&
@@ -362,20 +362,20 @@ namespace URLMatcher
     // Check if the server config has any location blocks defined
     if (conn.urlMatcherData.config->has_locations)
     {
-      debuglog(YELLOW, "URLMatcher: Checking %lu location blocks for URI '%s'", 
+      debuglog(YELLOW, "URLMatcher: Checking %lu location blocks for URI '%s'",
                conn.urlMatcherData.config->location_blocks.size(), conn.data.target.c_str());
-      
+
       // Loop through all location blocks to find a matching one
       for (std::map<std::string, Location>::const_iterator location_pair =
                conn.urlMatcherData.config->location_blocks.begin();
            location_pair != conn.urlMatcherData.config->location_blocks.end(); ++location_pair)
       {
         debuglog(YELLOW, "URLMatcher: Checking location '%s' against target '%s'",
-                location_pair->first.c_str(), conn.data.target.c_str());
-                
+                 location_pair->first.c_str(), conn.data.target.c_str());
+
         // Check if the target URL starts with this location path
         if (conn.data.target.find(location_pair->first) == 0)
-        { 
+        {
           // Found a matching location block
           Location location = location_pair->second;
           debuglog(GREEN, "URLMatcher: Found matching location block for '%s'",
@@ -409,10 +409,10 @@ namespace URLMatcher
           if (location.return_directive.first != 0)
           {
             conn.urlMatcherData.return_directive = true;
-            debuglog(YELLOW, "URLMatcher: Location block return directive found: %d %s", 
+            debuglog(YELLOW, "URLMatcher: Location block return directive found: %d %s",
                      location.return_directive.first, location.return_directive.second.c_str());
-            Responses::createResponse(conn, "text/plain", location.return_directive.second, 
-                                          location.return_directive.first);
+            Responses::createResponse(conn, "text/plain", location.return_directive.second,
+                                      location.return_directive.first);
             SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
             return;
           }
@@ -423,28 +423,82 @@ namespace URLMatcher
             conn.urlMatcherData.file_upload = true;
             debuglog(YELLOW, "URLMatcher: File upload enabled in location block %s",
                      location_pair->first.c_str());
-            //conn.urlMatcherData.file_upload_dir = location.upload_dir;
-            // debug("file upload enabled in directory: %s",
-            //       location.upload_dir.c_str());
-            // debuglog(YELLOW, "URLMatcher: File upload enabled with directory: %s",
-            //          location.upload_dir.c_str());
+            // conn.urlMatcherData.file_upload_dir = location.upload_dir;
+            //  debug("file upload enabled in directory: %s",
+            //        location.upload_dir.c_str());
+            //  debuglog(YELLOW, "URLMatcher: File upload enabled with directory: %s",
+            //           location.upload_dir.c_str());
+          }
+
+          // check for if cookies are required and if we have an active session
+          if (location.cookie && !conn.retrieveSession()) // if cookies required and no session create session
+          {
+            debuglog(MAGENTA, "URLMatcher: Cookies required, creating session for location block %s",
+                     location_pair->first.c_str());
+            conn.data.cookies["sessionid"] = conn.generateSessionId();
+            conn.data.has_session = true;
+            conn.data.session_created = time(NULL);
+            conn.data.session_last_accessed = time(NULL);
+            conn.data.session_data.clear();
+            conn.data.session_id = conn.data.cookies["sessionid"];
+            debuglog(MAGENTA, "URLMatcher: Session ID generated: %s",
+                     conn.data.session_id.c_str());
+            // Add session cookie to response headers
+            string cookie = "Set-Cookie: sessionid=" + conn.data.session_id +
+                            "; Path=/; HttpOnly\r\n";
+            conn.data.response_headers += cookie;
+            debuglog(MAGENTA, "URLMatcher: Session cookie added to response headers");
           }
 
           // We found a match, so stop looking through location blocks
           debuglog(GREEN, "URLMatcher: Applied configuration from location block '%s'",
-                  location_pair->first.c_str());
+                   location_pair->first.c_str());
           return;
         }
       }
-      
+
       // If we reach here, no matching location block was found
-      debuglog(YELLOW, "URLMatcher: No matching location block found for '%s'", 
+      debuglog(YELLOW, "URLMatcher: No matching location block found for '%s'",
                conn.data.target.c_str());
     }
     else
     {
       debuglog(YELLOW, "URLMatcher: Server has no location blocks defined");
     }
+  }
+
+  bool handleCookieUpdateRequest(HTTPConnxData &conn)
+  {
+    // Check if this is a cookie API request
+    if (conn.data.target.find("/api/update-cookie/") == 0 && 
+        (conn.data.method == "PUT" || conn.data.method == "POST")) {
+        
+        // Extract the cookie name and value
+        string path = conn.data.target.substr(18); // Remove "/api/update-cookie/"
+        size_t separator = path.find("/");
+        
+        if (separator == string::npos) {
+            Responses::simpleStatusResponse(conn, 400);
+            return true;
+        }
+        
+        string cookieName = path.substr(0, separator);
+        string cookieValue = path.substr(separator + 1);
+        
+        debuglog(YELLOW, "Cookie update request: %s = %s", cookieName.c_str(), cookieValue.c_str());
+        
+        // Just add a Set-Cookie header to response_headers
+        string cookieHeader = "Set-Cookie: " + cookieName + "=" + 
+                             cookieValue + "; Path=/\r\n";
+        conn.data.response_headers += cookieHeader;
+        
+        // Create a minimal 200 response
+        Responses::createResponse(conn, "application/json", "{\"status\":\"success\"}", 200);
+        SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+        return true;
+    }
+    
+    return false; // Not a cookie API request
   }
 
   /**
@@ -461,6 +515,15 @@ namespace URLMatcher
     if (!getConfigSetURLMatcherData(conn))
       return; // Request handling complete or failed
 
+    // Try to retrieve existing session from cookies
+    conn.retrieveSession();
+
+    // Handle special API requests
+    if (handleCookieUpdateRequest(conn))
+    {
+      return; // Request has been handled by the API handler
+    }
+
     // check if target contains CGI alias
     if (findCGIPathAlias(conn))
       return;
@@ -470,7 +533,7 @@ namespace URLMatcher
       return;
 
     // Debug log to verify location blocks are being checked
-    debuglog(MAGENTA, "URLMatcher: After location check - path_for_stat: '%s', autoindex: %s", 
+    debuglog(MAGENTA, "URLMatcher: After location check - path_for_stat: '%s', autoindex: %s",
              conn.urlMatcherData.path_for_stat.c_str(),
              conn.urlMatcherData.autoindex ? "true" : "false");
 
@@ -487,61 +550,66 @@ namespace URLMatcher
     }
     debug("accepted method found: %s", conn.data.method.c_str());
 
-
-    
-      //handle DELETE request
+    // handle DELETE request
     if (conn.data.method == "DELETE")
     {
       debuglog(YELLOW, "URLMatcher: DELETE request detected for path '%s'",
                conn.urlMatcherData.full_path.c_str());
-      
+
       // Check if file upload is enabled for this location
       if (conn.urlMatcherData.file_upload)
       {
         debuglog(GREEN, "URLMatcher: File upload is enabled, attempting to delete the file");
-        
+
         // Delete the file directly using the full path without checking upload directory
         int result = unlink(conn.urlMatcherData.full_path.c_str());
-        if (result == 0) {
-          debuglog(GREEN, "URLMatcher: Successfully deleted file '%s'", 
-                  conn.urlMatcherData.full_path.c_str());
+        if (result == 0)
+        {
+          debuglog(GREEN, "URLMatcher: Successfully deleted file '%s'",
+                   conn.urlMatcherData.full_path.c_str());
           Responses::createResponse(conn, "text/plain", "File deleted", 200);
-        } else {
+        }
+        else
+        {
           // Log the error if delete failed
-          debuglog(RED, "URLMatcher: Failed to delete file '%s': %s", 
+          debuglog(RED, "URLMatcher: Failed to delete file '%s': %s",
                    conn.urlMatcherData.full_path.c_str(), strerror(errno));
-          
+
           // Check if file exists but can't be deleted, or doesn't exist
-          if (errno == ENOENT) {
+          if (errno == ENOENT)
+          {
             Responses::htmlErrorResponse(conn, 404); // Not Found
-          } else {
-            Responses::createResponse(conn, "text/plain", 
-                                     "Failed to delete file: " + std::string(strerror(errno)), 500);
+          }
+          else
+          {
+            Responses::createResponse(conn, "text/plain",
+                                      "Failed to delete file: " + std::string(strerror(errno)), 500);
           }
         }
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return;
-      } else {
+      }
+      else
+      {
         debuglog(RED, "URLMatcher: File upload is not enabled for this location");
       }
-      
+
       debuglog(RED, "URLMatcher: DELETE request not allowed for path '%s'",
                conn.urlMatcherData.full_path.c_str());
       Responses::htmlErrorResponse(conn, 403); // Forbidden
       SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
       return;
     }
-    
 
     // Check if the request is a POST request with a payload
     if (conn.data.method == "POST" && conn.data.content_length > 0)
-    { 
-		debug("POST request detected");
+    {
+      debug("POST request detected");
       debuglog(YELLOW, "URLMatcher: Upload request detected.");
       // check if upload allowed
       if (!conn.urlMatcherData.file_upload)
       {
-		debug("file upload not allowed");
+        debug("file upload not allowed");
         debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
                  conn.urlMatcherData.full_path.c_str());
         Responses::htmlErrorResponse(conn, 403); // Forbidden
@@ -562,15 +630,14 @@ namespace URLMatcher
       std::string payload = conn.data.request.substr(conn.data.headers_end);
       if (!payload.empty())
       {
-		debug("payload found %s", payload.c_str());
+        debug("payload found %s", payload.c_str());
         conn.data.response = payload;
         conn.data.bytes_sent = 0;
       }
       conn.state = CONN_UPLOAD;
-	  debug("setting state to CONN_UPLOAD");
+      debug("setting state to CONN_UPLOAD");
       return;
     } // end POST
-
 
     if (conn.data.method == "GET")
     {
@@ -633,5 +700,5 @@ namespace URLMatcher
       }
     } // end GET
   } // end of validateRequest
- 
+
 } // end of namespace URLMatcher

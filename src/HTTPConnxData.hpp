@@ -183,7 +183,7 @@ struct HTTPConnxData {
   string formatConnectionData(const ConnectionData &data);
   string formatConnectionDataLong(const ConnectionData &data);
 
-  // Session management methods
+  // Session management methods -------------------------------------Rufus
   string generateSessionId();
   void createSession();
   bool retrieveSession();
