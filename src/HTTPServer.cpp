@@ -120,33 +120,8 @@ int run(std::string configFile) {
         }
       }
 
-      // creates a state for clients
-      //   HTTPConnxData &conn = connections[current_fd];
-
-      // First try to find as normal connection
-      std::map<int, HTTPConnxData>::iterator conn_it =
-          connections.find(current_fd);
-
-      // If not found, check for CGI pipes
-      if (conn_it == connections.end()) {
-        for (std::map<int, HTTPConnxData>::iterator it = connections.begin();
-             it != connections.end(); ++it) {
-          if (it->second.cgiData.cgi_stdin == current_fd ||
-              it->second.cgiData.cgi_stdout == current_fd) {
-            conn_it = it;
-            break;
-          }
-        }
-
-        // Still not found? Handle error
-        if (conn_it == connections.end()) {
-          debuglog(RED, "FD %d not found in connections", current_fd);
-          throw std::runtime_error("FD not found in connections");
-        }
-      }
-
       // Now safely get reference
-      HTTPConnxData &conn = conn_it->second;
+      HTTPConnxData &conn = getConnectionData(current_fd);
 
       // Update activity time ONLY when I/O actually happens
       if (pollfds[i].revents & (POLLIN | POLLOUT)) {
