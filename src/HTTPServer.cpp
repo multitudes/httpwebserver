@@ -1,10 +1,10 @@
 
 #include "HTTPServer.hpp"
-#include "SocketUtils.hpp"
 #include "Constants.hpp"
 #include "DirectoryListing.hpp"
 #include "Parser.hpp"
 #include "Responses.hpp"
+#include "SocketUtils.hpp"
 #include "URLMatcher.hpp"
 #include "Utils.hpp"
 #include "debug.h"
@@ -120,13 +120,8 @@ int run(std::string configFile) {
         }
       }
 
-
-
       // creates a state for clients
       HTTPConnxData &conn = connections[current_fd];
-
-
-
 
       // Update activity time ONLY when I/O actually happens
       if (pollfds[i].revents & (POLLIN | POLLOUT)) {
@@ -305,8 +300,9 @@ int run(std::string configFile) {
             bytes_read = static_cast<ssize_t>(conn.data.request.size());
           }
           // Forward data to CGI process
-          ssize_t bytes_written = write(conn.cgiData.child_stdin_pipe[1], buffer,
-                                        static_cast<size_t>(bytes_read));
+          ssize_t bytes_written =
+              write(conn.cgiData.child_stdin_pipe[1], buffer,
+                    static_cast<size_t>(bytes_read));
           if (bytes_written < 0) {
             perror("Write to CGI failed");
             conn.reset();
@@ -318,7 +314,6 @@ int run(std::string configFile) {
             close(conn.cgiData.child_stdin_pipe[1]);
             conn.is_sending = 0;
             conn.is_receiving = 1;
-        
           }
         }
         // Handle data from CGI process (ready to write to client from cgi)
@@ -428,7 +423,7 @@ void finish_upload(HTTPConnxData &conn) {
            conn.data.bytes_sent, conn.filename);
   close(conn.file_fd);
   conn.upload_completed = true;
-   
+
   Responses::createResponse(conn, "text/plain", "File uploaded successfully.",
                             201);
   conn.state = CONN_SIMPLE_RESPONSE;

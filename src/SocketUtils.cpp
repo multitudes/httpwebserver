@@ -344,7 +344,7 @@ bool setSendRecTimeout(int clientfd) {
  * lastActivityTime map
  * TODO send a 408 Request Timeout response to the client before closing
  */
-void SocketUtils::checkForIdleConnections() {
+void checkForIdleConnections() {
   std::time_t now = std::time(NULL);
   std::map<int, std::time_t>::iterator it =
       HTTPServer::lastActivityTime.begin();
