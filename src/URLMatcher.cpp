@@ -470,34 +470,61 @@ namespace URLMatcher
   bool handleCookieUpdateRequest(HTTPConnxData &conn)
   {
     // Check if this is a cookie API request
-    if (conn.data.target.find("/api/update-cookie/") == 0 && 
-        (conn.data.method == "PUT" || conn.data.method == "POST")) {
-        
+    if (conn.data.target.find("/api/update-cookie/") == 0 &&
+        (conn.data.method == "PUT" || conn.data.method == "POST"))
+    {
         // Extract the cookie name and value
         string path = conn.data.target.substr(18); // Remove "/api/update-cookie/"
         size_t separator = path.find("/");
-        
-        if (separator == string::npos) {
-            Responses::simpleStatusResponse(conn, 400);
+
+        if (separator == string::npos)
+        {
+            Responses::simpleStatusResponse(conn, 400); // Bad Request
             return true;
         }
-        
+
+        // since we are doing only client side state management we do not store these values
+        // in the session data, but we can use them to update the cookie on the client
         string cookieName = path.substr(0, separator);
         string cookieValue = path.substr(separator + 1);
-        
+
         debuglog(YELLOW, "Cookie update request: %s = %s", cookieName.c_str(), cookieValue.c_str());
-        
-        // Just add a Set-Cookie header to response_headers
-        string cookieHeader = "Set-Cookie: " + cookieName + "=" + 
-                             cookieValue + "; Path=/\r\n";
+
+        // Check if the session is active
+        if (conn.data.has_session)
+        {
+            time_t now = time(NULL);
+            time_t sessionExpiry = conn.data.session_last_accessed + (30); // 30 seconds expiry
+
+            if (now > sessionExpiry)
+            {
+                debuglog(RED, "Session expired. Clearing session.");
+                conn.data.has_session = false;
+                conn.data.session_id.clear();
+                conn.data.session_data.clear();
+                conn.data.response_headers += "Set-Cookie: sessionid=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 UTC;\r\n"; 
+                // setting to a past time is a standard way of deleting a cookie
+                Responses::createResponse(conn, "application/json", "{\"status\":\"session_expired\"}", 401);
+                SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
+                return true;
+            }
+
+            // Update the session_last_accessed time
+            conn.data.session_last_accessed = now;
+            debuglog(GREEN, "Session last accessed time updated to %ld", now);
+        }
+
+        // Add a Set-Cookie header to response_headers
+        string cookieHeader = "Set-Cookie: " + cookieName + "=" +
+                              cookieValue + "; Path=/\r\n";
         conn.data.response_headers += cookieHeader;
-        
+
         // Create a minimal 200 response
         Responses::createResponse(conn, "application/json", "{\"status\":\"success\"}", 200);
         SocketUtils::update_poll_events(conn.client_fd, POLLOUT);
         return true;
     }
-    
+
     return false; // Not a cookie API request
   }
 

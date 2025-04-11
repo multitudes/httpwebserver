@@ -31,6 +31,11 @@
             margin-top: 20px;
             color: #666;
         }
+
+        #expiryMessage {
+            margin-top: 10px;
+            color: #999;
+        }
     </style>
 </head>
 <body>
@@ -39,57 +44,78 @@
     <button id="statusButton">Click Me!</button>
     
     <div id="statusMessage">Button has not been clicked yet</div>
+    <div id="expiryMessage"></div>
     
     <script>
-        // Get button element
         const button = document.getElementById('statusButton');
         const statusMessage = document.getElementById('statusMessage');
-        
-        // Check if button was previously clicked by checking cookies
+        const expiryMessage = document.getElementById('expiryMessage');
+
+        // Function to get a cookie by name
         function getCookie(name) {
             const value = `; ${document.cookie}`;
             const parts = value.split(`; ${name}=`);
             if (parts.length === 2) return parts.pop().split(';').shift();
             return null;
         }
-        
+
+        // Function to calculate and display the countdown
+        function startCountdown(expiryTime) {
+            const interval = setInterval(() => {
+                const now = new Date().getTime();
+                const timeLeft = expiryTime - now;
+
+                if (timeLeft <= 0) {
+                    clearInterval(interval);
+                    expiryMessage.textContent = 'Cookie has expired.';
+                    button.classList.remove('clicked');
+                    statusMessage.textContent = 'Button has not been clicked yet';
+                    document.cookie = "buttonClicked=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+                } else {
+                    const secondsLeft = Math.floor(timeLeft / 1000);
+                    expiryMessage.textContent = `Cookie will expire in ${secondsLeft} seconds.`;
+                }
+            }, 1000);
+        }
+
         // If the button was clicked in a previous session, show it as clicked
         if (getCookie('buttonClicked') === 'true') {
             button.classList.add('clicked');
             statusMessage.textContent = 'Button was clicked previously';
+
+            // Calculate expiry time (30 seconds from when the cookie was set)
+            const expiryTime = new Date().getTime() + 30 * 1000;
+            startCountdown(expiryTime);
         }
-        
+
         // Add click event listener
         button.addEventListener('click', function() {
-            // Change button appearance
             button.classList.add('clicked');
             statusMessage.textContent = 'Button clicked! Updating server...';
-            
-            // Create XMLHttpRequest to make a PUT request
-            const xhr = new XMLHttpRequest();
-            
-            // Configure the request
-            xhr.open('PUT', '/api/update-cookie/buttonClicked/true', true);
-            
-            // Set up response handler
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4) {
-                    if (xhr.status === 200) {
-                        // Success
-                        statusMessage.textContent = 'Cookie updated successfully!';
-                        
-                        // Update local cookie as well (as backup)
-                        document.cookie = "buttonClicked=true; path=/;";
-                    } else {
-                        // Error
-                        statusMessage.textContent = 'Failed to update cookie on server.';
-                        console.error('Error:', xhr.status);
-                    }
+
+            // Use Fetch API to make the PUT request
+            fetch('/api/update-cookie/buttonClicked/true', {
+                method: 'PUT'
+            })
+            .then(response => {
+                if (response.ok) {
+                    statusMessage.textContent = 'Cookie updated successfully!';
+                    
+                    // Set the cookie locally with a 30-second expiry
+                    const expiryTime = new Date().getTime() + 30 * 1000;
+                    document.cookie = `buttonClicked=true; path=/; expires=${new Date(expiryTime).toUTCString()};`;
+
+                    // Start the countdown
+                    startCountdown(expiryTime);
+                } else {
+                    statusMessage.textContent = 'Failed to update cookie on server.';
+                    console.error('Error:', response.status);
                 }
-            };
-            
-            // Send the request
-            xhr.send();
+            })
+            .catch(error => {
+                statusMessage.textContent = 'An error occurred while updating the cookie.';
+                console.error('Fetch error:', error);
+            });
         });
     </script>
 </body>

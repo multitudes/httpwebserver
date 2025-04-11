@@ -472,22 +472,35 @@ void HTTPConnxData::createSession() {
 
 // Try to retrieve session from cookies
 bool HTTPConnxData::retrieveSession() {
-  // Check if we already have a session for this connection
-  if (data.has_session && !data.session_id.empty()) {
-      debuglog(GREEN, "Session already loaded: %s", data.session_id.c_str());
-      return true;
-  }
-  
-  // Check if a sessionid cookie exists
-  if (data.cookies.find("sessionid") != data.cookies.end()) {
-      data.session_id = data.cookies["sessionid"];
-      data.has_session = true;
-      data.session_last_accessed = time(NULL);
-      debuglog(GREEN, "Session found in cookies: %s", data.session_id.c_str());
-      return true;
-  }
-  
-  debuglog(YELLOW, "No session cookie found");
-  return false;
+    // Check if we already have a session for this connection
+    if (data.has_session && !data.session_id.empty()) {
+        debuglog(GREEN, "Session already loaded: %s", data.session_id.c_str());
+        return true;
+    }
+    
+    // Check if a sessionid cookie exists
+    if (data.cookies.find("sessionid") != data.cookies.end()) {
+        data.session_id = data.cookies["sessionid"];
+        data.has_session = true;
+
+        // Check if the session has expired
+        time_t now = time(NULL);
+        time_t sessionExpiry = data.session_last_accessed + 30; // 30 seconds expiry
+        if (now > sessionExpiry) {
+            debuglog(RED, "Session expired. Clearing session.");
+            data.has_session = false;
+            data.session_id.clear();
+            data.session_data.clear();
+            return false; // Session expired
+        }
+
+        // Update session_last_accessed
+        data.session_last_accessed = now;
+        debuglog(GREEN, "Session found in cookies: %s", data.session_id.c_str());
+        return true;
+    }
+    
+    debuglog(YELLOW, "No session cookie found");
+    return false;
 }
 // end SESSION MANAGEMENT FUNCTIONS---------------------------------Rufus
