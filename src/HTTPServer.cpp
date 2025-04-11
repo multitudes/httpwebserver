@@ -119,8 +119,13 @@ int run(std::string configFile) {
         }
       }
 
+
+
       // creates a state for clients
       HTTPConnxData &conn = connections[current_fd];
+
+
+
 
       // Update activity time ONLY when I/O actually happens
       if (pollfds[i].revents & (POLLIN | POLLOUT)) {
@@ -302,7 +307,7 @@ int run(std::string configFile) {
             bytes_read = static_cast<ssize_t>(conn.data.request.size());
           }
           // Forward data to CGI process
-          ssize_t bytes_written = write(conn.child_stdin_pipe[1], buffer,
+          ssize_t bytes_written = write(conn.cgiData.child_stdin_pipe[1], buffer,
                                         static_cast<size_t>(bytes_read));
           if (bytes_written < 0) {
             perror("Write to CGI failed");
@@ -312,20 +317,20 @@ int run(std::string configFile) {
           if (bytes_read < BUFFER_SIZE) {
             // Close the write end of the pipe to signal EOF to the CGI
             debuglog(YELLOW, "Closing write end of pipe");
-            close(conn.child_stdin_pipe[1]);
+            close(conn.cgiData.child_stdin_pipe[1]);
             conn.is_sending = 0;
             conn.is_receiving = 1;
-            SocketUtils::update_poll_events(conn.child_stdin_pipe[1],
+            SocketUtils::update_poll_events(conn.cgiData.child_stdin_pipe[1],
                                             0); // Remove POLLOUT
-            SocketUtils::update_poll_events(conn.child_stdout_pipe[0], POLLIN);
+            SocketUtils::update_poll_events(conn.cgiData.child_stdout_pipe[0], POLLIN);
           }
         }
         // Handle data from CGI process (ready to write to client from cgi)
-        if (conn.child_stdout_pipe[0] == current_fd &&
+        if (conn.cgiData.child_stdout_pipe[0] == current_fd &&
             (pollfds[i].revents & POLLIN)) {
           char buffer[BUFFER_SIZE];
           ssize_t bytes_read =
-              read(conn.child_stdout_pipe[0], buffer, BUFFER_SIZE);
+              read(conn.cgiData.child_stdout_pipe[0], buffer, BUFFER_SIZE);
           if (bytes_read <= 0) {
             // CGI process closed pipe or error
             if (bytes_read == 0) {

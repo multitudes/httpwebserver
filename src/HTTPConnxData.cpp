@@ -22,7 +22,6 @@ void HTTPConnxData::reset() {
   cgiData = CGIData();
   urlMatcherData = URLMatcherData();
   headers_sent = false;
-  cgi_processing = false;
   bytes_received = 0;
 
   // Close open file descriptors

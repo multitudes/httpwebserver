@@ -198,7 +198,7 @@ void shutdownServer() {
         ::close(conn.file_fd);
       }
       if (conn.cgiData.child_pid > 0) {
-        ::kill(conn.child_pid, SIGTERM);
+        ::kill(conn.cgiData.child_pid, SIGTERM);
       }
       HTTPServer::connections.erase(fd);
     }

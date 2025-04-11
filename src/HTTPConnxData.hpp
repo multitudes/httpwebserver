@@ -71,8 +71,6 @@ struct HTTPConnxData {
     string boundary;
     size_t headers_end;
 
-
-
     // Response data
     int response_status;
     string response;
@@ -99,12 +97,13 @@ struct HTTPConnxData {
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_sent(false), sending_response(false), response_sent(false),
-          parse_status(PARSE_INCOMPLETE),
-          session_id(""), has_session(false), // for session management
-          session_created(0), session_last_accessed(0), session_data() // for session management
-          {
-			memset(client_ip, 0, sizeof(client_ip)); 
-		  }
+          parse_status(PARSE_INCOMPLETE), session_id(""),
+          has_session(false), // for session management
+          session_created(0), session_last_accessed(0),
+          session_data() // for session management
+    {
+      memset(client_ip, 0, sizeof(client_ip));
+    }
   };
 
   struct URLMatcherData {
@@ -134,10 +133,21 @@ struct HTTPConnxData {
     // CGI process ID
     pid_t child_pid;
     std::map<std::string, std::string> env;
+    // CGI processing
+    int child_stdin_pipe[2];
+    int child_stdout_pipe[2];
+    int cgi_stdin;
+    int cgi_stdout;
 
     CGIData()
         : buffer(""), is_sending(false), is_receiving(true), child_pid(-1),
-          path_info(""), query_string(), env() {
+          path_info(""), query_string(), env(), cgi_stdin(-1), cgi_stdout(-1) {
+
+      child_stdin_pipe[0] = -1;
+      child_stdin_pipe[1] = -1;
+      child_stdout_pipe[0] = -1;
+      child_stdout_pipe[1] = -1;
+
       env["SERVER_SOFTWARE"] = "VibeServer/1.0";
       env["REMOTE_HOST"] = "";
       env["REMOTE_USER"] = "";
@@ -155,21 +165,11 @@ struct HTTPConnxData {
   ConnectionData data;
 
   int client_fd;
-  ssize_t indexServerConf;
-  int poll_client_idx;
 
   // I/O state flags
   int is_sending;
   int is_receiving;
   bool headers_sent;
-
-  // CGI processing
-  int child_stdin_pipe[2];
-  int child_stdout_pipe[2];
-  int poll_stdin_idx;
-  int poll_stdout_idx;
-  pid_t child_pid;
-  bool cgi_processing;
 
   // File handling
   int file_fd;
@@ -187,10 +187,9 @@ struct HTTPConnxData {
   CGIData cgiData;
 
   HTTPConnxData()
-      : state(CONN_INCOMING), data(), client_fd(-1), indexServerConf(-1),
-        is_sending(0), is_receiving(0), headers_sent(false), poll_stdin_idx(-1),
-        poll_stdout_idx(-1), child_pid(-1), cgi_processing(false), file_fd(-1),
-        file_size(0), file_offset(0), writeto_fd(-1), upload_completed(false),
+      : state(CONN_INCOMING), data(), client_fd(-1), is_sending(0),
+        is_receiving(0), headers_sent(false), file_fd(-1), file_size(0),
+        file_offset(0), writeto_fd(-1), upload_completed(false),
         bytes_received(0) {
     filename[0] = '\0';
   }

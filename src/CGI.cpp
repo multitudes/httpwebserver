@@ -13,20 +13,20 @@ int prepareCGI(HTTPConnxData &conn) {
 
   // Create pipes
   debug("create pipes");
-  if (pipe(conn.child_stdin_pipe) < 0) {
+  if (pipe(conn.cgiData.child_stdin_pipe) < 0) {
     perror("Failed to create pipes");
     return -1;
   }
-  if (pipe(conn.child_stdout_pipe) < 0) {
+  if (pipe(conn.cgiData.child_stdout_pipe) < 0) {
     perror("Failed to create pipes");
-    ::close(conn.child_stdin_pipe[0]);
-    close(conn.child_stdin_pipe[1]);
+    ::close(conn.cgiData.child_stdin_pipe[0]);
+    close(conn.cgiData.child_stdin_pipe[1]);
     return -1;
   }
-  debug("values in the pipes now %d", conn.child_stdin_pipe[0]);
-  debug("values in the pipes now %d", conn.child_stdin_pipe[1]);
-  debug("values in the pipes now %d", conn.child_stdout_pipe[0]);
-  debug("values in the pipes now %d", conn.child_stdout_pipe[1]);
+  debug("values in the pipes now %d", conn.cgiData.child_stdin_pipe[0]);
+  debug("values in the pipes now %d", conn.cgiData.child_stdin_pipe[1]);
+  debug("values in the pipes now %d", conn.cgiData.child_stdout_pipe[0]);
+  debug("values in the pipes now %d", conn.cgiData.child_stdout_pipe[1]);
   // Set the pipes to non-blocking mode
   // Create child process
   pid_t pid = fork();
@@ -38,16 +38,16 @@ int prepareCGI(HTTPConnxData &conn) {
     // Child process
 
     // Close unused pipe ends
-    ::close(conn.child_stdin_pipe[1]);  // Close write end of stdin pipe
-    ::close(conn.child_stdout_pipe[0]); // Close read end of stdout pipe
+    ::close(conn.cgiData.child_stdin_pipe[1]);  // Close write end of stdin pipe
+    ::close(conn.cgiData.child_stdout_pipe[0]); // Close read end of stdout pipe
 
     // Close original file descriptors
-    ::close(conn.child_stdin_pipe[0]);
-    ::close(conn.child_stdout_pipe[1]);
+    ::close(conn.cgiData.child_stdin_pipe[0]);
+    ::close(conn.cgiData.child_stdout_pipe[1]);
 
     // Redirect stdin and stdout
-    ::dup2(conn.child_stdin_pipe[0], STDIN_FILENO);
-    ::dup2(conn.child_stdout_pipe[1], STDOUT_FILENO);
+    ::dup2(conn.cgiData.child_stdin_pipe[0], STDIN_FILENO);
+    ::dup2(conn.cgiData.child_stdout_pipe[1], STDOUT_FILENO);
 
     // Prepare environment variables for execve - this one a bit complicate
     // because the env expects a const char* array . the args was easier. could
@@ -87,8 +87,8 @@ int prepareCGI(HTTPConnxData &conn) {
     // SocketUtils::add_to_poll(conn.child_stdout_pipe[0], POLLIN);
 
     // Close unused pipe ends
-    ::close(conn.child_stdout_pipe[1]); // Close write end of stdout pipe
-    ::close(conn.child_stdin_pipe[0]);  // Close read end of stdin pipe
+    ::close(conn.cgiData.child_stdout_pipe[1]); // Close write end of stdout pipe
+    ::close(conn.cgiData.child_stdin_pipe[0]);  // Close read end of stdin pipe
 
     // Write the request body to the child's stdin
     conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
