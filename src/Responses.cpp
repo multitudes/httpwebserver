@@ -15,32 +15,71 @@ using std::string;
 
 namespace Responses {
 
+    // Helper function to add session cookie headers (doesn't modify response_headers)
+    string addSessionCookieHeaders(HTTPConnxData &connection) {
+        if (connection.data.has_session && !connection.data.session_id.empty()) {
+            // Update last accessed time
+            connection.data.session_last_accessed = time(NULL);
+            
+            // Only return cookie headers if not already in response_headers
+            if (connection.data.response_headers.find("Set-Cookie: sessionid=") == string::npos) {
+                debuglog(YELLOW, "Response: Adding session cookie to headers");
+                return "Set-Cookie: sessionid=" + connection.data.session_id + 
+                       "; Path=/; HttpOnly\r\n";
+            }
+        }
+        return "";
+    }
+    
+    // Create a more comprehensive function that handles all headers
+    void addStandardHeaders(HTTPConnxData &conn, string &header, int statusCode, 
+                           const string &contentType, long contentLength) {
+        // Status line
+        header = "HTTP/1.1 " + Utils::to_string(statusCode) + " " + 
+                Constants::statusMessages[statusCode] + "\r\n";
+        
+        // Content type
+        header += "Content-Type: " + contentType + "\r\n";
+        
+        // Session cookies
+        header += addSessionCookieHeaders(conn);
+        
+        // Any other headers that were set previously
+        if (!conn.data.response_headers.empty()) {
+            header += conn.data.response_headers;
+        }
+        
+        // Content length always comes last before empty line
+        header += "Content-Length: " + Utils::to_string(contentLength) + "\r\n";
+        header += "\r\n";
+    }
+
     // addd HTTP header to the response and set the response
     void createResponse(HTTPConnxData &connection, std::string contentType, std::string response, int statusCode)
     {
-        string header = "HTTP/1.1 ";
-        header += Utils::to_string(statusCode) + " " + Constants::statusMessages[statusCode] + "\r\n";
-        header += "Content-Type: " + contentType;
-        header += "\r\n";
-        
-        // Add Location header for redirect status codes (301, 302, 303, 307, 308)
+        // Add Location header for redirect status codes (301, 302, 303, 307, 308) BEFORE creating standard headers
         if ((statusCode == 301 || statusCode == 302 || statusCode == 303 || 
              statusCode == 307 || statusCode == 308) && !response.empty()) {
-            header += "Location: " + response + "\r\n";
+            // Store the Location header in response_headers so it's included by addStandardHeaders
+            connection.data.response_headers += "Location: " + response + "\r\n";
+            
+            // For redirects, we typically want an empty or minimal body
+            response = "<html><body>Redirecting to " + response + "</body></html>";
+            
+            debuglog(YELLOW, "Redirect: Adding Location header for %s", response.c_str());
         }
         
-        header += "Content-Length: " + Utils::to_string(static_cast<int>(response.size())) + "\r\n";
-        header += "\r\n";
+        // Now create the standard headers after Location was added to response_headers
+        string header;
+        addStandardHeaders(connection, header, statusCode, contentType, static_cast<int>(response.size()));
 
         connection.data.response = header + response;
         
         // Always set state to CONN_SIMPLE_RESPONSE for simple string responses
         connection.state = CONN_SIMPLE_RESPONSE;
         
-        debuglog(GREEN, "Basic response prepared, state set to CONN_SIMPLE_RESPONSE");
+        debuglog(GREEN, "Response prepared: %s", connection.data.response.c_str());
     }
-
-
 
     // generate a simple HTML error response
     void htmlErrorResponse(HTTPConnxData &connection, int statusCode)
@@ -118,11 +157,8 @@ namespace Responses {
     void prepareFileResponse(HTTPConnxData &conn, long fileSize)
     {
         // Use the content type already stored in the connection
-        string header = "HTTP/1.1 200 OK\r\n";
-        header += "Content-Type: " + conn.urlMatcherData.content_type + "\r\n";
-        header += "Content-Length: " + Utils::to_string(static_cast<long long>(fileSize)) + "\r\n";
-        // header += "Connection: close\r\n";
-        header += "\r\n";
+        string header;
+        addStandardHeaders(conn, header, 200, conn.urlMatcherData.content_type, fileSize);
         
         conn.data.response = header;
         conn.headers_sent = false;
@@ -158,11 +194,8 @@ namespace Responses {
       conn.state = CONN_FILE_REQUEST;
       
       // Prepare headers with the error status code
-      string header = "HTTP/1.1 ";
-      header += Utils::to_string(statusCode) + " " + Constants::statusMessages[statusCode] + "\r\n";
-      header += "Content-Type: " + conn.urlMatcherData.content_type + "\r\n";
-      header += "Content-Length: " + Utils::to_string(conn.file_size) + "\r\n";
-      header += "\r\n";
+      string header;
+      addStandardHeaders(conn, header, statusCode, conn.urlMatcherData.content_type, conn.file_size);
       
       conn.data.response = header;
       conn.headers_sent = false;
