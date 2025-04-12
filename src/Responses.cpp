@@ -10,7 +10,7 @@
 #include "Utils.hpp"
 #include "SocketUtils.hpp"
 #include "URLMatcher.hpp"
-#include <poll.h> // Add this include for POLLOUT
+
 using std::string;
 
 namespace Responses {
