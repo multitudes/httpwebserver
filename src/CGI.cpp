@@ -99,12 +99,20 @@ int prepareCGI(HTTPConnxData &conn) {
     // assign the fds to the connection data
     conn.cgiData.cgi_stdin = conn.cgiData.child_stdin_pipe[1];
     conn.cgiData.cgi_stdout = conn.cgiData.child_stdout_pipe[0];
+    
+    // add the fds to the poll
+    conn.cgiData.is_sending = 0;
+    conn.cgiData.is_receiving = 1;
+    SocketUtils::add_to_poll(conn.cgiData.cgi_stdin, POLLOUT);
+    SocketUtils::add_to_poll(conn.cgiData.cgi_stdout, POLLIN);
 
-    // Write the request body to the child's stdin
+    // this buffer is bidirectional. in this case i use now for the req body
     conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
     debug("CGI request body: %s", conn.cgiData.buffer.c_str());
     conn.cgiData.child_pid = pid;
     debug("Started CGI process with PID %d", pid);
+
+    // the rest will happen in the poll loop
     return 0;
   }
 }
