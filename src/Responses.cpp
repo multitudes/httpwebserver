@@ -33,7 +33,8 @@ namespace Responses {
     
     // Create a more comprehensive function that handles all headers
     void addStandardHeaders(HTTPConnxData &conn, string &header, int statusCode, 
-                           const string &contentType, long contentLength) {
+                           const string &contentType, long contentLength) 
+    {
         // Status line
         header = "HTTP/1.1 " + Utils::to_string(statusCode) + " " + 
                 Constants::statusMessages[statusCode] + "\r\n";
@@ -41,15 +42,18 @@ namespace Responses {
         // Content type
         header += "Content-Type: " + contentType + "\r\n";
         
-        // Session cookies
-        header += addSessionCookieHeaders(conn);
+        // Session cookie (only if needed)
+        if (conn.data.has_session) {
+            header += "Set-Cookie: sessionid=" + conn.data.session_id + 
+                     "; Path=/; HttpOnly\r\n";
+        }
         
-        // Any other headers that were set previously
+        // Add any additional headers
         if (!conn.data.response_headers.empty()) {
             header += conn.data.response_headers;
         }
         
-        // Content length always comes last before empty line
+        // Content length
         header += "Content-Length: " + Utils::to_string(contentLength) + "\r\n";
         header += "\r\n";
     }
