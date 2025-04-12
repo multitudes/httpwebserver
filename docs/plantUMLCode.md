@@ -121,7 +121,6 @@ class HTTPConnxData {
     + client_fd: int
     + indexServerConf: ssize_t
     + poll_client_idx: int
-    + is_sending: int
     + is_receiving: int
     + headers_sent: bool
     

@@ -274,11 +274,27 @@ int run(std::string configFile) {
         }
         continue;
 
+
+
+
+
+
+
       } else if (conn.state == CONN_CGI) {
+        debug("CONN_CGI fd %d", conn.client_fd);
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
-        // check if the cgi is ready to be sent
-        // if not set to CONN_CLOSING
-        // else send the cgi
+
+        // check if the child process is pollin and i have data in buffer from the 
+        // preparecgi function
+
+        if (current_fd == conn.cgiData.cgi_stdin &&
+            (pollfds[i].revents & POLLOUT)) {
+          debug("CGI stdin fd %d", conn.client_fd);
+          // Send data to CGI process
+          ssize_t bytes_written =
+              write(conn.cgiData.cgi_stdin, conn.cgiData.buffer.c_str(), 
+                    conn.cgiData.buffer.size());
+            }
         // Handle data from client and send to cgi
         if (current_fd == conn.client_fd && (pollfds[i].revents & POLLIN)) {
           char buffer[BUFFER_SIZE];
@@ -312,10 +328,13 @@ int run(std::string configFile) {
             // Close the write end of the pipe to signal EOF to the CGI
             debuglog(YELLOW, "Closing write end of pipe");
             close(conn.cgiData.child_stdin_pipe[1]);
-            conn.is_sending = 0;
-            conn.is_receiving = 1;
+            conn.cgiData.is_sending = 1;
+            conn.cgiData.is_receiving = 0;
           }
         }
+
+
+
         // Handle data from CGI process (ready to write to client from cgi)
         if (conn.cgiData.child_stdout_pipe[0] == current_fd &&
             (pollfds[i].revents & POLLIN)) {
@@ -326,7 +345,7 @@ int run(std::string configFile) {
             // CGI process closed pipe or error
             if (bytes_read == 0) {
               printf("CGI process finished\n");
-              conn.is_receiving = 0;
+              conn.cgiData.is_receiving = 0;
             } else {
               perror("Read from CGI failed");
               conn.reset();

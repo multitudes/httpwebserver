@@ -166,9 +166,6 @@ struct HTTPConnxData {
 
   int client_fd;
 
-  // I/O state flags
-  int is_sending;
-  int is_receiving;
   bool headers_sent;
 
   // File handling
@@ -187,8 +184,8 @@ struct HTTPConnxData {
   CGIData cgiData;
 
   HTTPConnxData()
-      : state(CONN_INCOMING), data(), client_fd(-1), is_sending(0),
-        is_receiving(0), headers_sent(false), file_fd(-1), file_size(0),
+      : state(CONN_INCOMING), data(), client_fd(-1), headers_sent(false), 
+        file_fd(-1), file_size(0),
         file_offset(0), writeto_fd(-1), upload_completed(false),
         bytes_received(0) {
     filename[0] = '\0';
