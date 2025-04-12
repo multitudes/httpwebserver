@@ -3,13 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Click Button Example</title>
+    <title>Cookie Session Test</title>
+    <link rel="stylesheet" type="text/css" href="/css/style-home.css">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            text-align: center;
-        }
+
         
         #statusButton {
             background-color: #f0f0f0;
@@ -39,7 +36,7 @@
     </style>
 </head>
 <body>
-    <h1>Click the Button</h1>
+    <h1>Cookie Session Test</h1>
     
     <button id="statusButton">Click Me!</button>
     
@@ -90,7 +87,7 @@
         // If the button was clicked in a previous session, show it as clicked
         if (getCookie('buttonClicked') === 'true') {
             button.classList.add('clicked');
-            statusMessage.textContent = 'Button was clicked previously';
+            statusMessage.textContent = 'Button already clicked previously, Session still Active! Expiry reset';
 
             // Calculate expiry time (30 seconds from when the cookie was set)
             const expiryTime = new Date().getTime() + 30 * 1000;

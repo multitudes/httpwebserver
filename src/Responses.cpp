@@ -57,7 +57,9 @@ namespace Responses {
     // addd HTTP header to the response and set the response
     void createResponse(HTTPConnxData &connection, std::string contentType, std::string response, int statusCode)
     {
-        // Add Location header for redirect status codes (301, 302, 303, 307, 308) BEFORE creating standard headers
+        debuglog(YELLOW, "Creating response with status %d", statusCode);
+        
+        // Handle redirect status codes
         if ((statusCode == 301 || statusCode == 302 || statusCode == 303 || 
              statusCode == 307 || statusCode == 308) && !response.empty()) {
             // Store the Location header in response_headers so it's included by addStandardHeaders
@@ -67,18 +69,17 @@ namespace Responses {
             response = "<html><body>Redirecting to " + response + "</body></html>";
             
             debuglog(YELLOW, "Redirect: Adding Location header for %s", response.c_str());
+            // Set content type to HTML for the redirect message
+            contentType = "text/html";
         }
         
-        // Now create the standard headers after Location was added to response_headers
         string header;
         addStandardHeaders(connection, header, statusCode, contentType, static_cast<int>(response.size()));
-
-        connection.data.response = header + response;
         
-        // Always set state to CONN_SIMPLE_RESPONSE for simple string responses
+        connection.data.response = header + response;
         connection.state = CONN_SIMPLE_RESPONSE;
         
-        debuglog(GREEN, "Response prepared: %s", connection.data.response.c_str());
+        debuglog(GREEN, "Response headers:\n%s", header.c_str());
     }
 
     // generate a simple HTML error response
