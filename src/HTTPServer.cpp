@@ -300,6 +300,7 @@ int run(std::string configFile) {
         continue;
 
       } else if (conn.state == CONN_CGI) {
+        debug("CONN_CGI fd %d", conn.client_fd);
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
         // check if the cgi is ready to be sent
         // if not set to CONN_CLOSING
@@ -337,10 +338,13 @@ int run(std::string configFile) {
             // Close the write end of the pipe to signal EOF to the CGI
             debuglog(YELLOW, "Closing write end of pipe");
             close(conn.cgiData.child_stdin_pipe[1]);
-            conn.is_sending = 0;
-            conn.is_receiving = 1;
+            conn.cgiData.is_sending = 1;
+            conn.cgiData.is_receiving = 0;
           }
         }
+
+
+
         // Handle data from CGI process (ready to write to client from cgi)
         if (conn.cgiData.child_stdout_pipe[0] == current_fd &&
             (pollfds[i].revents & POLLIN)) {
@@ -351,7 +355,7 @@ int run(std::string configFile) {
             // CGI process closed pipe or error
             if (bytes_read == 0) {
               printf("CGI process finished\n");
-              conn.is_receiving = 0;
+              conn.cgiData.is_receiving = 0;
             } else {
               perror("Read from CGI failed");
               conn.reset();
