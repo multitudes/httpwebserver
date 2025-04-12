@@ -59,6 +59,20 @@ namespace Responses {
     {
         debuglog(YELLOW, "Creating response with status %d", statusCode);
         
+        // Handle redirect status codes
+        if ((statusCode == 301 || statusCode == 302 || statusCode == 303 || 
+             statusCode == 307 || statusCode == 308) && !response.empty()) {
+            // Store the Location header in response_headers so it's included by addStandardHeaders
+            connection.data.response_headers += "Location: " + response + "\r\n";
+            
+            // For redirects, we typically want an empty or minimal body
+            response = "<html><body>Redirecting to " + response + "</body></html>";
+            
+            debuglog(YELLOW, "Redirect: Adding Location header for %s", response.c_str());
+            // Set content type to HTML for the redirect message
+            contentType = "text/html";
+        }
+        
         string header;
         addStandardHeaders(connection, header, statusCode, contentType, static_cast<int>(response.size()));
         
