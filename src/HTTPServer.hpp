@@ -66,8 +66,7 @@ void acceptNewClient(int server_fd);
 void setSendRecTimeout(int clientfd);
 bool maxConnectionsCheck(int clientfd);
 bool printLocalAddress(int clientfd);
-const char *custom_inet_ntop(int af, const void *src, char *dst,
-                             socklen_t size);
 HTTPConnxData &getConnectionData(int fd);
+void send_critical_error(int fd, int code); 
 
 } // namespace HTTPServer

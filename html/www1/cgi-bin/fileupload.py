@@ -59,7 +59,7 @@ def main():
 <body>
     <h1>File Upload</h1>
     <div class="box">
-        <form name="uploadForm" action="/cgi-bin/upload.py" method="POST" enctype="multipart/form-data" onsubmit="return validateForm()">
+        <form name="uploadForm" action="/cgi/upload.py" method="POST" enctype="multipart/form-data" onsubmit="return validateForm()">
             <label for="file">Select file:</label>
             <input type="file" id="file" name="file">
             <button type="submit" id="uploadButton" disabled>Upload</button>
@@ -68,7 +68,7 @@ def main():
     </div>
     <div class="file-list">
         <h2>Uploaded Files</h2>
-        <form action="/cgi-bin/delete.py" method="POST">
+        <form action="/cgi/delete.py" method="POST">
             <ul class="file-list-ul">
         """
 
@@ -126,7 +126,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>{e}</p>
-    <form action='/cgi-bin/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
+    <form action='/cgi/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
 </body>
 </html>
         """

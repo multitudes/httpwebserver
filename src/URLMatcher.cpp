@@ -29,40 +29,26 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   debug("checking the request");
   char buffer[BUFFER_SIZE + 1];
 
-  // Ensure BUFFER_SIZE > 0 for recv
-  ssize_t bytes_read = recv(conn.client_fd, buffer, BUFFER_SIZE, MSG_DONTWAIT);
+  ssize_t bytes_read = ::recv(conn.client_fd, buffer, BUFFER_SIZE, MSG_DONTWAIT);
 
-    if (bytes_read <= 0)
-    {
-      if (bytes_read == 0)
-      {
-
-        debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.",
-                 conn.client_fd);
-        SocketUtils::remove_from_poll(conn.client_fd);
-        close(conn.client_fd);
-        // conn.reset();
-        HTTPServer::connections.erase(conn.client_fd);
-        return false;
-      }
-      else
-      {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-        {
-          debug("No data available yet - keep in reading state");
-          return false;
-        }
-
-        //
-        debug("%s", strerror(errno));
-        // perror("URLMatcher: recv failed");
-      }
+  if (bytes_read <= 0) {
+    if (bytes_read == 0) {
+      debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.",
+               conn.client_fd);
       SocketUtils::remove_from_poll(conn.client_fd);
       close(conn.client_fd);
-      conn.reset();
       HTTPServer::connections.erase(conn.client_fd);
       return false;
+    } else {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        debug("No data available yet - keep in reading state");
+        return false;
+      }
+      debug("%s", strerror(errno));
+	  HTTPServer::send_critical_error(conn.client_fd, 500);
+	  return false;
     }
+  }
 
   // Null-terminate buffer safely
   buffer[bytes_read] = '\0';
@@ -82,15 +68,12 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     return false;
   case PARSE_ERROR:
     debuglog(RED, "Error parsing headers");
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.reset();
+    HTTPServer::send_critical_error(conn.client_fd, 400);
     conn.state = CONN_SIMPLE_RESPONSE;
     debuglog(RED, "Error parsing headers");
     return false;
   }
 
-  //   debuglog(MAGENTA, "Parsed connection data: %s",
-  //    conn.formatConnectionDataLong(conn.data).c_str());
   debugcolor(MAGENTA, "Parsed whole connection data: %s",
              conn.data.request.c_str());
   return true;
@@ -309,7 +292,10 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
     return false;
   }
 
-  if (conn.data.target.find(cgi_path_alias) == 0) { // found CGI alias
+  // here i need to make sure cgi alias is not being substituted incorrectly
+  // ex if the alias is "cgi" -> cgi-bin and i pass cgicgi i will check that it includes the end / 
+  if (conn.data.target == cgi_path_alias || 
+    (conn.data.target.find(CGI::ensureTrailinSlash(cgi_path_alias)) == 0)) { // found CGI alias
     debuglog(BLUE, "URLMatcher: CGI path alias: '%s' -> '%s'",
              cgi_path_alias.c_str(), cgi_path.c_str());
     debuglog(BLUE, "URLMatcher: CGI alias found. Target: %s",

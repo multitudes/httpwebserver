@@ -34,7 +34,7 @@ def main():
 <body>
     <div class="container">
         <h1>Tea Break</h1>
-        <form name="coffee" action="/cgi-bin/makecoffee.py" enctype="multipart/form-data" method="POST">
+        <form name="coffee" action="/cgi/makecoffee.py" enctype="multipart/form-data" method="POST">
             <button type="submit">Make me a coffee?</button>
         </form>
     </div>

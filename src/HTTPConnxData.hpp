@@ -137,6 +137,7 @@ struct HTTPConnxData {
     int child_stdout_pipe[2];
     int cgi_stdin;
     int cgi_stdout;
+    bool cgi_finished;
 
     CGIData()
         : buffer(""), is_sending(false), is_receiving(true), child_pid(-1),
@@ -148,13 +149,9 @@ struct HTTPConnxData {
       child_stdout_pipe[1] = -1;
 
       env["SERVER_SOFTWARE"] = "VibeServer/1.0";
-      env["REMOTE_HOST"] = "";
-      env["REMOTE_USER"] = "";
+      env["REMOTE_USER"] = "N/A";
       env["GATEWAY_INTERFACE"] = "CGI/1.1";
-      env["AUTH_TYPE"] = "";
-      env["TRANSFER_ENCODING"] = "";
-      env["PATH_INFO"] = "";
-      env["PATH_TRANSLATED"] = "/";
+      env["AUTH_TYPE"] = "N/A";
     }
   };
   // Connection state and metadata
@@ -165,9 +162,6 @@ struct HTTPConnxData {
 
   int client_fd;
 
-  // I/O state flags
-  int is_sending;
-  int is_receiving;
   bool headers_sent;
 
   // File handling
@@ -186,8 +180,8 @@ struct HTTPConnxData {
   CGIData cgiData;
 
   HTTPConnxData()
-      : state(CONN_INCOMING), data(), client_fd(-1), is_sending(0),
-        is_receiving(0), headers_sent(false), file_fd(-1), file_size(0),
+      : state(CONN_INCOMING), data(), client_fd(-1), headers_sent(false), 
+        file_fd(-1), file_size(0),
         file_offset(0), writeto_fd(-1), upload_completed(false),
         bytes_received(0) {
     filename[0] = '\0';

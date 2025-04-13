@@ -175,6 +175,7 @@ void shutdownServer() {
     }
 
     debuglog(YELLOW, "Closing client socket %d\n", fd);
+    debug("Closing client socket %d\n", fd);
 
     close(fd);
 
@@ -184,8 +185,11 @@ void shutdownServer() {
       if (conn.file_fd != -1) {
         ::close(conn.file_fd);
       }
-      if (conn.cgiData.child_pid > 0) {
-        ::kill(conn.cgiData.child_pid, SIGTERM);
+      int status;
+      if (::waitpid(conn.cgiData.child_pid, &status, 0) > 0) {
+          debug("CGI process with PID %d exited with status %d", conn.cgiData.child_pid, status);
+      } else {
+          perror("waitpid failed");
       }
       HTTPServer::connections.erase(fd);
     }
@@ -362,6 +366,35 @@ void checkForIdleConnections() {
       ++it;
     }
   }
+}
+
+/**
+ * @brief Custom inet_ntop implementation for IPv4 addresses
+ *
+ * @param af The address family
+ * @param src The source address
+ * @param dst The destination buffer
+ * @param size The size of the buffer
+ * @return const char* The string representation of the address
+ *
+ * This function is a custom implementation of inet_ntop for IPv4 addresses.
+ * It takes an address family, a source address, a destination buffer, and the
+ * size of the buffer. It returns the string representation of the address.
+ * The reason for this custom implementation is that inet_ntop is allowed in the
+ * subject for webserv and it is a simple function to implement. Also
+ * considering that we develop for linux and macos only.
+ */
+const char *custom_inet_ntop(int af, const void *src, char *dst,
+	socklen_t size) {
+if (af == AF_INET) {
+const struct in_addr *addr = static_cast<const struct in_addr *>(src);
+unsigned char *bytes = (unsigned char *)&addr->s_addr;
+::snprintf(dst, size, "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2],
+bytes[3]);
+return dst;
+}
+errno = EAFNOSUPPORT;
+return NULL;
 }
 
 } // namespace SocketUtils

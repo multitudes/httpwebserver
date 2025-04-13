@@ -6,7 +6,7 @@ import cgitb
 
 cgitb.enable()  # Enable detailed error messages
 
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', './www/uploads')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'http/www/uploads')
 
 def main():
     try:
@@ -27,7 +27,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>No files selected for deletion.</p>
-    <form action="/cgi-bin/fileupload.py" method="get"><button type="submit">Go Back</button></form>
+    <form action="/cgi/fileupload.py" method="get"><button type="submit">Go Back</button></form>
 </body>
 </html>"""
             print("HTTP/1.1 400 Bad Request")
@@ -55,7 +55,7 @@ def main():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Webserv File Deletion</title>
-    <link rel="icon" href="www/favicon/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" type="text/css" href="/css/style.css">
 </head>
 <body>"""
@@ -69,7 +69,7 @@ def main():
                 for filename in not_found_files:
                     html_content += f"<li>{filename}</li>"
                 html_content += "</ul>"
-            html_content += '<form action="/cgi-bin/fileupload.py" method="get"><button type="submit">Go Back</button></form>'
+            html_content += '<form action="/cgi/fileupload.py" method="get"><button type="submit">Go Back</button></form>'
             html_content += "</body></html>"
 
             print("HTTP/1.1 200 OK")
@@ -92,7 +92,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>{e}</p>
-    <form action='/cgi-bin/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
+    <form action='/cgi/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
 </body>
 </html>"""
 

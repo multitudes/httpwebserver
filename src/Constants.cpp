@@ -10,7 +10,7 @@ const char *default_config_file = "config/default.conf";
 int maxConnections = 200;
 int requestTimeout = 10;
 int responseTimeout = 10;
-int keepalive_timeout = 10;
+int keepalive_timeout = 100;
 bool autoReload = false;
 
 void initStatusMessageMap() {
