@@ -362,7 +362,7 @@ int run(std::string configFile) {
 
             // Handle data FROM CGI process (ready to write to client from cgi)
             // my client is ready to be written to
-            if (current_fd == conn.client_fd && (pollfds[i].revents & POLLOUT)) {
+            if (current_fd == conn.client_fd && (pollfds[i].revents & POLLOUT && conn.cgiData.is_sending)) {
               for (size_t j = 0; j < pollfds.size(); j++) {
                 // and the cgi process is ready to be read from
                 if (pollfds[j].fd == conn.cgiData.child_stdout_pipe[0] &&

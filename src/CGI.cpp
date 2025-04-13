@@ -100,15 +100,16 @@ int prepareCGI(HTTPConnxData &conn) {
     conn.cgiData.cgi_stdin = conn.cgiData.child_stdin_pipe[1];
     conn.cgiData.cgi_stdout = conn.cgiData.child_stdout_pipe[0];
     
-    if (conn.data.method == "GET") {
+    if (conn.data.method == "GET" || conn.data.content_length == 0) {
+      // No data to send to CGI stdin, close the write end of the pipe
       debug("GET request in cgi - closing child stdin pipe[1]");
-      conn.cgiData.is_receiving = 0; // No data to send to CGI stdin
-      conn.cgiData.is_sending = 1;   // Data to receive from CGI stdout
+      conn.cgiData.is_receiving = false; // No data to send to CGI stdin
+      conn.cgiData.is_sending = true;   // Data to receive from CGI stdout
       SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
       ::close(conn.cgiData.child_stdin_pipe[1]);
     } else {
-      conn.cgiData.is_receiving = 1; // Data to send to CGI stdin
-      conn.cgiData.is_sending = 0;   // No data to receive from CGI stdout
+      conn.cgiData.is_receiving = true; // Data to send to CGI stdin
+      conn.cgiData.is_sending = false;   // No data to receive from CGI stdout
       SocketUtils::add_to_poll(conn.cgiData.cgi_stdin, POLLOUT);
       SocketUtils::add_to_poll(conn.cgiData.cgi_stdout, POLLIN);
       conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);

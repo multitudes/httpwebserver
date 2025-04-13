@@ -292,6 +292,8 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
     return false;
   }
 
+  // here i need to make sure cgi alias is not being substituted incorrectly
+  // ex if the alias is "cgi" -> cgi-bin and i pass cgicgi i will check that it includes the end / 
   if (conn.data.target == cgi_path_alias || 
     (conn.data.target.find(CGI::ensureTrailinSlash(cgi_path_alias)) == 0)) { // found CGI alias
     debuglog(BLUE, "URLMatcher: CGI path alias: '%s' -> '%s'",
