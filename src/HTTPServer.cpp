@@ -391,6 +391,7 @@ int run(std::string configFile) {
                     break;
                   }
                   debug("Received %ld bytes from CGI stdout", bytes_read);
+                  debugcolor(MAGENTA, "response from CGI: %s", buffer);
                   ssize_t bytes_written = ::send(conn.client_fd, buffer, bytes_read, 0);
                   if (bytes_written < 0) {
                     perror("Failed to send data to client");

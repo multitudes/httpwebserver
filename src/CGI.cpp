@@ -149,6 +149,10 @@ void setCGIEnv(HTTPConnxData &conn) {
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
   conn.cgiData.env["SERVER_PROTOCOL"] = conn.data.version;
   conn.cgiData.env["REMOTE_ADDR"] = conn.data.client_ip;
+  conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
+
+  // this is extra
+  conn.cgiData.env["HTTP_UPLOAD_DIR"] = conn.urlMatcherData.config->cgiData.upload_dir;
 
 }
 
