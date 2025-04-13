@@ -1,0 +1,22 @@
+1. read/recv/write/send
+check if the returned value is correctly checked 
+checking only -1 or 0 values is not enough, both should be checked
+
+2. how to test this line 
+Limit the client body (use: curl -X POST -H "Content-Type: plain/text" --data "BODY IS HERE write something shorter or longer than body limit").
+
+this command can not work
+hai@c4c1c3:~/httpwebserver$ curl -X POST -H "Content-Type: plain/text" --data "BODY IS HERE write something shorter or longer than body limit" localhost:4244
+<!DOCTYPE html>
+<html lang = "en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>403 Forbidden</title>
+<link rel="icon" href="../../favicon/favicon.ico" type="image/x-icon">
+<style> body {display: flex; flex-direction: column; justify-content: center;align-items: center; height: 100vh; margin: 0; background-color: black; color: white} </style></head>
+<body>
+<h1>403</h1>
+<p>Forbidden</p>
+</body>
+</html>

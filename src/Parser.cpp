@@ -114,7 +114,7 @@ void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig) {
       }
     }
 
-    else if (trimmedLine.find("error_page") == 0 &&
+    else if (trimmedLine.find("error_pages") == 0 &&
              trimmedLine.find("{") != std::string::npos) {
       // Handle error_page block
       size_t blockStart = trimmedLine.find("{");
@@ -360,7 +360,7 @@ void parseServerBlock(const std::string &serverBlockContent,
           debuglog(GREEN, "Server autoindex: on");
         }
       }
-    } else if (trimmedLine.find("limit_accept") == 0) {
+    } else if (trimmedLine.find("acceptedMethods") == 0) {
       size_t methodsStart = trimmedLine.find_first_not_of(" \t", 12);
       size_t openBrace = trimmedLine.find("{");
       size_t semiColon = trimmedLine.find(";");
@@ -486,23 +486,6 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
                    value.c_str());
         }
       }
-    } else if (trimmedLine.find("cookie") == 0) {
-      size_t valueStart = trimmedLine.find_first_not_of(" \t", 6);
-      size_t valueEnd = trimmedLine.find(';', valueStart);
-
-      if (valueEnd != std::string::npos) {
-        std::string value =
-            trimmedLine.substr(valueStart, valueEnd - valueStart);
-        if (value == "on") {
-          location.cookie = true;
-          debuglog(GREEN, "Location cookie: on");
-        } else if (value == "off") {
-          location.cookie = false;
-          debuglog(GREEN, "Location cookie: off");
-        } else {
-          debuglog(YELLOW, "Warning: Invalid cookie value: %s", value.c_str());
-        }
-      }
     }
 
     else if (trimmedLine.find("internal") == 0) {
@@ -567,36 +550,36 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
         location.upload_dir = value;
         debuglog(GREEN, "Location upload_dir: %s", value.c_str());
       }
-    } else if (trimmedLine.find("acceptedMethods") == 0) {
+    } 
+    else if (trimmedLine.find("acceptedMethods") == 0) {
       size_t methodsStart = trimmedLine.find_first_not_of(" \t", 15);
       size_t openBrace = trimmedLine.find("{");
-      size_t semiColon = trimmedLine.find(";");
 
-      if (methodsStart != std::string::npos && openBrace != std::string::npos) {
-        std::string methods =
-            trimmedLine.substr(methodsStart, openBrace - methodsStart);
-        std::istringstream methodStream(methods);
+      if (methodsStart != std::string::npos) {
+        std::string methodsStr;
+        if (openBrace != std::string::npos) {
+          methodsStr =
+              trimmedLine.substr(methodsStart, openBrace - methodsStart);
+        } else {
+          methodsStr = trimmedLine.substr(methodsStart);
+        }
+
+        size_t lastNonSpace = methodsStr.find_last_not_of(" \t\n\r");
+        if (lastNonSpace != std::string::npos) {
+          methodsStr = methodsStr.substr(0, lastNonSpace + 1);
+        }
+
+        std::istringstream methodStream(methodsStr);
         std::string method;
 
-        // Parse allowed methods
         if (location.acceptedMethods.size() > 0)
           location.acceptedMethods.clear();
-        while (methodStream >> method) {
-          if (method != "{") {
-            location.acceptedMethods.push_back(method);
-            debuglog(GREEN, "Location accepted method: %s", method.c_str());
-          }
-        }
-      } else if (methodsStart != std::string::npos &&
-                 semiColon != std::string::npos) {
-        std::string methods =
-            trimmedLine.substr(methodsStart, semiColon - methodsStart);
-        std::istringstream methodStream(methods);
-        std::string method;
 
         while (methodStream >> method) {
-          location.acceptedMethods.push_back(method);
-          debuglog(GREEN, "Location accepted method: %s", method.c_str());
+          if (method != "{" && method != "}") {
+            location.acceptedMethods.push_back(method);
+            debuglog(GREEN, "location acceptedMethods method: %s", method.c_str());
+          }
         }
       }
     }
@@ -842,7 +825,7 @@ void debugprintConfigs(std::vector<ServerData> &servers,
           debuglog(BLUE, "    Error Page: %d %s", it->first,
                    it->second.c_str());
         }
-        debuglog(BLUE, "\n\n    Cookie: %s\n\n", loc.cookie ? "on" : "off");
+
       }
     }
 

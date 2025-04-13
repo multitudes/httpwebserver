@@ -575,6 +575,15 @@ void validateRequest(HTTPConnxData &conn) {
     if (conn.data.method == "POST" && conn.data.content_length > 0) {
       debug("POST request detected");
       debuglog(YELLOW, "URLMatcher: Upload request detected.");
+
+        // Add this code to check max body size
+    if (conn.data.content_length > conn.urlMatcherData.config->maxBodySize) {
+      debuglog(RED, "URLMatcher: Content length %zu exceeds maximum allowed size %zu", 
+             conn.data.content_length, conn.urlMatcherData.config->maxBodySize);
+      Responses::htmlErrorResponse(conn, 413); // Request Entity Too Large
+      return;
+  }
+  
       // check if upload allowed
       if (!conn.urlMatcherData.file_upload) {
         debug("file upload not allowed");
