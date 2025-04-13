@@ -114,7 +114,7 @@ void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig) {
       }
     }
 
-    else if (trimmedLine.find("error_page") == 0 &&
+    else if (trimmedLine.find("error_pages") == 0 &&
              trimmedLine.find("{") != std::string::npos) {
       // Handle error_page block
       size_t blockStart = trimmedLine.find("{");

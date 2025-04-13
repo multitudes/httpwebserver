@@ -1,3 +1,15 @@
+# Check the code and ask questions
+
+## 1. Ask explanations about the basics of an HTTP server
+
+```bash
+An HTTP server is software (or a system) that understands and responds to HTTP requests from clients, typically web browsers or tools like curl. Its main job is to serve web content—like HTML pages, images, CSS files, or even data—in response to client requests.
+```
+
+## 2. Ask what function the group used for I/O Multiplexing
+```bash
+
+
 # Configuration
 
 ## 1. how to test:
@@ -52,3 +64,4 @@ run the command
   ```bash
          curl -X DELETE http://localhost:4244/images/test.txt
 ```
+test.txt will not be deleted, and return error page 405 
