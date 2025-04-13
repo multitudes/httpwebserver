@@ -149,13 +149,9 @@ struct HTTPConnxData {
       child_stdout_pipe[1] = -1;
 
       env["SERVER_SOFTWARE"] = "VibeServer/1.0";
-      env["REMOTE_HOST"] = "";
-      env["REMOTE_USER"] = "";
+      env["REMOTE_USER"] = "N/A";
       env["GATEWAY_INTERFACE"] = "CGI/1.1";
-      env["AUTH_TYPE"] = "";
-      env["TRANSFER_ENCODING"] = "";
-      env["PATH_INFO"] = "";
-      env["PATH_TRANSLATED"] = "/";
+      env["AUTH_TYPE"] = "N/A";
     }
   };
   // Connection state and metadata

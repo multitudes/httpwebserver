@@ -127,28 +127,28 @@ int prepareCGI(HTTPConnxData &conn) {
 }
 
 void setCGIEnv(HTTPConnxData &conn) {
-  // Set environment variables for CGI
-  conn.cgiData.env["SERVER_SOFTWARE"] = "VibeServer/1.0";
+  // Set environment variables for CGI - some are already init to defaults 
+  // int he struct constructor - ex REMOTE_USER which we dont use
   conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
-  conn.cgiData.env["REMOTE_USER"] = "";
-  conn.cgiData.env["GATEWAY_INTERFACE"] = "CGI/1.1";
-  conn.cgiData.env["AUTH_TYPE"] = "";
   // for the body of the request if chunked
-  if (conn.data.chunked == true) {
-    conn.cgiData.env["TRANSFER_ENCODING"] = "chunked";
-  } else {
-    conn.cgiData.env["TRANSFER_ENCODING"] = "";
-  }
-  conn.cgiData.env["TRANSFER_ENCODING"] = "";
   conn.cgiData.env["REQUEST_METHOD"] = conn.data.method;
   conn.cgiData.env["SCRIPT_NAME"] = conn.urlMatcherData.full_path;
-  conn.cgiData.env["PATH_INFO"] = conn.cgiData.path_info;
+
+  conn.cgiData.env["PATH_INFO"] = conn.cgiData.path_info.empty() ? "/" : conn.cgiData.path_info;
   conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string;
-  conn.cgiData.env["PATH_TRANSLATED"] = "/";
-  conn.cgiData.env["CONTENT_TYPE"] = conn.data.headers["Content-Type"];
+  string path_translated = conn.urlMatcherData.config->root + conn.cgiData.path_info;
+  conn.cgiData.env["PATH_TRANSLATED"] = path_translated.c_str();
+
+  // Ensure Content-Type is always set
+  if (conn.urlMatcherData.content_type.empty()) {
+    conn.urlMatcherData.content_type = "application/octet-stream";
+  }
+  conn.cgiData.env["CONTENT_TYPE"] = conn.urlMatcherData.content_type;
   conn.cgiData.env["CONTENT_LENGTH"] = conn.data.content_length > 0 ? Utils::to_string(conn.data.content_length) : "0";
   conn.cgiData.env["SERVER_NAME"] = conn.data.host;
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
+
+
 }
 
 std::string ensureTrailinSlash(std::string path) {
