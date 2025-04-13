@@ -360,10 +360,13 @@ int run(std::string configFile) {
 
 
 
-            // Handle data from CGI process (ready to write to client from cgi)
+            // Handle data FROM CGI process (ready to write to client from cgi)
+            // my client is ready to be written to
             if (current_fd == conn.client_fd && (pollfds[i].revents & POLLOUT)) {
               for (size_t j = 0; j < pollfds.size(); j++) {
-                if (pollfds[j].fd == conn.cgiData.cgi_stdout) {
+                // and the cgi process is ready to be read from
+                if (pollfds[j].fd == conn.cgiData.child_stdout_pipe[0] &&
+                    (pollfds[j].revents & POLLIN)) { 
                   debug("POLLIN event on CGI stdout fd %d", conn.cgiData.cgi_stdout);
                   //write to client from cgi
                   char buffer[BUFFER_SIZE];
@@ -371,14 +374,21 @@ int run(std::string configFile) {
                   if (bytes_read < 0) {
                     perror("Failed to read from CGI stdout");
                     conn.reset();
-                    continue;
+                    conn.cgiData.cgi_finished = true;
+                    close(conn.cgiData.child_stdout_pipe[0]);
+                    // todo send the error to the client
+                    break;
                   }
                   if (bytes_read == 0) {
                     debug("CGI process finished");
                     conn.cgiData.cgi_finished = true;
-                    close(conn.cgiData.cgi_stdout);
-                    conn.cgiData.cgi_stdout = -1;
-                    continue;
+                    SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
+                    close(conn.cgiData.child_stdout_pipe[0]);
+                    conn.cgiData.cgi_finished = true;
+                    // connections.erase(conn.client_fd);
+                    conn.reset();
+    
+                    break;
                   }
                   debug("Received %ld bytes from CGI stdout", bytes_read);
                   ssize_t bytes_written = ::send(conn.client_fd, buffer, bytes_read, 0);
@@ -388,11 +398,20 @@ int run(std::string configFile) {
                     continue;
                   }
                   debug("Sent %ld bytes to client", bytes_written);
-      
+                  if (bytes_written < BUFFER_SIZE) {
+                    // i finished sending the data to the client
+                    // close the read end of the pipe to signal EOF to the CGI
+                    debuglog(YELLOW, "Closing read end of pipe");
+                    close(conn.cgiData.child_stdout_pipe[0]);
+                    conn.cgiData.cgi_finished = true;
+                    SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
+                    conn.reset();
+                  }
                  
                   break;
-                }
+                } //pollfds[j].fd == conn.cgiData.child_stdout_pipe[0]
               }
+              // it is not to read from the cgi process
             }
       
 
@@ -404,8 +423,7 @@ int run(std::string configFile) {
 
 
       } // end of the for loop
-    
-    continue; // continue to the while loop
+
     }
     
   
