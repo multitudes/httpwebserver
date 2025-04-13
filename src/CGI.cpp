@@ -147,7 +147,8 @@ void setCGIEnv(HTTPConnxData &conn) {
   conn.cgiData.env["CONTENT_LENGTH"] = conn.data.content_length > 0 ? Utils::to_string(conn.data.content_length) : "0";
   conn.cgiData.env["SERVER_NAME"] = conn.data.host;
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
-
+  conn.cgiData.env["SERVER_PROTOCOL"] = conn.data.version;
+  conn.cgiData.env["REMOTE_ADDR"] = conn.data.client_ip;
 
 }
 
