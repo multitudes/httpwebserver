@@ -292,7 +292,8 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
     return false;
   }
 
-  if (conn.data.target.find(cgi_path_alias) == 0) { // found CGI alias
+  if (conn.data.target == cgi_path_alias || 
+    (conn.data.target.find(CGI::ensureTrailinSlash(cgi_path_alias)) == 0)) { // found CGI alias
     debuglog(BLUE, "URLMatcher: CGI path alias: '%s' -> '%s'",
              cgi_path_alias.c_str(), cgi_path.c_str());
     debuglog(BLUE, "URLMatcher: CGI alias found. Target: %s",
