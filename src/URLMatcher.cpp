@@ -419,61 +419,52 @@ void updateWithLocationBlockConfig(HTTPConnxData &conn) {
     }
   }
 
-  bool handleCookieUpdateRequest(HTTPConnxData &conn)
-  {
-    if (conn.data.target.find("/api/update-cookie/") == 0 &&
-        (conn.data.method == "PUT" || conn.data.method == "POST"))
+bool handleCookieUpdateRequest(HTTPConnxData &conn)
+{
+    if (conn.data.target.find("/api/update-cookie/") == 0)
     {
-        debuglog(YELLOW, "Cookie update request received: %s", conn.data.target.c_str());
-
-        // Create or retrieve session when cookie update is requested
-        if (!conn.data.has_session) {
-            debuglog(MAGENTA, "Creating new session for cookie update request");
-            conn.data.session_id = conn.generateSessionId();
-            conn.data.has_session = true;
-            conn.data.session_created = time(NULL);
-            conn.data.session_last_accessed = time(NULL);
-            conn.data.session_data.clear();
-            
-            debuglog(GREEN, "New session created with ID: %s", conn.data.session_id.c_str());
-            
-            // Add session cookie to response headers
-            conn.data.response_headers += "Set-Cookie: sessionid=" + 
-                conn.data.session_id + "; Path=/; HttpOnly\r\n";
-        }
-
-        // Update session last accessed time
-        conn.data.session_last_accessed = time(NULL);
-
-        // Extract the cookie name and value before cookie check
-        string path = conn.data.target.substr(18); // Remove "/api/update-cookie/"
-        size_t separator = path.find("/");
-
+        debuglog(YELLOW, "Original target: '%s'", conn.data.target.c_str());
+        
+        // Skip past "/api/update-cookie/"
+        size_t prefixLength = strlen("/api/update-cookie/");
+        string fullPath = conn.data.target.substr(prefixLength);
+        debuglog(YELLOW, "After prefix removal: '%s'", fullPath.c_str());
+        
+        // Find the first forward slash after prefix
+        size_t separator = fullPath.find("/");
         if (separator == string::npos) {
             debuglog(RED, "Invalid cookie update request format");
             Responses::simpleStatusResponse(conn, 400);
             return true;
         }
 
-        string cookieName = path.substr(0, separator);
-        string cookieValue = path.substr(separator + 1);
+        // Extract the name and value parts
+        string cookieName = fullPath.substr(0, separator);      // Get "buttonClicked"
+        string cookieValue = fullPath.substr(separator + 1);    // Get "true"
+        
+        debuglog(YELLOW, "Cookie components:");
+        debuglog(YELLOW, "  Name: '%s'", cookieName.c_str());
+        debuglog(YELLOW, "  Value: '%s'", cookieValue.c_str());
 
-        debuglog(YELLOW, "Attempting to update cookie: %s = %s", 
-                cookieName.c_str(), cookieValue.c_str());
+        // Create session if needed
+        if (!conn.data.has_session) {
+            debuglog(MAGENTA, "Creating new session for cookie update request");
+            conn.createSession();
+        }
 
-        // Add cookie to response headers
-        string cookieHeader = "Set-Cookie: " + cookieName + "=" +
-                            cookieValue + "; Path=/\r\n";
-        conn.data.response_headers += cookieHeader;
+        // Format cookie header with correct name=value format
+        string cookieHeader = "Set-Cookie: " + cookieName + "=" + cookieValue + "; Path=/\r\n";
+        debuglog(YELLOW, "Generated cookie header: '%s'", cookieHeader.c_str());
+        
+        conn.data.response_headers = cookieHeader;
 
         // Create success response
         Responses::createResponse(conn, "application/json", "{\"status\":\"success\"}", 200);
         debuglog(GREEN, "Cookie update request completed successfully");
         return true;
     }
-
     return false;
-  }
+}
 
 /**
  * @brief Validates incoming request, handles file/directory serving.
