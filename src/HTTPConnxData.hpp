@@ -137,6 +137,7 @@ struct HTTPConnxData {
     int child_stdout_pipe[2];
     int cgi_stdin;
     int cgi_stdout;
+    bool cgi_finished;
 
     CGIData()
         : buffer(""), is_sending(false), is_receiving(true), child_pid(-1),

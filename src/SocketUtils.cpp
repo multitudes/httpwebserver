@@ -175,6 +175,7 @@ void shutdownServer() {
     }
 
     debuglog(YELLOW, "Closing client socket %d\n", fd);
+    debug("Closing client socket %d\n", fd);
 
     close(fd);
 
@@ -184,8 +185,11 @@ void shutdownServer() {
       if (conn.file_fd != -1) {
         ::close(conn.file_fd);
       }
-      if (conn.cgiData.child_pid > 0) {
-        ::kill(conn.cgiData.child_pid, SIGTERM);
+      int status;
+      if (::waitpid(conn.cgiData.child_pid, &status, 0) > 0) {
+          debug("CGI process with PID %d exited with status %d", conn.cgiData.child_pid, status);
+      } else {
+          perror("waitpid failed");
       }
       HTTPServer::connections.erase(fd);
     }

@@ -43,13 +43,13 @@ int prepareCGI(HTTPConnxData &conn) {
     ::close(conn.cgiData.child_stdin_pipe[1]);  // Close write end of stdin pipe
     ::close(conn.cgiData.child_stdout_pipe[0]); // Close read end of stdout pipe
 
-    // Close original file descriptors
-    ::close(conn.cgiData.child_stdin_pipe[0]);
-    ::close(conn.cgiData.child_stdout_pipe[1]);
-
     // Redirect stdin and stdout
     ::dup2(conn.cgiData.child_stdin_pipe[0], STDIN_FILENO);
     ::dup2(conn.cgiData.child_stdout_pipe[1], STDOUT_FILENO);
+
+    // Close original file descriptors
+    ::close(conn.cgiData.child_stdin_pipe[0]);
+    ::close(conn.cgiData.child_stdout_pipe[1]);
 
     // Prepare environment variables for execve - this one a bit complicate
     // because the env expects a const char* array . the args was easier. could
@@ -100,14 +100,23 @@ int prepareCGI(HTTPConnxData &conn) {
     conn.cgiData.cgi_stdin = conn.cgiData.child_stdin_pipe[1];
     conn.cgiData.cgi_stdout = conn.cgiData.child_stdout_pipe[0];
     
+    if (conn.data.method == "GET") {
+      debug("GET request in cgi - closing child stdin pipe[1]");
+      conn.cgiData.is_receiving = 0; // No data to send to CGI stdin
+      conn.cgiData.is_sending = 1;   // Data to receive from CGI stdout
+      SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
+      ::close(conn.cgiData.child_stdin_pipe[1]);
+    } else {
+      conn.cgiData.is_receiving = 1; // Data to send to CGI stdin
+      conn.cgiData.is_sending = 0;   // No data to receive from CGI stdout
+      SocketUtils::add_to_poll(conn.cgiData.cgi_stdin, POLLOUT);
+      SocketUtils::add_to_poll(conn.cgiData.cgi_stdout, POLLIN);
+      conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
+    }
+  
     // add the fds to the poll
-    conn.cgiData.is_sending = 0;
-    conn.cgiData.is_receiving = 1;
-    SocketUtils::add_to_poll(conn.cgiData.cgi_stdin, POLLOUT);
-    SocketUtils::add_to_poll(conn.cgiData.cgi_stdout, POLLIN);
 
     // this buffer is bidirectional. in this case i use now for the req body
-    conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
     debug("CGI request body: %s", conn.cgiData.buffer.c_str());
     conn.cgiData.child_pid = pid;
     debug("Started CGI process with PID %d", pid);
@@ -137,8 +146,7 @@ void setCGIEnv(HTTPConnxData &conn) {
   conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string;
   conn.cgiData.env["PATH_TRANSLATED"] = "/";
   conn.cgiData.env["CONTENT_TYPE"] = conn.data.headers["Content-Type"];
-  conn.cgiData.env["CONTENT_LENGTH"] =
-      Utils::to_string(conn.data.content_length);
+  conn.cgiData.env["CONTENT_LENGTH"] = conn.data.content_length > 0 ? Utils::to_string(conn.data.content_length) : "0";
   conn.cgiData.env["SERVER_NAME"] = conn.data.host;
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
 }
