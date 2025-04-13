@@ -153,8 +153,8 @@ void setCGIEnv(HTTPConnxData &conn) {
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
 
   // this is extra
-  conn.cgiData.env["HTTP_UPLOAD_DIR"] = conn.urlMatcherData.config->cgiData.upload_dir;
-
+  conn.cgiData.env["UPLOAD_DIR"] = conn.urlMatcherData.config->cgiData.upload_dir;
+  debug("set upload dir for cgi to %s", conn.cgiData.env["HTTP_UPLOAD_DIR"].c_str());
 }
 
 std::string ensureTrailinSlash(std::string path) {

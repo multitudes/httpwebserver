@@ -134,13 +134,7 @@ int run(std::string configFile) {
 
           if (pollfds[i].revents & POLLIN && conn.state == CONN_PARSING_HEADER) {
             debug("CONN_PARSING_HEADER fd %d", conn.client_fd);
-            // here only if the previous validate request could not parse the whole
-            // headers
-
-            debug("CONN_PARSING_HEADER fd %d", conn.client_fd);
-            // parse header
-            // if header complete, set state
-            // else continue parsing
+            URLMatcher::validateRequest(conn);
             continue;
           }
 
@@ -292,7 +286,45 @@ int run(std::string configFile) {
    
             // check if the child process is pollin and i have data in buffer from the 
             // preparecgi function
-
+            if (conn.cgiData.is_receiving) {
+              debug("cgiData is receiving");
+              for (size_t j = 0; j < pollfds.size(); j++) {
+                // and the cgi process is ready to be read from
+                if (pollfds[j].fd == conn.cgiData.child_stdin_pipe[1] &&
+                    (pollfds[j].revents & POLLOUT)) { 
+                      debug("POLLOUT event on CGI stdin fd %d", conn.cgiData.child_stdin_pipe[1]);
+                      
+                      //write to cgi
+                      ssize_t bytes_written = ::write(conn.cgiData.child_stdin_pipe[1], conn.cgiData.buffer.c_str(), conn.cgiData.buffer.size());
+                      if (bytes_written < 0) {
+                        perror("Failed to write to CGI stdin");
+                        conn.reset();
+                        conn.cgiData.cgi_finished = true;
+                        SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                        close(conn.cgiData.child_stdin_pipe[1]);
+                        break;
+                      }
+                      debug("Wrote %ld bytes to CGI stdin", bytes_written);
+                      debugcolor(MAGENTA, "request to CGI: %s", conn.cgiData.buffer.c_str());
+                      debug("Wrote %ld bytes to CGI stdin", bytes_written);
+                      if (bytes_written < static_cast<ssize_t>(conn.cgiData.buffer.size())) {
+                        // Not all data was written, handle partial write
+                        debuglog(YELLOW, "Partial write to CGI stdin");
+                        conn.cgiData.buffer.erase(0, bytes_written);
+                      } else {
+                        // All data was written, clear the buffer
+                        conn.cgiData.buffer.clear();
+                      }
+                      if (bytes_written < BUFFER_SIZE) {
+                        // i finished sending the data to the cgi
+                        // close the write end of the pipe to signal EOF to the CGI
+                        debuglog(YELLOW, "Closing write end of pipe");
+                        SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                        close(conn.cgiData.child_stdin_pipe[1]);
+                        conn.cgiData.is_receiving = false;
+                        conn.cgiData.is_sending = true;
+                      }
+              }}}
             // if (current_fd == conn.cgiData.cgi_stdin &&
             //     (pollfds[i].revents & POLLOUT)) {
               // if (conn.cgiData.is_receiving == 1 && conn.cgiData.buffer.size() > 0) {
