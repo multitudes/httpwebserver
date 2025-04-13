@@ -128,33 +128,44 @@ int prepareCGI(HTTPConnxData &conn) {
 }
 
 void setCGIEnv(HTTPConnxData &conn) {
-  // Set environment variables for CGI - some are already init to defaults 
-  // int he struct constructor - ex REMOTE_USER which we dont use
-  conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
-  // for the body of the request if chunked
-  conn.cgiData.env["REQUEST_METHOD"] = conn.data.method;
-  conn.cgiData.env["SCRIPT_NAME"] = conn.urlMatcherData.full_path;
+  // // Set environment variables for CGI - some are already init to defaults 
+  // // int he struct constructor - ex REMOTE_USER which we dont use
+  // conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
+  // debug("set remote host to %s", conn.cgiData.env["REMOTE_HOST"].c_str());
+  // // for the body of the request if chunked
+  // conn.cgiData.env["REQUEST_METHOD"] = conn.data.method;
+  // debug("set request method to %s", conn.cgiData.env["REQUEST_METHOD"].c_str());
+  // conn.cgiData.env["SCRIPT_NAME"] = conn.urlMatcherData.full_path;
+  // debug("set script name to %s", conn.cgiData.env["SCRIPT_NAME"].c_str());
+  // conn.cgiData.env["PATH_INFO"] = conn.cgiData.path_info.empty() ? "/" : conn.cgiData.path_info;
+  // debug("set path info to %s", conn.cgiData.env["PATH_INFO"].c_str());
+  // conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string.empty() ? "N/A" : conn.cgiData.query_string;
+  // debug("set query string to %s", conn.cgiData.env["QUERY_STRING"].c_str());
+  // string path_translated = conn.urlMatcherData.config->root + conn.cgiData.path_info;
+  // conn.cgiData.env["PATH_TRANSLATED"] = path_translated;
+  // debug("set path translated to %s", conn.cgiData.env["PATH_TRANSLATED"].c_str());
 
-  conn.cgiData.env["PATH_INFO"] = conn.cgiData.path_info.empty() ? "/" : conn.cgiData.path_info;
-  conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string;
-  string path_translated = conn.urlMatcherData.config->root + conn.cgiData.path_info;
-  conn.cgiData.env["PATH_TRANSLATED"] = path_translated.c_str();
+  // // Ensure Content-Type is always set
+  // if (conn.urlMatcherData.content_type.empty()) {
+  //   conn.urlMatcherData.content_type = "application/octet-stream";
+  // }
+  // conn.cgiData.env["CONTENT_TYPE"] = conn.urlMatcherData.content_type;
+  // debug("set content type to %s", conn.cgiData.env["CONTENT_TYPE"].c_str());
+  // conn.cgiData.env["CONTENT_LENGTH"] = conn.data.content_length > 0 ? Utils::to_string(conn.data.content_length) : "0";
+  // debug("set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
+  // conn.cgiData.env["SERVER_NAME"] = conn.data.host;
+  // debug("set server name to %s", conn.cgiData.env["SERVER_NAME"].c_str());
+  // conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
+  // debug("set server port to %s", conn.cgiData.env["SERVER_PORT"].c_str());
+  // conn.cgiData.env["SERVER_PROTOCOL"] = "HTTP/1.1";
+  // debug("set server protocol to %s", conn.cgiData.env["SERVER_PROTOCOL"].c_str());
+  // conn.cgiData.env["REMOTE_ADDR"] = conn.data.client_ip;
+  // debug("set remote addr to %s", conn.cgiData.env["REMOTE_ADDR"].c_str());
 
-  // Ensure Content-Type is always set
-  if (conn.urlMatcherData.content_type.empty()) {
-    conn.urlMatcherData.content_type = "application/octet-stream";
-  }
-  conn.cgiData.env["CONTENT_TYPE"] = conn.urlMatcherData.content_type;
-  conn.cgiData.env["CONTENT_LENGTH"] = conn.data.content_length > 0 ? Utils::to_string(conn.data.content_length) : "0";
-  conn.cgiData.env["SERVER_NAME"] = conn.data.host;
-  conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
-  conn.cgiData.env["SERVER_PROTOCOL"] = conn.data.version;
-  conn.cgiData.env["REMOTE_ADDR"] = conn.data.client_ip;
-  conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
-
-  // this is extra
-  conn.cgiData.env["UPLOAD_DIR"] = conn.urlMatcherData.config->cgiData.upload_dir;
-  debug("set upload dir for cgi to %s", conn.cgiData.env["HTTP_UPLOAD_DIR"].c_str());
+  // // this is extra
+  // conn.cgiData.env["UPLOAD_DIR"] = conn.urlMatcherData.config->cgiData.upload_dir;
+  conn.cgiData.env["UPLOAD_DIR"] = "html/www1/upload";
+  // debug("set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
 }
 
 std::string ensureTrailinSlash(std::string path) {

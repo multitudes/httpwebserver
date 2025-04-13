@@ -81,6 +81,7 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
   // Validate HTTP version
   if (data.version != "HTTP/1.1" && data.version != "HTTP/1.0") {
     debuglog(RED, "Unsupported HTTP version: %s", data.version.c_str());
+    debug("Unsupported HTTP version: %s", data.version.c_str());
     return PARSE_ERROR;
   }
 
