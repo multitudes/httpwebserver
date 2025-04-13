@@ -8,6 +8,16 @@ An HTTP server is software (or a system) that understands and responds to HTTP r
 
 ## 2. Ask what function the group used for I/O Multiplexing
 ```bash
+poll() is a system call in POSIX-compliant systems that lets a server monitor multiple file descriptors to see if I/O operations can be performed without blocking—perfect for handling many simultaneous client connections.
+```
+
+## 3. Ask if they use only one select() (or equivalent) and how they've managed the server to accept and the client to read/write.
+```bash
+One poll() Call: The server uses only one poll() call to handle multiple connections simultaneously. It’s efficient since it allows the server to wait for events on many sockets at once without blocking on any one socket.
+
+Efficient Resource Management: By using poll(), the server doesn't need to block on each socket individually. Instead, it can handle multiple clients in a non-blocking way, making it scalable and able to serve many clients concurrently.
+```
+
 
 
 # Configuration
@@ -65,3 +75,20 @@ run the command
          curl -X DELETE http://localhost:4244/images/test.txt
 ```
 test.txt will not be deleted, and return error page 405 
+
+
+# Basic checks
+
+## 1. GET Request
+
+```bash
+        curl -v http://localhost:4244/index.html
+        
+        
+        telnet localhost 4244 (first this command and then run the next two line command)
+
+        GET /index.html HTTP/1.1
+        Host: localhost
+
+
+
