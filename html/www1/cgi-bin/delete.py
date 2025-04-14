@@ -10,6 +10,7 @@ UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
 
 def main():
     try:
+        
         # Parse the form data
         form = cgi.FieldStorage()
 

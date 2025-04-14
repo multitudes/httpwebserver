@@ -202,7 +202,7 @@ struct ConnectionData {
     ConnectionData()
         : method(""), target(""), version(""), host(""), port(4244),
           request(""), content_length(0), headers(), cookies(),
-          headers_received(false), is_get_request(false), chunked(false),
+          headers_received(false), chunked(false),
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_sent(false), sending_response(false), response_sent(false),

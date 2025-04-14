@@ -276,13 +276,13 @@ int run(std::string configFile) {
 
 
           } else if (conn.state == CONN_CGI) {
+            debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
             debug("CONN_CGI - current fd %d and is %s", current_fd, (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
 
             debug("poll_result %ld", poll_result);
             debug("CONN_CGI fd %d", conn.client_fd);
             debug("CGI fd in %d", conn.cgiData.cgi_stdin);
             debug("CGI fd out %d", conn.cgiData.cgi_stdout);
-            debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
    
             // check if the child process is pollin and i have data in buffer from the 
             // preparecgi function
@@ -341,6 +341,8 @@ int run(std::string configFile) {
                   } 
                   // continue;
             } else if ( conn.cgiData.is_receiving && current_fd == conn.client_fd && (pollfds[i].revents & POLLIN)) {
+              // first read from the client
+              debug("POLLIN event on client fd %d", conn.client_fd);
               for (size_t j = 0; j < pollfds.size(); j++) {
                 // and the cgi process is ready to be read from
                 if (pollfds[j].fd == conn.cgiData.child_stdin_pipe[1] &&
@@ -366,55 +368,60 @@ int run(std::string configFile) {
                       conn.cgiData.is_receiving = false;
                       conn.cgiData.is_sending = true;
                       buffer[0] = '\0'; // 
-                      break;
-                    } 
+                      
+                    } else {
 
-                    debug("Received %ld bytes from client", bytes_read);
-                    debug("writing to cgi stdin %d", conn.cgiData.child_stdin_pipe[1]);
-                 
-                    buffer[bytes_read] = '\0'; // Null-terminate the buffer
-
-                    // now write to cgi the buffer
-                    ssize_t bytes_written = ::write(conn.cgiData.child_stdin_pipe[1], buffer, bytes_read);
-
-                    if (bytes_written < 0) {
-                      perror("Failed to write to CGI stdin");
-                      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
-                      close(conn.cgiData.child_stdin_pipe[1]);
-                      conn.reset();
-                      break;
-                    } else if (bytes_written < BUFFER_SIZE - conn.data.headers_end) {
-                      debug("Wrote %ld bytes to CGI stdin", bytes_written);
-                      debugcolor(MAGENTA, "request to CGI: %s", conn.cgiData.buffer.c_str());
-                      // i finished sending the data to the cgi
-                      // close the write end of the pipe to signal EOF to the CGI
-                      debuglog(YELLOW, "Closing write end of pipe");
-                      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
-                      close(conn.cgiData.child_stdin_pipe[1]);
-                      conn.cgiData.is_receiving = false;
-                      conn.cgiData.is_sending = true;
-                      conn.cgiData.buffer.clear();
-                      break;
-                    } else if (bytes_written < static_cast<ssize_t>(conn.cgiData.buffer.size())) {
-                      // Not all data was written, handle partial write
-                      debuglog(YELLOW, "Partial write to CGI stdin");
-                      conn.cgiData.buffer.erase(0, bytes_written);
-                      break;
-                    } else if (bytes_written == static_cast<ssize_t>(conn.cgiData.buffer.size())) {
-                      // All data was written, clear the buffer
-                      conn.cgiData.buffer.clear();
-                      break;
-                    } else if (bytes_written == 0) {
-                      // No data was written, this should not happen
-                      debuglog(RED, "No data written to CGI stdin");
-                      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
-                      close(conn.cgiData.child_stdin_pipe[1]);
-                      close(conn.cgiData.child_stdout_pipe[0]);
-                      conn.reset();
-                      break;
-                    }
-                    break;
+                      
+                      debug("Received %ld bytes from client", bytes_read);
+                      debug("writing to cgi stdin %d", conn.cgiData.child_stdin_pipe[1]);
+                   
+                      buffer[bytes_read] = '\0'; // Null-terminate the buffer
+  
+                      // now write to cgi the buffer
+                      ssize_t bytes_written = ::write(conn.cgiData.child_stdin_pipe[1], buffer, bytes_read);
+  
+                      if (bytes_written < 0) {
+                        perror("Failed to write to CGI stdin");
+                        SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                        close(conn.cgiData.child_stdin_pipe[1]);
+                        conn.reset();
+                        break;
+                      } else if (bytes_written < BUFFER_SIZE - conn.data.headers_end) {
+                        debug("Wrote %ld bytes to CGI stdin", bytes_written);
+                        debugcolor(MAGENTA, "request to CGI: %s", conn.cgiData.buffer.c_str());
+                        // i finished sending the data to the cgi
+                        // close the write end of the pipe to signal EOF to the CGI
+                        debuglog(YELLOW, "Closing write end of pipe");
+                        SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                        close(conn.cgiData.child_stdin_pipe[1]);
+                        conn.cgiData.is_receiving = false;
+                        conn.cgiData.is_sending = true;
+                        conn.cgiData.buffer.clear();
+                        break;
+                      } else if (bytes_written < static_cast<ssize_t>(conn.cgiData.buffer.size())) {
+                        // Not all data was written, handle partial write
+                        debuglog(YELLOW, "Partial write to CGI stdin");
+                        conn.cgiData.buffer.erase(0, bytes_written);
+                        break;
+                      } else if (bytes_written == static_cast<ssize_t>(conn.cgiData.buffer.size())) {
+                        // All data was written, clear the buffer
+                        conn.cgiData.buffer.clear();
+                        break;
+                      } else if (bytes_written == 0) {
+                        // No data was written, this should not happen
+                        debuglog(RED, "No data written to CGI stdin");
+                        SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                        close(conn.cgiData.child_stdin_pipe[1]);
+                        close(conn.cgiData.child_stdout_pipe[0]);
+                        conn.reset();
+                        break;
+                      }
                 
+                    }
+                  
+                      
+                    
+
                 
                 
                 }
@@ -425,11 +432,13 @@ int run(std::string configFile) {
             // Handle data FROM CGI process (ready to write to client from cgi)
             // my client is ready to be written to
             if ( conn.cgiData.is_sending && current_fd == conn.client_fd && (pollfds[i].revents & POLLOUT )) {
+              debug("cgiData.is_sending  and client fd %d is POLLOUT", conn.client_fd);
               for (size_t j = 0; j < pollfds.size(); j++) {
                 // and the cgi process is ready to be read from
                 if (pollfds[j].fd == conn.cgiData.child_stdout_pipe[0] &&
-                    (pollfds[j].revents & POLLIN)) { 
-                  debug("POLLIN event on CGI stdout fd %d", conn.cgiData.cgi_stdout);
+                  (pollfds[j].revents & POLLIN)) { 
+                      
+                  debug("POLLIN event on CGI stdout fd %d", conn.cgiData.child_stdout_pipe[0]);
                   //write to client from cgi
                   char buffer[BUFFER_SIZE + 1];
                   ssize_t bytes_read = ::read(conn.cgiData.cgi_stdout, buffer, BUFFER_SIZE);
@@ -437,6 +446,7 @@ int run(std::string configFile) {
                     perror("Failed to read from CGI stdout");
              
                     close(conn.cgiData.child_stdout_pipe[0]);
+                    SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
                     conn.reset();
                     // todo send the error to the client
                     break;
@@ -446,17 +456,17 @@ int run(std::string configFile) {
                   debugcolor(MAGENTA, "response from CGI: %s", buffer);
                   if (bytes_read == 0 || bytes_read < BUFFER_SIZE) {
                     debug("CGI process finished");
-                    SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
-                    close(conn.cgiData.child_stdout_pipe[0]);
+                    // SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
                     // conn.reset();
-    
+                    
                     // break;
                   } 
-
+                  
                   // Send data to client
                   ssize_t bytes_written = ::send(conn.client_fd, buffer, bytes_read, 0);
                   if (bytes_written < 0) {
                     perror("Failed to send data to client");
+                    close(conn.cgiData.child_stdout_pipe[0]);
                     conn.reset();
                     continue;
                   }

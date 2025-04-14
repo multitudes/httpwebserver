@@ -103,7 +103,6 @@ class ConnectionData {
     + headers: map<string, string>
     + cookies: map<string, string>
     + headers_received: bool
-    + is_get_request: bool
     + chunked: bool
     + multipart: bool
     + boundary: string

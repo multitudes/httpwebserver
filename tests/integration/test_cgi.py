@@ -13,7 +13,7 @@ def test_cgi_script(webserver_normal_config):
     assert response.status_code == 200, f"Unexpected status code: {response.status_code}"
     assert response.headers["Content-Type"] == "text/html", "Content-Type header mismatch"
     assert "Hello, CGI-World!" in response.text, "Missing expected content in response body"
-    assert "<li>CONTENT_TYPE: application/octet-stream</li>" in response.text, "CONTENT_TYPE mismatch"
+    assert "<li>CONTENT_TYPE: N/A</li>" in response.text, "CONTENT_TYPE mismatch"
     assert "<li>CONTENT_LENGTH: 0</li>" in response.text, "CONTENT_LENGTH mismatch"
     assert "<li>PATH_INFO: /lol/lol/lol</li>" in response.text, "PATH_INFO mismatch"
     assert "<li>PATH_TRANSLATED: htmltest/www1//lol/lol/lol</li>" in response.text, "PATH_TRANSLATED mismatch"

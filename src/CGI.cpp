@@ -127,6 +127,7 @@ int prepareCGI(HTTPConnxData &conn) {
 }
 
 void setCGIEnv(HTTPConnxData &conn) {
+  conn.cgiData.env.clear();
   // Set environment variables for CGI - some are already init to defaults 
   // int he struct constructor - ex REMOTE_USER which we dont use
   conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
@@ -145,11 +146,14 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set path translated to %s", conn.cgiData.env["PATH_TRANSLATED"].c_str());
 
   // Ensure Content-Type is always set
-  if (conn.urlMatcherData.content_type.empty()) {
-    conn.urlMatcherData.content_type = "application/octet-stream";
+  debug("content type in urlmatcher", conn.urlMatcherData.content_type.c_str());
+  debug("content type in general", conn.data.headers["Content-Type"].c_str());
+  if (conn.urlMatcherData.content_type.empty() ) {
+    conn.cgiData.env["CONTENT_TYPE"] = "N/A";
   } else {
     conn.cgiData.env["CONTENT_TYPE"] = conn.urlMatcherData.content_type;
   }
+
   debug("set content type to %s", conn.cgiData.env["CONTENT_TYPE"].c_str());
   conn.cgiData.env["CONTENT_LENGTH"] = conn.data.content_length > 0 ? Utils::to_string(conn.data.content_length) : "0";
   debug("set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
@@ -161,7 +165,13 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set server protocol to %s", conn.cgiData.env["SERVER_PROTOCOL"].c_str());
   conn.cgiData.env["REMOTE_ADDR"] = conn.client_ip;
   debug("set remote addr to %s", conn.cgiData.env["REMOTE_ADDR"].c_str());
-
+  conn.cgiData.env["SERVER_SOFTWARE"] = "VibeServer/1.0";
+  debug("set server software to %s", conn.cgiData.env["SERVER_SOFTWARE"].c_str());  
+  conn.cgiData.env["GATEWAY_INTERFACE"] = "CGI/1.1";
+  conn.cgiData.env["REMOTE_USER"] = "N/A";
+  debug("set remote user to %s", conn.cgiData.env["REMOTE_USER"].c_str());
+  conn.cgiData.env["AUTH_TYPE"] = "N/A";
+  debug("set auth type to %s", conn.cgiData.env["AUTH_TYPE"].c_str());
   // this is extra
   // conn.cgiData.env["UPLOAD_DIR"] = conn.urlMatcherData.config->cgiData.upload_dir;
   conn.cgiData.env["UPLOAD_DIR"] = "html/www1/upload";
@@ -185,3 +195,14 @@ std::string removeLeadingSlash(std::string path) {
 
 
 } // namespace CGI
+
+
+/**
+ * 
+ * testing
+ * 
+ * 
+ curl -v -X POST -H "Content-Type: application/x-www-form-urlencoded" \
+-d "delete_files=egyptiancatsuploadtest.jpeg" \
+http://localhost:4244/cgi/delete.py
+ */

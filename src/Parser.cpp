@@ -306,7 +306,7 @@ void parseServerBlock(const std::string &serverBlockContent,
         if (ServerData.root[ServerData.root.length() - 1] != '/') {
           ServerData.root += '/';
         }
-        ServerData.upload_dir = ServerData.root + "uploads/";
+        ServerData.upload_dir = ServerData.root + "upload/";
         debuglog(GREEN, "Server root: %s", ServerData.root.c_str());
         debuglog(GREEN, "Server upload_dir: %s", ServerData.upload_dir.c_str());
       }
@@ -519,7 +519,7 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
           value += '/';
         }
         location.root = value;
-        location.upload_dir = value + "uploads/";
+        location.upload_dir = value + "upload/";
         debuglog(GREEN, "Location root: %s", value.c_str());
       }
     }

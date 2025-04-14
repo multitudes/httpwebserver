@@ -65,7 +65,6 @@ struct HTTPConnxData {
     map<std::string, std::string> cookies;
 
     bool headers_received;
-    bool is_get_request;
     bool chunked;
     bool multipart;
     string boundary;
@@ -93,7 +92,7 @@ struct HTTPConnxData {
     ConnectionData()
         : method(""), target(""), version(""), host(""), port(4244),
           request(""), content_length(0), headers(), cookies(),
-          headers_received(false), is_get_request(false), chunked(false),
+          headers_received(false), chunked(false),
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_sent(false), sending_response(false), response_sent(false),
@@ -112,7 +111,6 @@ struct HTTPConnxData {
     string full_path;       // Full path to the requested resource
     string path_for_stat;   // Path adjusted for stat() calls
     string content_type;    // Content type (MIME type) for the response
-    string file_upload_dir; // Directory for file uploads
     bool autoindex;
     bool return_directive;         // Flag for return directive
     bool file_upload;
@@ -120,7 +118,7 @@ struct HTTPConnxData {
 	
     
     std::vector<std::string> acceptedMethods;
-    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), file_upload_dir(""), autoindex(false), return_directive(false), file_upload(false), cookie(false), acceptedMethods() {}
+    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), autoindex(false), return_directive(false), file_upload(false), cookie(false), acceptedMethods() {}
   };
 
   struct CGIData {
@@ -146,12 +144,7 @@ struct HTTPConnxData {
       child_stdin_pipe[0] = -1;
       child_stdin_pipe[1] = -1;
       child_stdout_pipe[0] = -1;
-      child_stdout_pipe[1] = -1;
-
-      env["SERVER_SOFTWARE"] = "VibeServer/1.0";
-      env["REMOTE_USER"] = "N/A";
-      env["GATEWAY_INTERFACE"] = "CGI/1.1";
-      env["AUTH_TYPE"] = "N/A";
+      child_stdout_pipe[1] = -1;      
     }
   };
   // Connection state and metadata

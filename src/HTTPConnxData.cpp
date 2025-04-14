@@ -99,8 +99,6 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
     return PARSE_ERROR;
   }
 
-  data.is_get_request = (data.method == "GET");
-
   // Parse target into path and query string
   size_t query_pos = data.target.find('?');
   if (query_pos != string::npos) {
@@ -111,21 +109,21 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
     cgiData.query_string.clear();
   }
 
-  if (data.is_get_request) {
-    // Find the last dot in the target (file extension)
-    size_t last_dot = data.target.find_last_of('.');
-    if (last_dot != string::npos) {
-      // Find the next slash after the extension
-      size_t slash_after_ext = data.target.find('/', last_dot);
-      if (slash_after_ext != string::npos) {
-        // Everything after the slash is path_info
-        cgiData.path_info = data.target.substr(slash_after_ext);
-        debug("Path info: %s", cgiData.path_info.c_str());
-        // Everything before is the actual target
-        data.target = data.target.substr(0, slash_after_ext);
-      }
+
+  // Find the last dot in the target (file extension)
+  size_t last_dot = data.target.find_last_of('.');
+  if (last_dot != string::npos) {
+    // Find the next slash after the extension
+    size_t slash_after_ext = data.target.find('/', last_dot);
+    if (slash_after_ext != string::npos) {
+      // Everything after the slash is path_info
+      cgiData.path_info = data.target.substr(slash_after_ext);
+      debug("Path info: %s", cgiData.path_info.c_str());
+      // Everything before is the actual target
+      data.target = data.target.substr(0, slash_after_ext);
     }
   }
+  
 
   return PARSE_SUCCESS;
 }
@@ -230,21 +228,29 @@ ParseStatus HTTPConnxData::processContentHeaders() {
     }
   }
 
-  // Process Multipart
-  if (data.request.find("Content-Type: multipart/") != string::npos) {
-    size_t boundary_pos = data.request.find("boundary=");
-    if (boundary_pos == string::npos) {
-      debuglog(RED, "No boundary found in multipart form data");
-      return PARSE_ERROR;
+  string content_type;
+  if (checkHeader(*this, "Content-Type", content_type)) {
+    data.headers["Content-Type"] = content_type;
+    
+    // Special handling for multipart
+    if (content_type.find("multipart/") != string::npos) {
+      size_t boundary_pos = content_type.find("boundary=");
+      if (boundary_pos == string::npos) {
+        debuglog(RED, "No boundary found in multipart form data");
+        return PARSE_ERROR;
+      }
+      
+      boundary_pos += 9; // Skip "boundary="
+      data.boundary = "--" + content_type.substr(boundary_pos);
+      data.multipart = true;
+      data.headers["boundary"] = data.boundary;
     }
-
-    boundary_pos += 9; // Skip "boundary="
-    size_t boundary_end = data.request.find("\r\n", boundary_pos);
-    data.boundary =
-        "--" + data.request.substr(boundary_pos, boundary_end - boundary_pos);
-    data.multipart = true;
-    data.headers["Content-Type"] = "multipart/form-data";
-    data.headers["boundary"] = data.boundary;
+  }
+  else {
+    // Set default content-type for POST requests
+    if (data.method == "POST") {
+      data.headers["Content-Type"] = "application/x-www-form-urlencoded";
+    }
   }
 
   // Process Cookies
@@ -385,7 +391,6 @@ string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
       << "content_length=" << data.content_length << ", "
       << "headers_received=" << (data.headers_received ? "true" : "false")
       << ", "
-      << "is_get_request=" << (data.is_get_request ? "true" : "false") << ", "
       << "chunked=" << (data.chunked ? "true" : "false") << ", "
       << "multipart=" << (data.multipart ? "true" : "false");
 

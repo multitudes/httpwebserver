@@ -123,7 +123,7 @@ Config::Config(std::string filename) {
   server1.location_blocks["/go"] = location;
   location = Location();
   location.file_upload = true;
-  server1.location_blocks["/uploads"] = location;
+  server1.location_blocks["/upload"] = location;
   server1.ports.push_back(SERVER_PORT);
  // server1.ports.push_back(4245);
   /* test the servernames with curl -H "Host: myWebserver"
@@ -153,14 +153,14 @@ server1.error_pages.insert(
 server1.error_pages.insert(
     std::make_pair(502, server1.root + "/error_pages/502.html"));
 
-server1.upload_dir = "http/www1/uploads";
+server1.upload_dir = "http/www1/upload";
 server1.maxBodySize = 100000000;
 server1.acceptedMethods.push_back("GET");
 server1.acceptedMethods.push_back("POST");
 server1.acceptedMethods.push_back("DELETE");
 server1.acceptedMethods.push_back("PUT");
 server1.cgiData.cgi_path_alias = std::make_pair("/cgi-bin", "/cgi-bin");
-server1.cgiData.upload_dir = "www/uploads";
+server1.cgiData.upload_dir = "www/upload";
 // server1.cgiData = data;
 // Second server configuration
 ServerData server2;
