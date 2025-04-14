@@ -2,7 +2,6 @@
 
 #include "HTTPConnxData.hpp"
 
-enum CONTENT_TYPE { TEXT_PLAIN = 0, TEXT_HTML = 1 };
 
 using std::string;
 

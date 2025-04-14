@@ -6,7 +6,7 @@ import cgitb
 
 cgitb.enable()  # Enable detailed error messages
 
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'html/www/upload')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
 
 def main():
     try:

@@ -8,12 +8,12 @@ import mimetypes
 
 cgitb.enable()  # Enable detailed error messages
 
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'html/www/upload')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
 
 def main():
     try:
 		# Get the upload directory from environment variable
-        UPLOAD_DIR = os.getenv('UPLOAD_DIR')
+        # UPLOAD_DIR = os.getenv('UPLOAD_DIR')
         if not os.path.exists(UPLOAD_DIR):
             os.makedirs(UPLOAD_DIR)
         # cgi,maxlen = 100 * 1024 * 1024

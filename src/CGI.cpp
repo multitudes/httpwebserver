@@ -64,7 +64,6 @@ int prepareCGI(HTTPConnxData &conn) {
     }
     envArray[i] = NULL;
 
-    
     std::string script_path = removeLeadingSlash(ensureTrailinSlash(conn.urlMatcherData.config->root)) \
     + removeLeadingSlash(conn.urlMatcherData.full_path);
     debug("CGI script_path: %s", script_path.c_str());

@@ -9,7 +9,7 @@ from urllib.parse import quote
 cgitb.enable()  # Enable detailed error messages
 
 # Get the upload directory from the environment variable
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'html/www/upload')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
 
 def main():
     try:

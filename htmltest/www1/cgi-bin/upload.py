@@ -8,7 +8,7 @@ import mimetypes
 
 cgitb.enable()  # Enable detailed error messages
 
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'http/www/upload')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', './http/www1/upload')
 
 def main():
     try:
