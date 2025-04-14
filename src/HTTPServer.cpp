@@ -51,6 +51,9 @@ map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
 vector<ServerData> configs_;
 
+// I will keep them into a map because they are being stored only at the beginning of a connection
+// static map<int, string> remoteAddresses;
+
 /**
  * @brief Entrypoint for the HTTP server
  *
@@ -337,12 +340,91 @@ int run(std::string configFile) {
                   // now i read from client again 
                   } 
                   // continue;
+            } else if ( conn.cgiData.is_receiving && current_fd == conn.client_fd && (pollfds[i].revents & POLLIN)) {
+              for (size_t j = 0; j < pollfds.size(); j++) {
+                // and the cgi process is ready to be read from
+                if (pollfds[j].fd == conn.cgiData.child_stdin_pipe[1] &&
+                    (pollfds[j].revents & POLLOUT)) { 
+                    debug("POLLOUT event on CGI stdin fd %d", conn.cgiData.child_stdin_pipe[1]);
+                   
+                    // read from client
+                    char buffer[BUFFER_SIZE + 1];
+                    ssize_t bytes_read = ::recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
+                    if (bytes_read < 0) {
+                      perror("Failed to read from client");
+                      close(conn.cgiData.child_stdout_pipe[0]);
+                      close(conn.cgiData.child_stdin_pipe[1]);
+                      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                      SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
+                      conn.reset();
+
+                      break;
+                    } else if (bytes_read == 0) {
+                      debug("Client closed connection - giving EOF to CGI stdin");
+                      close(conn.cgiData.child_stdin_pipe[1]);
+                      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                      conn.cgiData.is_receiving = false;
+                      conn.cgiData.is_sending = true;
+                      buffer[0] = '\0'; // 
+                      break;
+                    } 
+
+                    debug("Received %ld bytes from client", bytes_read);
+                    debug("writing to cgi stdin %d", conn.cgiData.child_stdin_pipe[1]);
+                 
+                    buffer[bytes_read] = '\0'; // Null-terminate the buffer
+
+                    // now write to cgi the buffer
+                    ssize_t bytes_written = ::write(conn.cgiData.child_stdin_pipe[1], buffer, bytes_read);
+
+                    if (bytes_written < 0) {
+                      perror("Failed to write to CGI stdin");
+                      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                      close(conn.cgiData.child_stdin_pipe[1]);
+                      conn.reset();
+                      break;
+                    } else if (bytes_written < BUFFER_SIZE - conn.data.headers_end) {
+                      debug("Wrote %ld bytes to CGI stdin", bytes_written);
+                      debugcolor(MAGENTA, "request to CGI: %s", conn.cgiData.buffer.c_str());
+                      // i finished sending the data to the cgi
+                      // close the write end of the pipe to signal EOF to the CGI
+                      debuglog(YELLOW, "Closing write end of pipe");
+                      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                      close(conn.cgiData.child_stdin_pipe[1]);
+                      conn.cgiData.is_receiving = false;
+                      conn.cgiData.is_sending = true;
+                      conn.cgiData.buffer.clear();
+                      break;
+                    } else if (bytes_written < static_cast<ssize_t>(conn.cgiData.buffer.size())) {
+                      // Not all data was written, handle partial write
+                      debuglog(YELLOW, "Partial write to CGI stdin");
+                      conn.cgiData.buffer.erase(0, bytes_written);
+                      break;
+                    } else if (bytes_written == static_cast<ssize_t>(conn.cgiData.buffer.size())) {
+                      // All data was written, clear the buffer
+                      conn.cgiData.buffer.clear();
+                      break;
+                    } else if (bytes_written == 0) {
+                      // No data was written, this should not happen
+                      debuglog(RED, "No data written to CGI stdin");
+                      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                      close(conn.cgiData.child_stdin_pipe[1]);
+                      close(conn.cgiData.child_stdout_pipe[0]);
+                      conn.reset();
+                      break;
+                    }
+                    break;
+                
+                
+                
+                }
+              }
+
             }
-          
 
             // Handle data FROM CGI process (ready to write to client from cgi)
             // my client is ready to be written to
-            if (current_fd == conn.client_fd && (pollfds[i].revents & POLLOUT && conn.cgiData.is_sending)) {
+            if ( conn.cgiData.is_sending && current_fd == conn.client_fd && (pollfds[i].revents & POLLOUT )) {
               for (size_t j = 0; j < pollfds.size(); j++) {
                 // and the cgi process is ready to be read from
                 if (pollfds[j].fd == conn.cgiData.child_stdout_pipe[0] &&
@@ -353,7 +435,7 @@ int run(std::string configFile) {
                   ssize_t bytes_read = ::read(conn.cgiData.cgi_stdout, buffer, BUFFER_SIZE);
                   if (bytes_read < 0) {
                     perror("Failed to read from CGI stdout");
-                    conn.cgiData.cgi_finished = true;
+             
                     close(conn.cgiData.child_stdout_pipe[0]);
                     conn.reset();
                     // todo send the error to the client
@@ -677,14 +759,14 @@ void acceptNewClient(int server_fd) {
 
     // Store client IP address
     SocketUtils::custom_inet_ntop(AF_INET, &client_addr.sin_addr,
-                                  conn.data.client_ip,
-                                  sizeof(conn.data.client_ip));
+                                  conn.client_ip,
+                                  sizeof(conn.client_ip));
     uint16_t client_port = ntohs(client_addr.sin_port);
 
     // add the timeout for the client
     lastActivityTime[client_fd] = std::time(NULL);
 
-    debuglog(YELLOW, "Incoming client connected from %s:%d", conn.data.client_ip,
+    debuglog(YELLOW, "Incoming client connected from %s:%d", conn.client_ip,
              client_port);
     debuglog(YELLOW,
              "Connection data initialized in state INCOMING for client %d",

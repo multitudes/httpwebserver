@@ -55,7 +55,7 @@ struct HTTPConnxData {
     // Connection info
     string host;
     uint16_t port;
-    char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
+    
 
     string request;
     size_t content_length;
@@ -102,7 +102,7 @@ struct HTTPConnxData {
           session_created(0), session_last_accessed(0),
           session_data() // for session management
     {
-      memset(client_ip, 0, sizeof(client_ip));
+     
     }
   };
 
@@ -161,7 +161,7 @@ struct HTTPConnxData {
   ConnectionData data;
 
   int client_fd;
-
+  char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
   bool headers_sent;
 
   // File handling
@@ -185,6 +185,7 @@ struct HTTPConnxData {
         file_offset(0), writeto_fd(-1), upload_completed(false),
         bytes_received(0) {
     filename[0] = '\0';
+    memset(client_ip, 0, sizeof(client_ip));
   }
 
   void reset();

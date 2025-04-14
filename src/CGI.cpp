@@ -159,7 +159,7 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set server port to %s", conn.cgiData.env["SERVER_PORT"].c_str());
   conn.cgiData.env["SERVER_PROTOCOL"] = "HTTP/1.1";
   debug("set server protocol to %s", conn.cgiData.env["SERVER_PROTOCOL"].c_str());
-  conn.cgiData.env["REMOTE_ADDR"] = conn.data.client_ip;
+  conn.cgiData.env["REMOTE_ADDR"] = conn.client_ip;
   debug("set remote addr to %s", conn.cgiData.env["REMOTE_ADDR"].c_str());
 
   // this is extra
