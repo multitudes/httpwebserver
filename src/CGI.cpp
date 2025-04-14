@@ -147,8 +147,9 @@ void setCGIEnv(HTTPConnxData &conn) {
   // Ensure Content-Type is always set
   if (conn.urlMatcherData.content_type.empty()) {
     conn.urlMatcherData.content_type = "application/octet-stream";
+  } else {
+    conn.cgiData.env["CONTENT_TYPE"] = conn.urlMatcherData.content_type;
   }
-  conn.cgiData.env["CONTENT_TYPE"] = conn.urlMatcherData.content_type;
   debug("set content type to %s", conn.cgiData.env["CONTENT_TYPE"].c_str());
   conn.cgiData.env["CONTENT_LENGTH"] = conn.data.content_length > 0 ? Utils::to_string(conn.data.content_length) : "0";
   debug("set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
@@ -164,7 +165,8 @@ void setCGIEnv(HTTPConnxData &conn) {
   // this is extra
   // conn.cgiData.env["UPLOAD_DIR"] = conn.urlMatcherData.config->cgiData.upload_dir;
   conn.cgiData.env["UPLOAD_DIR"] = "html/www1/upload";
-  // debug("set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
+  debug("set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
+  
 }
 
 std::string ensureTrailinSlash(std::string path) {
