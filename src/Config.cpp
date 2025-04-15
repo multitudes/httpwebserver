@@ -126,13 +126,13 @@ Config::Config(std::string filename) {
   server1.location_blocks["/upload"] = location;
   server1.ports.push_back(SERVER_PORT);
  // server1.ports.push_back(4245);
-  /* test the servernames with curl -H "Host: myWebserver"
+  * test the servernames with curl -H "Host: myWebserver"
    * http://localhost:4244/ or curl -H "Host: someWebserver"
    * http://localhost:4244/ or curl -H "Host: myWebserver"
    * http://localhost:4245/ or curl -H "Host: someWebserver"
    * http://localhost:4245/ or nc localhost 4244 and GET / HTTP/1.1 Host:
    * myWebserver
-   */
+   *
 /*
 server1.server_names.push_back("myWebserver");
 server1.server_names.push_back("someWebserver");

@@ -2,8 +2,6 @@ import pytest
 import requests
 import os
 
-
-
 # Test for the CGI script
 def test_cgi_script(webserver_normal_config):
     """Test the CGI script"""
@@ -30,4 +28,137 @@ def test_cgi_script(webserver_normal_config):
     assert "<li>GATEWAY_INTERFACE: CGI/1.1</li>" in response.text, "GATEWAY_INTERFACE mismatch"
     assert "<li>AUTH_TYPE: N/A</li>" in response.text, "AUTH_TYPE mismatch"
 
-print("All tests passed!")
+import requests
+import pytest # Make sure pytest is installed: pip install pytest requests
+
+# Assuming your webserver fixture is defined elsewhere (like in conftest.py)
+# and named 'webserver_normal_config'
+
+# --- Test for POST with multipart/form-data ---
+
+def test_cgi_post_multipart(webserver_normal_config):
+    """Test the CGI script with a POST request using multipart/form-data"""
+    url = 'http://localhost:4244/cgi/hello.py' # Target CGI script
+    
+    # Define the multipart data
+    # 'files' tells requests to encode as multipart/form-data
+    # Format: { 'form_field_name': ('filename', 'file_content', 'content_type') }
+    # Or for simple fields: { 'form_field_name': (None, 'field_value') }
+    files_data = {
+        'text_field': (None, 'Simple text value'),
+        'file_upload': ('report.txt', 'This is the content of the file.\nSecond line.', 'text/plain')
+    }
+    
+    # Make the POST request
+    response = requests.post(url, files=files_data)
+    
+    # Validate the response
+    assert response.status_code == 200, f"Unexpected status code: {response.status_code}"
+    assert response.headers.get("Content-Type", "").startswith("text/html"), "Content-Type header mismatch"
+    assert "Hello, CGI-World!" in response.text, "Missing expected content in response body"
+    
+    # Validate CGI environment variables specific to POST multipart
+    assert "<li>REQUEST_METHOD: POST</li>" in response.text, "REQUEST_METHOD mismatch"
+    # CONTENT_TYPE will include a dynamic boundary, so check the start
+    assert "<li>CONTENT_TYPE: multipart/form-data; boundary=" in response.text, "CONTENT_TYPE mismatch"
+    # CONTENT_LENGTH should be present and non-empty for multipart
+    assert "<li>CONTENT_LENGTH: </li>" not in response.text, "CONTENT_LENGTH should be set for multipart POST"
+    
+    # Check other common variables (adjust path/query specific ones if needed)
+    assert "<li>PATH_INFO: </li>" in response.text, "PATH_INFO should be empty"
+    assert "<li>QUERY_STRING: </li>" in response.text, "QUERY_STRING should be empty"
+    assert "<li>SCRIPT_NAME: /cgi/hello.py</li>" in response.text, "SCRIPT_NAME mismatch" # Adjusted from original test
+    assert "<li>SERVER_PROTOCOL: HTTP/1.1</li>" in response.text, "SERVER_PROTOCOL mismatch"
+    assert "<li>SERVER_SOFTWARE: VibeServer/1.0</li>" in response.text, "SERVER_SOFTWARE mismatch"
+    assert "<li>SERVER_NAME: localhost</li>" in response.text, "SERVER_NAME mismatch"
+    assert "<li>SERVER_PORT: 4244</li>" in response.text, "SERVER_PORT mismatch"
+    assert "<li>REMOTE_ADDR: 127.0.0.1</li>" in response.text, "REMOTE_ADDR mismatch"
+    assert "<li>GATEWAY_INTERFACE: CGI/1.1</li>" in response.text, "GATEWAY_INTERFACE mismatch"
+
+# --- Test for POST with Chunked Transfer Encoding ---
+
+# Generator function to simulate chunked data
+def chunked_data_generator():
+    yield b"This is the first chunk.\n"
+    yield b"And this is the second chunk.\n"
+    yield b"Finally, the third chunk."
+
+def test_cgi_post_chunked(webserver_normal_config):
+    """Test the CGI script with a POST request using chunked transfer encoding"""
+    url = 'http://localhost:4244/cgi/hello.py' # Target CGI script
+    headers = {
+        'Content-Type': 'text/plain',
+        # 'Transfer-Encoding': 'chunked' # requests handles this header when data is an iterator
+    }
+
+    # Make the POST request with a generator for the data
+    # This tells requests to use chunked encoding
+    response = requests.post(url, data=chunked_data_generator(), headers=headers)
+
+    # Validate the response
+    assert response.status_code == 200, f"Unexpected status code: {response.status_code}"
+    assert response.headers.get("Content-Type", "").startswith("text/html"), "Content-Type header mismatch"
+    assert "Hello, CGI-World!" in response.text, "Missing expected content in response body"
+
+    # Validate CGI environment variables specific to chunked POST
+    assert "<li>REQUEST_METHOD: POST</li>" in response.text, "REQUEST_METHOD mismatch"
+    # CONTENT_LENGTH should NOT be set for chunked requests according to CGI spec
+    assert "<li>CONTENT_LENGTH: </li>" in response.text, "CONTENT_LENGTH should be empty/unset for chunked POST"
+    # CONTENT_TYPE should reflect what we sent
+    assert "<li>CONTENT_TYPE: text/plain</li>" in response.text, "CONTENT_TYPE mismatch"
+    # The web server should set HTTP_TRANSFER_ENCODING based on the header
+    # Note: Header names are converted to HTTP_*, uppercase, with dashes replaced by underscores
+    assert "<li>HTTP_TRANSFER_ENCODING: chunked</li>" in response.text, "HTTP_TRANSFER_ENCODING mismatch"
+
+    # Check other common variables (adjust path/query specific ones if needed)
+    assert "<li>PATH_INFO: </li>" in response.text, "PATH_INFO should be empty"
+    assert "<li>QUERY_STRING: </li>" in response.text, "QUERY_STRING should be empty"
+    assert "<li>SCRIPT_NAME: /cgi/hello.py</li>" in response.text, "SCRIPT_NAME mismatch" # Adjusted
+    assert "<li>SERVER_PROTOCOL: HTTP/1.1</li>" in response.text, "SERVER_PROTOCOL mismatch"
+    assert "<li>SERVER_SOFTWARE: VibeServer/1.0</li>" in response.text, "SERVER_SOFTWARE mismatch"
+    assert "<li>SERVER_NAME: localhost</li>" in response.text, "SERVER_NAME mismatch"
+    assert "<li>SERVER_PORT: 4244</li>" in response.text, "SERVER_PORT mismatch"
+    assert "<li>GATEWAY_INTERFACE: CGI/1.1</li>" in response.text, "GATEWAY_INTERFACE mismatch"
+
+
+# --- Test for DELETE request ---
+
+def test_cgi_delete(webserver_normal_config):
+    """Test the CGI script with a DELETE request"""
+    # Include some path info to simulate deleting a resource
+    url = 'http://localhost:4244/cgi/hello.py/resource/to/delete' 
+    
+    # Make the DELETE request (no body in this case)
+    response = requests.delete(url)
+    
+    # Validate the response
+    assert response.status_code == 200, f"Unexpected status code: {response.status_code}" # Or maybe 204 if your script handles it
+    assert response.headers.get("Content-Type", "").startswith("text/html"), "Content-Type header mismatch"
+    assert "Hello, CGI-World!" in response.text, "Missing expected content in response body"
+    
+    # Validate CGI environment variables specific to DELETE
+    assert "<li>REQUEST_METHOD: DELETE</li>" in response.text, "REQUEST_METHOD mismatch"
+    # CONTENT_LENGTH should be empty/unset or 0 if no body is sent
+    # Check for empty:
+    assert "<li>CONTENT_LENGTH: </li>" in response.text or "<li>CONTENT_LENGTH: 0</li>" in response.text, "CONTENT_LENGTH should be empty or 0 for DELETE with no body"
+    # CONTENT_TYPE should be empty/unset if no body is sent
+    assert "<li>CONTENT_TYPE: </li>" in response.text, "CONTENT_TYPE should be empty/unset for DELETE with no body"
+    
+    # Check path/query specific variables
+    assert "<li>PATH_INFO: /resource/to/delete</li>" in response.text, "PATH_INFO mismatch"
+    # Assuming PATH_TRANSLATED maps similarly to your GET test structure
+    # Adjust the base path 'htmltest/www1/' as needed for your setup
+    assert "<li>PATH_TRANSLATED: htmltest/www1/resource/to/delete</li>" in response.text, "PATH_TRANSLATED mismatch" 
+    assert "<li>QUERY_STRING: </li>" in response.text, "QUERY_STRING should be empty"
+    assert "<li>SCRIPT_NAME: /cgi/hello.py</li>" in response.text, "SCRIPT_NAME mismatch" # Adjusted
+
+    # Check other common variables
+    assert "<li>SERVER_PROTOCOL: HTTP/1.1</li>" in response.text, "SERVER_PROTOCOL mismatch"
+    assert "<li>SERVER_SOFTWARE: VibeServer/1.0</li>" in response.text, "SERVER_SOFTWARE mismatch"
+    assert "<li>SERVER_NAME: localhost</li>" in response.text, "SERVER_NAME mismatch"
+    assert "<li>SERVER_PORT: 4244</li>" in response.text, "SERVER_PORT mismatch"
+    assert "<li>GATEWAY_INTERFACE: CGI/1.1</li>" in response.text, "GATEWAY_INTERFACE mismatch"
+
+# You might want a final print statement outside the functions if running directly
+# but pytest handles reporting.
+# print("All CGI tests defined.")

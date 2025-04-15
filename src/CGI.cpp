@@ -146,8 +146,8 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set path translated to %s", conn.cgiData.env["PATH_TRANSLATED"].c_str());
 
   // Ensure Content-Type is always set
-  debug("content type in urlmatcher", conn.urlMatcherData.content_type.c_str());
-  debug("content type in general", conn.data.headers["Content-Type"].c_str());  
+  debug("content type in urlmatcher %s", conn.urlMatcherData.content_type.c_str());
+  debug("content type in general %s", conn.data.headers["Content-Type"].c_str());  
   conn.cgiData.env["CONTENT_TYPE"] = conn.urlMatcherData.content_type;
   if (conn.data.content_length > 0) {
     conn.cgiData.env["CONTENT_LENGTH"] = Utils::to_string(conn.data.content_length);
