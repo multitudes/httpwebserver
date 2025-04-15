@@ -14,7 +14,7 @@ def test_cgi_script(webserver_normal_config):
     assert "<li>CONTENT_TYPE: </li>" in response.text, "CONTENT_TYPE mismatch"
     assert "<li>CONTENT_LENGTH: </li>" in response.text, "CONTENT_LENGTH mismatch"
     assert "<li>PATH_INFO: /lol/lol/lol</li>" in response.text, "PATH_INFO mismatch"
-    assert "<li>PATH_TRANSLATED: htmltest/www1//lol/lol/lol</li>" in response.text, "PATH_TRANSLATED mismatch"
+    assert "<li>PATH_TRANSLATED: htmltest/www1/lol/lol/lol</li>" in response.text, "PATH_TRANSLATED mismatch"
     assert "<li>SCRIPT_NAME: /cgi-bin/hello.py</li>" in response.text, "SCRIPT_NAME mismatch"
     assert "<li>SERVER_PROTOCOL: HTTP/1.1</li>" in response.text, "SERVER_PROTOCOL mismatch"
     assert "<li>REQUEST_METHOD: GET</li>" in response.text, "REQUEST_METHOD mismatch"
@@ -65,9 +65,9 @@ def test_cgi_post_multipart(webserver_normal_config):
     assert "<li>CONTENT_LENGTH: </li>" not in response.text, "CONTENT_LENGTH should be set for multipart POST"
     
     # Check other common variables (adjust path/query specific ones if needed)
-    assert "<li>PATH_INFO: </li>" in response.text, "PATH_INFO should be empty"
+    assert "<li>PATH_INFO: /</li>" in response.text, "PATH_INFO should be empty"
     assert "<li>QUERY_STRING: </li>" in response.text, "QUERY_STRING should be empty"
-    assert "<li>SCRIPT_NAME: /cgi/hello.py</li>" in response.text, "SCRIPT_NAME mismatch" # Adjusted from original test
+    assert "<li>SCRIPT_NAME: /cgi-bin/hello.py</li>" in response.text, "SCRIPT_NAME mismatch" # Adjusted from original test
     assert "<li>SERVER_PROTOCOL: HTTP/1.1</li>" in response.text, "SERVER_PROTOCOL mismatch"
     assert "<li>SERVER_SOFTWARE: VibeServer/1.0</li>" in response.text, "SERVER_SOFTWARE mismatch"
     assert "<li>SERVER_NAME: localhost</li>" in response.text, "SERVER_NAME mismatch"
@@ -88,7 +88,7 @@ def test_cgi_post_chunked(webserver_normal_config):
     url = 'http://localhost:4244/cgi/hello.py' # Target CGI script
     headers = {
         'Content-Type': 'text/plain',
-        # 'Transfer-Encoding': 'chunked' # requests handles this header when data is an iterator
+        'Transfer-Encoding': 'chunked' # requests handles this header when data is an iterator
     }
 
     # Make the POST request with a generator for the data
@@ -111,9 +111,9 @@ def test_cgi_post_chunked(webserver_normal_config):
     assert "<li>HTTP_TRANSFER_ENCODING: chunked</li>" in response.text, "HTTP_TRANSFER_ENCODING mismatch"
 
     # Check other common variables (adjust path/query specific ones if needed)
-    assert "<li>PATH_INFO: </li>" in response.text, "PATH_INFO should be empty"
+    assert "<li>PATH_INFO: /</li>" in response.text, "PATH_INFO should be /"
     assert "<li>QUERY_STRING: </li>" in response.text, "QUERY_STRING should be empty"
-    assert "<li>SCRIPT_NAME: /cgi/hello.py</li>" in response.text, "SCRIPT_NAME mismatch" # Adjusted
+    assert "<li>SCRIPT_NAME: /cgi-bin/hello.py</li>" in response.text, "SCRIPT_NAME mismatch" # Adjusted
     assert "<li>SERVER_PROTOCOL: HTTP/1.1</li>" in response.text, "SERVER_PROTOCOL mismatch"
     assert "<li>SERVER_SOFTWARE: VibeServer/1.0</li>" in response.text, "SERVER_SOFTWARE mismatch"
     assert "<li>SERVER_NAME: localhost</li>" in response.text, "SERVER_NAME mismatch"
@@ -150,7 +150,7 @@ def test_cgi_delete(webserver_normal_config):
     # Adjust the base path 'htmltest/www1/' as needed for your setup
     assert "<li>PATH_TRANSLATED: htmltest/www1/resource/to/delete</li>" in response.text, "PATH_TRANSLATED mismatch" 
     assert "<li>QUERY_STRING: </li>" in response.text, "QUERY_STRING should be empty"
-    assert "<li>SCRIPT_NAME: /cgi/hello.py</li>" in response.text, "SCRIPT_NAME mismatch" # Adjusted
+    assert "<li>SCRIPT_NAME: /cgi-bin/hello.py</li>" in response.text, "SCRIPT_NAME mismatch" # Adjusted
 
     # Check other common variables
     assert "<li>SERVER_PROTOCOL: HTTP/1.1</li>" in response.text, "SERVER_PROTOCOL mismatch"

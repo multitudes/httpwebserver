@@ -133,6 +133,8 @@ void setCGIEnv(HTTPConnxData &conn) {
   conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
   debug("set remote host to %s", conn.cgiData.env["REMOTE_HOST"].c_str());
   // for the body of the request if chunked
+  conn.cgiData.env["HTTP_TRANSFER_ENCODING"] = conn.data.headers["Transfer-Encoding"];
+  debug("set transfer encoding to %s", conn.cgiData.env["HTTP_TRANSFER_ENCODING"].c_str());
   conn.cgiData.env["REQUEST_METHOD"] = conn.data.method;
   debug("set request method to %s", conn.cgiData.env["REQUEST_METHOD"].c_str());
   conn.cgiData.env["SCRIPT_NAME"] = conn.urlMatcherData.full_path;
@@ -141,7 +143,9 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set path info to %s", conn.cgiData.env["PATH_INFO"].c_str());
   conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string;
   debug("set query string to %s", conn.cgiData.env["QUERY_STRING"].c_str());
-  string path_translated = conn.urlMatcherData.config->root + conn.cgiData.path_info;
+
+
+  string path_translated = ensureTrailinSlash(conn.urlMatcherData.config->root) + removeLeadingSlash(conn.cgiData.path_info);
   conn.cgiData.env["PATH_TRANSLATED"] = path_translated;
   debug("set path translated to %s", conn.cgiData.env["PATH_TRANSLATED"].c_str());
 

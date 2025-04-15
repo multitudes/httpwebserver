@@ -15,4 +15,4 @@ pip/*
 create*
 environment/*
 htmltest/www2/test.txt
-.vscode/
+.vscode/*
