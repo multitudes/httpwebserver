@@ -281,8 +281,8 @@ int run(std::string configFile) {
 
             debug("poll_result %ld", poll_result);
             debug("CONN_CGI fd %d", conn.client_fd);
-            debug("CGI fd in %d", conn.cgiData.cgi_stdin);
-            debug("CGI fd out %d", conn.cgiData.cgi_stdout);
+            debug("CGI fd in %d", conn.cgiData.child_stdin_pipe[1]);
+            debug("CGI fd out %d", conn.cgiData.child_stdout_pipe[0]);
    
             // check if the child process is pollin and i have data in buffer from the 
             // preparecgi function
@@ -295,36 +295,13 @@ int run(std::string configFile) {
                           debug("POLLOUT event on CGI stdin fd %d", conn.cgiData.child_stdin_pipe[1]);
                           
                           //write to cgi the buffer if any remaining from the initialisation
-                        if (conn.data.chunked) {
-
-                            //handle chunks.. collect them in the one place and 
-                            // write in the end when getting the end
-                            debug("Chunked transfer encoding detected\n");
-                            if (conn.cgiData.buffer.find("0\r\n\r\n", 0) !=
-                                string::npos) {
-                              debug("End of chunking - Request complete");
-                              // dechunk the data
-
-                            } else {
-                              debug("Still reading chunked data");
-                              // copy to chunkedBody
-                              conn.data.chunkedBody = conn.cgiData.buffer;
-                              conn.cgiData.buffer.clear();
-                              
-               
-                              break;
-                            }
-
-
-
-                          } else {
-
-                           
                             ssize_t bytes_written = ::write(conn.cgiData.child_stdin_pipe[1], conn.cgiData.buffer.c_str(), conn.cgiData.buffer.size());
                             if (bytes_written < 0) {
                               perror("Failed to write to CGI stdin");
                               SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+                              SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
                               close(conn.cgiData.child_stdin_pipe[1]);
+                              close(conn.cgiData.child_stdout_pipe[0]);
                               conn.reset();
                               break;
                             } else if (bytes_written < BUFFER_SIZE - conn.data.headers_end) {
@@ -361,7 +338,7 @@ int run(std::string configFile) {
 
 
 
-                          }
+                          
                     }
                   
                   // so i wrote the remaining data to the cgi stdin which i got after the headers...
@@ -469,7 +446,7 @@ int run(std::string configFile) {
                   debug("POLLIN event on CGI stdout fd %d", conn.cgiData.child_stdout_pipe[0]);
                   //write to client from cgi
                   char buffer[BUFFER_SIZE + 1];
-                  ssize_t bytes_read = ::read(conn.cgiData.cgi_stdout, buffer, BUFFER_SIZE);
+                  ssize_t bytes_read = ::read(conn.cgiData.child_stdout_pipe[0], buffer, BUFFER_SIZE);
                   if (bytes_read < 0) {
                     perror("Failed to read from CGI stdout");
              
@@ -914,3 +891,31 @@ HTTPConnxData &getConnectionData(int fd) {
 }
 
 } // namespace HTTPServer
+
+
+// parked code TODO remove
+
+// if (conn.data.chunked) {
+
+//   //handle chunks.. collect them in the one place and 
+//   // write in the end when getting the end
+//   debug("Chunked transfer encoding detected\n");
+//   if (conn.cgiData.buffer.find("0\r\n\r\n", 0) !=
+//       string::npos) {
+//     debug("End of chunking - Request complete");
+//     // dechunk the data
+//     conn.dechunkData();
+//     conn.data.chunked = false;
+//     debug("Dechunked data: %s", conn.cgiData.buffer.c_str());
+
+//   } else {
+//     debug("Still reading chunked data");
+//     // copy to chunkedBody
+//     conn.data.chunkedBody = conn.cgiData.buffer;
+//     conn.cgiData.buffer.clear();
+    
+
+//     break;
+//   }
+
+// }

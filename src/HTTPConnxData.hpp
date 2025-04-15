@@ -199,5 +199,5 @@ struct HTTPConnxData {
   string generateSessionId();
   void createSession();
   bool retrieveSession();
-  void dechunkData(HTTPConnxData &conn);
+  void dechunkData();
 };

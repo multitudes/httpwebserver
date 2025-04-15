@@ -13,59 +13,46 @@ using std::map;
 using std::string;
 using std::vector;
 
-void dechunkData(HTTPConnxData &conn) {
-  string &buffer = conn.cgiData.buffer;
-  string dechunked;
+
+
+/**
+ * @brief Dechunk the data in the buffer
+ * 
+ * This function processes the buffer to remove chunked transfer encoding.
+ * It will be called once we have the final chunk (0\r\n\r\n).
+ */
+void HTTPConnxData::dechunkData() {
+  std::string dechunked;
   size_t pos = 0;
-
-  while (pos < buffer.length()) {
-    // Find the chunk size line
-    size_t chunk_size_end = buffer.find("\r\n", pos);
-    if (chunk_size_end == string::npos) {
-      break; // Invalid chunk format
-    }
-
-    // Parse chunk size (hex string)
-    string hex_size = buffer.substr(pos, chunk_size_end - pos);
-    unsigned int chunk_size;
-    std::stringstream ss;
-    ss << std::hex << hex_size;
-    ss >> chunk_size;
-
-    // Last chunk (size 0)
-    if (chunk_size == 0) {
-      break;
-    }
-
-    // Move to start of chunk data
-    pos = chunk_size_end + 2;
-
-    // Check if we have complete chunk data
-    if (pos + chunk_size > buffer.length()) {
-      break; // Incomplete chunk
-    }
-
-    // Append chunk data to dechunked body
-    dechunked.append(buffer.substr(pos, chunk_size));
-
-    // Move to next chunk (skip \r\n after chunk data)
-    pos += chunk_size + 2;
+  
+  while (pos < cgiData.buffer.length()) {
+      // Find chunk size line
+      size_t chunk_size_end = cgiData.buffer.find("\r\n", pos);
+      if (chunk_size_end == std::string::npos) break;
+      
+      // Parse hex chunk size
+      std::string hex_size = cgiData.buffer.substr(pos, chunk_size_end - pos);
+      unsigned int chunk_size;
+      std::istringstream iss(hex_size);
+      iss >> std::hex >> chunk_size;
+      
+      if (chunk_size == 0) break;  // Last chunk
+      
+      // Move to chunk data start
+      pos = chunk_size_end + 2;
+      if (pos + chunk_size > cgiData.buffer.length()) break;
+      
+      // Append chunk data
+      dechunked.append(cgiData.buffer.substr(pos, chunk_size));
+      
+      // Move to next chunk
+      pos += chunk_size + 2;
   }
-
-  // Replace buffer with dechunked data
-  buffer = dechunked;
-
-  // Update Content-Length in headers if it exists
-  if (conn.data.headers.find("Content-Length") != conn.data.headers.end()) {
-    std::ostringstream oss;
-    oss << buffer.length();
-    conn.data.headers["Content-Length"] = oss.str();
-  }
-
-  // Or add Content-Length if it wasn't present
-  std::ostringstream oss;
-  oss << buffer.length();
-  conn.data.headers["Content-Length"] = oss.str();
+  
+  // Update buffer and headers
+  cgiData.buffer = dechunked;
+  data.headers["Content-Length"] = std::to_string(cgiData.buffer.length());
+  data.headers.erase("Transfer-Encoding");  // Remove chunked header
 }
 
 
@@ -536,7 +523,7 @@ string HTTPConnxData::generateSessionId() {
   // Get current time
   time_t now = time(NULL);
   // Convert to hex string with padding
-  stringstream ss;
+  std::stringstream ss;
   ss << std::hex << std::setfill('0') << std::setw(16) << now;
   // Add process ID for additional uniqueness
   ss << "_" << std::hex << getpid();

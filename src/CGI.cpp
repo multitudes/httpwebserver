@@ -87,17 +87,11 @@ int prepareCGI(HTTPConnxData &conn) {
     std::exit(EXIT_FAILURE);
   } else {
     // Parent process
-    // conn.poll_stdin_idx = SocketUtils::add_to_poll(conn.child_stdin_pipe[1],
-    // POLLOUT); conn.poll_stdout_idx =
-    // SocketUtils::add_to_poll(conn.child_stdout_pipe[0], POLLIN);
-
     // Close unused pipe ends
     ::close(conn.cgiData.child_stdout_pipe[1]); // Close write end of stdout pipe
     ::close(conn.cgiData.child_stdin_pipe[0]);  // Close read end of stdin pipe
     
     // assign the fds to the connection data
-    conn.cgiData.cgi_stdin = conn.cgiData.child_stdin_pipe[1];
-    conn.cgiData.cgi_stdout = conn.cgiData.child_stdout_pipe[0];
     
     if (conn.data.method == "GET" || (conn.data.content_length == 0 && conn.data.chunked != true)) {
       // No data to send to CGI stdin, close the write end of the pipe
@@ -109,8 +103,8 @@ int prepareCGI(HTTPConnxData &conn) {
     } else {
       conn.cgiData.is_receiving = true; // Data to send to CGI stdin
       conn.cgiData.is_sending = false;   // No data to receive from CGI stdout
-      SocketUtils::add_to_poll(conn.cgiData.cgi_stdin, POLLOUT);
-      SocketUtils::add_to_poll(conn.cgiData.cgi_stdout, POLLIN);
+      SocketUtils::add_to_poll(conn.cgiData.child_stdin_pipe[1], POLLOUT);
+      SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
       conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
     }
   
