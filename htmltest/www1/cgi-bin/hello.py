@@ -38,6 +38,8 @@ def main():
     message += f"<li>REMOTE_USER: {os.environ.get('REMOTE_USER', 'N/A')}</li>"
     message += f"<li>GATEWAY_INTERFACE: {os.environ.get('GATEWAY_INTERFACE', 'N/A')}</li>"
     message += f"<li>AUTH_TYPE: {os.environ.get('AUTH_TYPE', 'N/A')}</li>"
+    message += f"<li>HTTP_TRANSFER_ENCODING: {os.environ.get('HTTP_TRANSFER_ENCODING', 'N/A')}</li>"
+    
     message += "</ul>"
 
     # Print the body if received

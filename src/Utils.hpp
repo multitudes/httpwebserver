@@ -13,6 +13,18 @@ namespace Utils {
         return oss.str();
     }
 
+    inline string to_string(long n) {
+        std::ostringstream oss;
+        oss << n;
+        return oss.str();
+    }
+
+    inline string to_string(size_t n) {
+        std::ostringstream oss;
+        oss << n;
+        return oss.str();
+    }
+    
 	char *binToHex(const unsigned char *input, size_t len) ;
 	string trim(const string &str);
 

@@ -61,3 +61,24 @@
 These are some of the most important environment variables. RFC 3875 defines others, but these are generally the most commonly used.
 
 **Note:** The specific environment variables and their values may vary slightly depending on the web server implementation.
+
+
+## testing
+
+
+
+
+chunked and POST
+```bash
+echo -n -e "This is the first chunk.\nAnd this is the second chunk.\nFinally, the third chunk." | \
+    curl -v -X POST \
+         -H "Content-Type: text/plain" \
+         -H "Transfer-Encoding: chunked" \
+         --data-binary @- \
+         http://localhost:4244/cgi/hello.py
+```
+
+DELETE
+```bash
+curl -v -X DELETE http://localhost:4244/cgi/hello.py/resource/to/delete
+```

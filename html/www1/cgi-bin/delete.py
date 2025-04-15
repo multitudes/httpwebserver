@@ -6,10 +6,11 @@ import cgitb
 
 cgitb.enable()  # Enable detailed error messages
 
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'http/www/uploads')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
 
 def main():
     try:
+        
         # Parse the form data
         form = cgi.FieldStorage()
 

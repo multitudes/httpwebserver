@@ -9,7 +9,7 @@ from urllib.parse import quote
 cgitb.enable()  # Enable detailed error messages
 
 # Get the upload directory from the environment variable
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'http/www1/uploads')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'http/www1/upload')
 
 def main():
     try:
@@ -78,7 +78,7 @@ def main():
             html_content += f"""
 <li>
     <input type="checkbox" class="check" name="delete_files" value="{filename}" onclick="checkFiles()">
-    <a href="/uploads/{quote(filename)}" target="_blank">{filename}</a>
+    <a href="/upload/{quote(filename)}" target="_blank">{filename}</a>
 </li>
             """
 
@@ -126,7 +126,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>{e}</p>
-    <form action='/cgi-bin/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
+    <form action='/cgi/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
 </body>
 </html>
         """

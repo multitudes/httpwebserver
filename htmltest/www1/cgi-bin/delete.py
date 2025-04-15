@@ -6,7 +6,7 @@ import cgitb
 
 cgitb.enable()  # Enable detailed error messages
 
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', './www/uploads')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
 
 def main():
     try:
@@ -27,7 +27,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>No files selected for deletion.</p>
-    <form action="/cgi-bin/fileupload.py" method="get"><button type="submit">Go Back</button></form>
+    <form action="/cgi/fileupload.py" method="get"><button type="submit">Go Back</button></form>
 </body>
 </html>"""
             print("HTTP/1.1 400 Bad Request")
@@ -69,7 +69,7 @@ def main():
                 for filename in not_found_files:
                     html_content += f"<li>{filename}</li>"
                 html_content += "</ul>"
-            html_content += '<form action="/cgi-bin/fileupload.py" method="get"><button type="submit">Go Back</button></form>'
+            html_content += '<form action="/cgi/fileupload.py" method="get"><button type="submit">Go Back</button></form>'
             html_content += "</body></html>"
 
             print("HTTP/1.1 200 OK")
@@ -92,7 +92,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>{e}</p>
-    <form action='/cgi-bin/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
+    <form action='/cgi/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
 </body>
 </html>"""
 

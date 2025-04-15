@@ -55,7 +55,6 @@ struct HTTPConnxData {
     // Connection info
     string host;
     uint16_t port;
-    char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
 
     string request;
     size_t content_length;
@@ -65,8 +64,9 @@ struct HTTPConnxData {
     map<std::string, std::string> cookies;
 
     bool headers_received;
-    bool is_get_request;
     bool chunked;
+    string chunkedBody;
+
     bool multipart;
     string boundary;
     size_t headers_end;
@@ -93,7 +93,7 @@ struct HTTPConnxData {
     ConnectionData()
         : method(""), target(""), version(""), host(""), port(4244),
           request(""), content_length(0), headers(), cookies(),
-          headers_received(false), is_get_request(false), chunked(false),
+          headers_received(false), chunked(false), chunkedBody(""),
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_sent(false), sending_response(false), response_sent(false),
@@ -101,26 +101,25 @@ struct HTTPConnxData {
           has_session(false), // for session management
           session_created(0), session_last_accessed(0),
           session_data() // for session management
-    {
-      memset(client_ip, 0, sizeof(client_ip));
-    }
+    {}
   };
 
   struct URLMatcherData {
 
     const ServerData *config;
-    string full_path;       // Full path to the requested resource
-    string path_for_stat;   // Path adjusted for stat() calls
-    string content_type;    // Content type (MIME type) for the response
-    string file_upload_dir; // Directory for file uploads
+    string full_path;     // Full path to the requested resource
+    string path_for_stat; // Path adjusted for stat() calls
+    string content_type;  // Content type (MIME type) for the response
     bool autoindex;
-    bool return_directive;         // Flag for return directive
+    bool return_directive; // Flag for return directive
     bool file_upload;
-    bool cookie;         // Flag for file upload
-	
-    
+    bool cookie; // Flag for file upload
+
     std::vector<std::string> acceptedMethods;
-    URLMatcherData() : config(NULL), full_path(""), path_for_stat(""), content_type(""), file_upload_dir(""), autoindex(false), return_directive(false), file_upload(false), cookie(false), acceptedMethods() {}
+    URLMatcherData()
+        : config(NULL), full_path(""), path_for_stat(""), content_type(""),
+          autoindex(false), return_directive(false), file_upload(false),
+          cookie(false), acceptedMethods() {}
   };
 
   struct CGIData {
@@ -147,11 +146,6 @@ struct HTTPConnxData {
       child_stdin_pipe[1] = -1;
       child_stdout_pipe[0] = -1;
       child_stdout_pipe[1] = -1;
-
-      env["SERVER_SOFTWARE"] = "VibeServer/1.0";
-      env["REMOTE_USER"] = "N/A";
-      env["GATEWAY_INTERFACE"] = "CGI/1.1";
-      env["AUTH_TYPE"] = "N/A";
     }
   };
   // Connection state and metadata
@@ -161,7 +155,7 @@ struct HTTPConnxData {
   ConnectionData data;
 
   int client_fd;
-
+  char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
   bool headers_sent;
 
   // File handling
@@ -180,11 +174,11 @@ struct HTTPConnxData {
   CGIData cgiData;
 
   HTTPConnxData()
-      : state(CONN_INCOMING), data(), client_fd(-1), headers_sent(false), 
-        file_fd(-1), file_size(0),
-        file_offset(0), writeto_fd(-1), upload_completed(false),
-        bytes_received(0) {
+      : state(CONN_INCOMING), data(), client_fd(-1), headers_sent(false),
+        file_fd(-1), file_size(0), file_offset(0), writeto_fd(-1),
+        upload_completed(false), bytes_received(0) {
     filename[0] = '\0';
+    memset(client_ip, 0, sizeof(client_ip));
   }
 
   void reset();
@@ -205,4 +199,5 @@ struct HTTPConnxData {
   string generateSessionId();
   void createSession();
   bool retrieveSession();
+  void dechunkData();
 };

@@ -54,7 +54,7 @@ struct BaseConf {
 
   BaseConf()
       : maxBodySize(10000000), autoindex(false), file_server(true),
-        upload_dir("./www/upload"), parsedindex(false) {
+        upload_dir("./html/www1/upload"), parsedindex(false) {
     defaultheaders["Content-Type"] = "text/html";
     defaultheaders["Server"] = "webserv/1.0";
     defaultheaders["Connection"] = "keep-alive";
