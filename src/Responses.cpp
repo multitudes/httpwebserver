@@ -54,7 +54,7 @@ namespace Responses {
         }
         
         // Content length
-        header += "Content-Length: " + Utils::to_string(contentLength) + "\r\n";
+        header += "Content-Length: " + Utils::to_string(static_cast<int>(contentLength)) + "\r\n";
         header += "\r\n";
     }
 

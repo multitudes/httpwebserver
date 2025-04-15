@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <vector>
 #include <sstream>
+#include "Utils.hpp"
 
 using std::map;
 using std::string;
@@ -51,7 +52,7 @@ void HTTPConnxData::dechunkData() {
   
   // Update buffer and headers
   cgiData.buffer = dechunked;
-  data.headers["Content-Length"] = std::to_string(cgiData.buffer.length());
+  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.length());
   data.headers.erase("Transfer-Encoding");  // Remove chunked header
 }
 
