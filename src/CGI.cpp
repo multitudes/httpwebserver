@@ -33,7 +33,7 @@ int prepareCGI(HTTPConnxData &conn) {
       debug("Set content length to %s",
             conn.cgiData.env["CONTENT_LENGTH"].c_str());
       conn.data.headers["Content-Length"] =
-          std::to_string(conn.cgiData.buffer.length());
+          Utils::to_string(conn.cgiData.buffer.length());
           conn.data.content_length = conn.cgiData.buffer.length();
       conn.data.headers.erase("Transfer-Encoding"); // Remove chunked header
     } else {
