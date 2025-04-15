@@ -35,7 +35,14 @@ import pytest # Make sure pytest is installed: pip install pytest requests
 # and named 'webserver_normal_config'
 
 # --- Test for POST with multipart/form-data ---
+'''
+example curl
+curl -v -X POST \
+             -F "text_field=Simple text value" \
+             -F "file_upload=@report.txt;type=text/plain" \
+             http://localhost:4244/cgi/hello.py
 
+'''
 def test_cgi_post_multipart(webserver_normal_config):
     """Test the CGI script with a POST request using multipart/form-data"""
     url = 'http://localhost:4244/cgi/hello.py' # Target CGI script
@@ -74,10 +81,23 @@ def test_cgi_post_multipart(webserver_normal_config):
     assert "<li>SERVER_PORT: 4244</li>" in response.text, "SERVER_PORT mismatch"
     assert "<li>REMOTE_ADDR: 127.0.0.1</li>" in response.text, "REMOTE_ADDR mismatch"
     assert "<li>GATEWAY_INTERFACE: CGI/1.1</li>" in response.text, "GATEWAY_INTERFACE mismatch"
+    
+    # Validate the raw multipart data for text_field
+    assert 'form-data; name="text_field"' in response.text, "Missing 'text_field' in raw multipart data"
+   
+
 
 # --- Test for POST with Chunked Transfer Encoding ---
-
 # Generator function to simulate chunked data
+'''
+example curl
+echo -n -e "This is the first chunk.\nAnd this is the second chunk.\nFinally, the third chunk." | \
+    curl -v -X POST \
+         -H "Content-Type: text/plain" \
+         -H "Transfer-Encoding: chunked" \
+         --data-binary @- \
+         http://localhost:4244/cgi/hello.py
+'''
 def chunked_data_generator():
     yield b"This is the first chunk.\n"
     yield b"And this is the second chunk.\n"
@@ -103,7 +123,7 @@ def test_cgi_post_chunked(webserver_normal_config):
     # Validate CGI environment variables specific to chunked POST
     assert "<li>REQUEST_METHOD: POST</li>" in response.text, "REQUEST_METHOD mismatch"
     # CONTENT_LENGTH should NOT be set for chunked requests according to CGI spec
-    assert "<li>CONTENT_LENGTH: </li>" in response.text, "CONTENT_LENGTH should be empty/unset for chunked POST"
+    assert "<li>CONTENT_LENGTH: 80</li>" in response.text, "CONTENT_LENGTH should be set correctly for chunked POST"
     # CONTENT_TYPE should reflect what we sent
     assert "<li>CONTENT_TYPE: text/plain</li>" in response.text, "CONTENT_TYPE mismatch"
     # The web server should set HTTP_TRANSFER_ENCODING based on the header
@@ -120,9 +140,16 @@ def test_cgi_post_chunked(webserver_normal_config):
     assert "<li>SERVER_PORT: 4244</li>" in response.text, "SERVER_PORT mismatch"
     assert "<li>GATEWAY_INTERFACE: CGI/1.1</li>" in response.text, "GATEWAY_INTERFACE mismatch"
 
+    # Validate the body content
+    assert "<h2>Body Received</h2>" in response.text, "Missing 'Body Received' section in response"
+    assert "<p>First 100 characters:</p>" in response.text, "Missing 'First 100 characters' section in response"
+    expected_body = """<pre>This is the first chunk.
+And this is the second chunk.
+Finally, the third chunk.</pre>"""
+    assert expected_body in response.text, "Body content mismatch in response"
+
 
 # --- Test for DELETE request ---
-
 def test_cgi_delete(webserver_normal_config):
     """Test the CGI script with a DELETE request"""
     # Include some path info to simulate deleting a resource

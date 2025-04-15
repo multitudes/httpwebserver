@@ -1,8 +1,8 @@
 #include "CGI.hpp"
-#include "HTTPServer.hpp"
-#include "Utils.hpp"
-#include "URLMatcher.hpp"
 #include "HTTPConnxData.hpp"
+#include "HTTPServer.hpp"
+#include "URLMatcher.hpp"
+#include "Utils.hpp"
 #include "debug.h"
 
 namespace CGI {
@@ -10,9 +10,43 @@ namespace CGI {
 // Start a CGI process for a connection
 int prepareCGI(HTTPConnxData &conn) {
 
-
   setCGIEnv(conn);
-  
+
+  conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
+  // check for chunking
+  if (conn.data.chunked == true) {
+    // handle chunked data first
+    // collect them in the one place and
+    //  write in the end when getting the end
+    debug("Chunked transfer encoding detected\n");
+    debug("Buffer: %s", conn.cgiData.buffer.c_str());
+ 
+    // check if the buffer contains the end of chunking
+    if (conn.cgiData.buffer.find("0\r\n\r\n", 0) != string::npos) {
+      debug("End of chunking - Request complete");
+      // dechunk the data
+      conn.dechunkData();
+      conn.data.chunked = false;
+      debug("Dechunked data: %s", conn.cgiData.buffer.c_str());
+      // set the environment variable
+      conn.cgiData.env["CONTENT_LENGTH"] = Utils::to_string(conn.cgiData.buffer.size());
+      debug("Set content length to %s",
+            conn.cgiData.env["CONTENT_LENGTH"].c_str());
+      conn.data.headers["Content-Length"] =
+          std::to_string(conn.cgiData.buffer.length());
+          conn.data.content_length = conn.cgiData.buffer.length();
+      conn.data.headers.erase("Transfer-Encoding"); // Remove chunked header
+    } else {
+      debug("Still reading chunked data");
+      conn.state = CONN_INCOMING;
+      
+      return 0; // Still reading chunked data
+    }
+  }
+
+
+
+
   // Create pipes
   debug("create pipes");
   if (pipe(conn.cgiData.child_stdin_pipe) < 0) {
@@ -56,7 +90,8 @@ int prepareCGI(HTTPConnxData &conn) {
     // not use the const_cast in the same way
     char **envArray = new char *[conn.cgiData.env.size() + 1];
     int i = 0;
-    for (std::map<std::string, std::string>::const_iterator it = conn.cgiData.env.begin();
+    for (std::map<std::string, std::string>::const_iterator it =
+             conn.cgiData.env.begin();
          it != conn.cgiData.env.end(); ++it, ++i) {
       std::string envEntry = it->first + "=" + it->second;
       envArray[i] = new char[envEntry.size() + 1];
@@ -64,10 +99,11 @@ int prepareCGI(HTTPConnxData &conn) {
     }
     envArray[i] = NULL;
 
-    std::string script_path = removeLeadingSlash(ensureTrailinSlash(conn.urlMatcherData.config->root)) \
-    + removeLeadingSlash(conn.urlMatcherData.full_path);
+    std::string script_path = removeLeadingSlash(ensureTrailinSlash(
+                                  conn.urlMatcherData.config->root)) +
+                              removeLeadingSlash(conn.urlMatcherData.full_path);
     debug("CGI script_path: %s", script_path.c_str());
-    
+
     // Prepare arguments
     std::vector<char *> args;
     args.push_back(const_cast<char *>(script_path.c_str()));
@@ -88,26 +124,25 @@ int prepareCGI(HTTPConnxData &conn) {
   } else {
     // Parent process
     // Close unused pipe ends
-    ::close(conn.cgiData.child_stdout_pipe[1]); // Close write end of stdout pipe
-    ::close(conn.cgiData.child_stdin_pipe[0]);  // Close read end of stdin pipe
-    
+    ::close(
+        conn.cgiData.child_stdout_pipe[1]);    // Close write end of stdout pipe
+    ::close(conn.cgiData.child_stdin_pipe[0]); // Close read end of stdin pipe
+
     // assign the fds to the connection data
-    
-    if (conn.data.method == "GET" || (conn.data.content_length == 0 && conn.data.chunked != true)) {
+    if (conn.data.method == "GET" || (conn.data.content_length == 0)) {
       // No data to send to CGI stdin, close the write end of the pipe
       debug("GET request in cgi - closing child stdin pipe[1]");
       conn.cgiData.is_receiving = false; // No data to send to CGI stdin
-      conn.cgiData.is_sending = true;   // Data to receive from CGI stdout
+      conn.cgiData.is_sending = true;    // Data to receive from CGI stdout
       SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
       ::close(conn.cgiData.child_stdin_pipe[1]);
     } else {
       conn.cgiData.is_receiving = true; // Data to send to CGI stdin
-      conn.cgiData.is_sending = false;   // No data to receive from CGI stdout
+      conn.cgiData.is_sending = false;  // No data to receive from CGI stdout
       SocketUtils::add_to_poll(conn.cgiData.child_stdin_pipe[1], POLLOUT);
       SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
-      conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
     }
-  
+
     // add the fds to the poll
 
     // this buffer is bidirectional. in this case i use now for the req body
@@ -122,33 +157,42 @@ int prepareCGI(HTTPConnxData &conn) {
 
 void setCGIEnv(HTTPConnxData &conn) {
   conn.cgiData.env.clear();
-  // Set environment variables for CGI - some are already init to defaults 
+  // Set environment variables for CGI - some are already init to defaults
   // int he struct constructor - ex REMOTE_USER which we dont use
   conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
   debug("set remote host to %s", conn.cgiData.env["REMOTE_HOST"].c_str());
   // for the body of the request if chunked
   debug("it is chunked %d", conn.data.chunked);
-  conn.cgiData.env["HTTP_TRANSFER_ENCODING"] = conn.data.headers["Transfer-Encoding"];
-  debug("set transfer encoding to %s", conn.cgiData.env["HTTP_TRANSFER_ENCODING"].c_str());
+  conn.cgiData.env["HTTP_TRANSFER_ENCODING"] =
+      conn.data.headers["Transfer-Encoding"];
+  debug("set transfer encoding to %s",
+        conn.cgiData.env["HTTP_TRANSFER_ENCODING"].c_str());
   conn.cgiData.env["REQUEST_METHOD"] = conn.data.method;
   debug("set request method to %s", conn.cgiData.env["REQUEST_METHOD"].c_str());
   conn.cgiData.env["SCRIPT_NAME"] = conn.urlMatcherData.full_path;
   debug("set script name to %s", conn.cgiData.env["SCRIPT_NAME"].c_str());
-  conn.cgiData.env["PATH_INFO"] = conn.cgiData.path_info.empty() ? "/" : conn.cgiData.path_info;
+  conn.cgiData.env["PATH_INFO"] =
+      conn.cgiData.path_info.empty() ? "/" : conn.cgiData.path_info;
   debug("set path info to %s", conn.cgiData.env["PATH_INFO"].c_str());
   conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string;
   debug("set query string to %s", conn.cgiData.env["QUERY_STRING"].c_str());
 
-  string path_translated = ensureTrailinSlash(conn.urlMatcherData.config->root) + removeLeadingSlash(conn.cgiData.path_info);
+  string path_translated =
+      ensureTrailinSlash(conn.urlMatcherData.config->root) +
+      removeLeadingSlash(conn.cgiData.path_info);
   conn.cgiData.env["PATH_TRANSLATED"] = path_translated;
-  debug("set path translated to %s", conn.cgiData.env["PATH_TRANSLATED"].c_str());
+  debug("set path translated to %s",
+        conn.cgiData.env["PATH_TRANSLATED"].c_str());
 
   // Ensure Content-Type is always set
-  debug("content type in urlmatcher %s", conn.urlMatcherData.content_type.c_str());
-  debug("content type in general %s", conn.data.headers["Content-Type"].c_str());  
+  debug("content type in urlmatcher %s",
+        conn.urlMatcherData.content_type.c_str());
+  debug("content type in general %s",
+        conn.data.headers["Content-Type"].c_str());
   conn.cgiData.env["CONTENT_TYPE"] = conn.data.headers["Content-Type"];
   if (conn.data.content_length > 0) {
-    conn.cgiData.env["CONTENT_LENGTH"] = Utils::to_string(conn.data.content_length);
+    conn.cgiData.env["CONTENT_LENGTH"] =
+        Utils::to_string(conn.data.content_length);
   }
   debug("set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
   debug("content length in data? %d", conn.data.content_length);
@@ -157,21 +201,23 @@ void setCGIEnv(HTTPConnxData &conn) {
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
   debug("set server port to %s", conn.cgiData.env["SERVER_PORT"].c_str());
   conn.cgiData.env["SERVER_PROTOCOL"] = "HTTP/1.1";
-  debug("set server protocol to %s", conn.cgiData.env["SERVER_PROTOCOL"].c_str());
+  debug("set server protocol to %s",
+        conn.cgiData.env["SERVER_PROTOCOL"].c_str());
   conn.cgiData.env["REMOTE_ADDR"] = conn.client_ip;
   debug("set remote addr to %s", conn.cgiData.env["REMOTE_ADDR"].c_str());
   conn.cgiData.env["SERVER_SOFTWARE"] = "VibeServer/1.0";
-  debug("set server software to %s", conn.cgiData.env["SERVER_SOFTWARE"].c_str());  
+  debug("set server software to %s",
+        conn.cgiData.env["SERVER_SOFTWARE"].c_str());
   conn.cgiData.env["GATEWAY_INTERFACE"] = "CGI/1.1";
   conn.cgiData.env["REMOTE_USER"] = "N/A";
   debug("set remote user to %s", conn.cgiData.env["REMOTE_USER"].c_str());
   conn.cgiData.env["AUTH_TYPE"] = "N/A";
   debug("set auth type to %s", conn.cgiData.env["AUTH_TYPE"].c_str());
   // this is extra
-  // conn.cgiData.env["UPLOAD_DIR"] = conn.urlMatcherData.config->cgiData.upload_dir;
+  // conn.cgiData.env["UPLOAD_DIR"] =
+  // conn.urlMatcherData.config->cgiData.upload_dir;
   conn.cgiData.env["UPLOAD_DIR"] = "html/www1/upload";
   debug("set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
-  
 }
 
 std::string ensureTrailinSlash(std::string path) {
@@ -188,15 +234,13 @@ std::string removeLeadingSlash(std::string path) {
   return path;
 }
 
-
 } // namespace CGI
 
-
 /**
- * 
+ *
  * testing
- * 
- * 
+ *
+ *
  curl -v -X POST -H "Content-Type: application/x-www-form-urlencoded" \
 -d "delete_files=egyptiancatsuploadtest.jpeg" \
 http://localhost:4244/cgi/delete.py

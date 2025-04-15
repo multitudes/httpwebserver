@@ -891,31 +891,3 @@ HTTPConnxData &getConnectionData(int fd) {
 }
 
 } // namespace HTTPServer
-
-
-// parked code TODO remove
-
-// if (conn.data.chunked) {
-
-//   //handle chunks.. collect them in the one place and 
-//   // write in the end when getting the end
-//   debug("Chunked transfer encoding detected\n");
-//   if (conn.cgiData.buffer.find("0\r\n\r\n", 0) !=
-//       string::npos) {
-//     debug("End of chunking - Request complete");
-//     // dechunk the data
-//     conn.dechunkData();
-//     conn.data.chunked = false;
-//     debug("Dechunked data: %s", conn.cgiData.buffer.c_str());
-
-//   } else {
-//     debug("Still reading chunked data");
-//     // copy to chunkedBody
-//     conn.data.chunkedBody = conn.cgiData.buffer;
-//     conn.cgiData.buffer.clear();
-    
-
-//     break;
-//   }
-
-// }
