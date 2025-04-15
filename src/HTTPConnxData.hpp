@@ -128,19 +128,16 @@ struct HTTPConnxData {
     bool is_receiving;
     string path_info;
     string query_string;
-    // CGI process ID
     pid_t child_pid;
     std::map<std::string, std::string> env;
     // CGI processing
     int child_stdin_pipe[2];
     int child_stdout_pipe[2];
-    int cgi_stdin;
-    int cgi_stdout;
     bool cgi_finished;
 
     CGIData()
         : buffer(""), is_sending(false), is_receiving(true), child_pid(-1),
-          path_info(""), query_string(), env(), cgi_stdin(-1), cgi_stdout(-1) {
+          path_info(""), query_string(), env() {
 
       child_stdin_pipe[0] = -1;
       child_stdin_pipe[1] = -1;
