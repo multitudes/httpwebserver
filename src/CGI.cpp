@@ -99,7 +99,7 @@ int prepareCGI(HTTPConnxData &conn) {
     conn.cgiData.cgi_stdin = conn.cgiData.child_stdin_pipe[1];
     conn.cgiData.cgi_stdout = conn.cgiData.child_stdout_pipe[0];
     
-    if (conn.data.method == "GET" || conn.data.content_length == 0) {
+    if (conn.data.method == "GET" || (conn.data.content_length == 0 && conn.data.chunked != true)) {
       // No data to send to CGI stdin, close the write end of the pipe
       debug("GET request in cgi - closing child stdin pipe[1]");
       conn.cgiData.is_receiving = false; // No data to send to CGI stdin
@@ -133,6 +133,7 @@ void setCGIEnv(HTTPConnxData &conn) {
   conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
   debug("set remote host to %s", conn.cgiData.env["REMOTE_HOST"].c_str());
   // for the body of the request if chunked
+  debug("it is chunked %d", conn.data.chunked);
   conn.cgiData.env["HTTP_TRANSFER_ENCODING"] = conn.data.headers["Transfer-Encoding"];
   debug("set transfer encoding to %s", conn.cgiData.env["HTTP_TRANSFER_ENCODING"].c_str());
   conn.cgiData.env["REQUEST_METHOD"] = conn.data.method;
@@ -143,7 +144,6 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set path info to %s", conn.cgiData.env["PATH_INFO"].c_str());
   conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string;
   debug("set query string to %s", conn.cgiData.env["QUERY_STRING"].c_str());
-
 
   string path_translated = ensureTrailinSlash(conn.urlMatcherData.config->root) + removeLeadingSlash(conn.cgiData.path_info);
   conn.cgiData.env["PATH_TRANSLATED"] = path_translated;
@@ -157,6 +157,7 @@ void setCGIEnv(HTTPConnxData &conn) {
     conn.cgiData.env["CONTENT_LENGTH"] = Utils::to_string(conn.data.content_length);
   }
   debug("set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
+  debug("content length in data? %d", conn.data.content_length);
   conn.cgiData.env["SERVER_NAME"] = conn.data.host;
   debug("set server name to %s", conn.cgiData.env["SERVER_NAME"].c_str());
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);

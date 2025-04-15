@@ -6,10 +6,69 @@
 #include <stdlib.h> // for strtoul
 #include <string>
 #include <unistd.h>
+#include <vector>
+#include <sstream>
 
 using std::map;
 using std::string;
 using std::vector;
+
+void dechunkData(HTTPConnxData &conn) {
+  string &buffer = conn.cgiData.buffer;
+  string dechunked;
+  size_t pos = 0;
+
+  while (pos < buffer.length()) {
+    // Find the chunk size line
+    size_t chunk_size_end = buffer.find("\r\n", pos);
+    if (chunk_size_end == string::npos) {
+      break; // Invalid chunk format
+    }
+
+    // Parse chunk size (hex string)
+    string hex_size = buffer.substr(pos, chunk_size_end - pos);
+    unsigned int chunk_size;
+    std::stringstream ss;
+    ss << std::hex << hex_size;
+    ss >> chunk_size;
+
+    // Last chunk (size 0)
+    if (chunk_size == 0) {
+      break;
+    }
+
+    // Move to start of chunk data
+    pos = chunk_size_end + 2;
+
+    // Check if we have complete chunk data
+    if (pos + chunk_size > buffer.length()) {
+      break; // Incomplete chunk
+    }
+
+    // Append chunk data to dechunked body
+    dechunked.append(buffer.substr(pos, chunk_size));
+
+    // Move to next chunk (skip \r\n after chunk data)
+    pos += chunk_size + 2;
+  }
+
+  // Replace buffer with dechunked data
+  buffer = dechunked;
+
+  // Update Content-Length in headers if it exists
+  if (conn.data.headers.find("Content-Length") != conn.data.headers.end()) {
+    std::ostringstream oss;
+    oss << buffer.length();
+    conn.data.headers["Content-Length"] = oss.str();
+  }
+
+  // Or add Content-Length if it wasn't present
+  std::ostringstream oss;
+  oss << buffer.length();
+  conn.data.headers["Content-Length"] = oss.str();
+}
+
+
 
 /**
  * @brief Reset the connection for reuse
@@ -109,7 +168,6 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
     cgiData.query_string.clear();
   }
 
-
   // Find the last dot in the target (file extension)
   size_t last_dot = data.target.find_last_of('.');
   if (last_dot != string::npos) {
@@ -123,7 +181,6 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
       data.target = data.target.substr(0, slash_after_ext);
     }
   }
-  
 
   return PARSE_SUCCESS;
 }
@@ -163,17 +220,17 @@ ParseStatus HTTPConnxData::parseCookies(const string &cookieHeader) {
   return PARSE_SUCCESS;
 }
 
-ParseStatus HTTPConnxData::extractPortFromHost(std::string &host,
+ParseStatus HTTPConnxData::extractPortFromHost(string &host,
                                                uint16_t &port) {
   size_t colon_pos = host.find(':');
 
-  if (colon_pos == std::string::npos) {
+  if (colon_pos == string::npos) {
     debuglog(RED, "No port specified in Host header");
     return PARSE_ERROR;
   }
 
   // Extract port substring
-  std::string port_str = host.substr(colon_pos + 1);
+  string port_str = host.substr(colon_pos + 1);
   host = host.substr(0, colon_pos); // Remove port from host string
 
   // Convert port
@@ -231,7 +288,7 @@ ParseStatus HTTPConnxData::processContentHeaders() {
   string content_type;
   if (checkHeader(*this, "Content-Type", content_type)) {
     data.headers["Content-Type"] = content_type;
-    
+
     // Special handling for multipart
     if (content_type.find("multipart/") != string::npos) {
       size_t boundary_pos = content_type.find("boundary=");
@@ -239,14 +296,13 @@ ParseStatus HTTPConnxData::processContentHeaders() {
         debuglog(RED, "No boundary found in multipart form data");
         return PARSE_ERROR;
       }
-      
+
       boundary_pos += 9; // Skip "boundary="
       data.boundary = "--" + content_type.substr(boundary_pos);
       data.multipart = true;
       data.headers["boundary"] = data.boundary;
     }
-  }
-  else {
+  } else {
     // Set default content-type for POST requests
     if (data.method == "POST") {
       data.headers["Content-Type"] = "application/x-www-form-urlencoded";
@@ -256,29 +312,30 @@ ParseStatus HTTPConnxData::processContentHeaders() {
   // Process Cookies
   string cookieHeader;
   if (checkHeader(*this, "Cookie", cookieHeader)) {
-      debuglog(GREEN, "Found cookies in header: %s", cookieHeader.c_str());
-      
-      // Split cookies by semicolon
-      std::istringstream cookieStream(cookieHeader);
-      string cookiePair;
-      
-      while (std::getline(cookieStream, cookiePair, ';')) {
-          // Trim whitespace
-          size_t start = cookiePair.find_first_not_of(" \t");
-          if (start == string::npos) continue;
-          cookiePair = cookiePair.substr(start);
-          
-          // Split by equals sign
-          size_t equalPos = cookiePair.find('=');
-          if (equalPos != string::npos) {
-              string name = cookiePair.substr(0, equalPos);
-              string value = cookiePair.substr(equalPos + 1);
-              
-              // Store the cookie
-              data.cookies[name] = value;
-              debuglog(GREEN, "Parsed cookie: %s = %s", name.c_str(), value.c_str());
-          }
+    debuglog(GREEN, "Found cookies in header: %s", cookieHeader.c_str());
+
+    // Split cookies by semicolon
+    std::istringstream cookieStream(cookieHeader);
+    string cookiePair;
+
+    while (std::getline(cookieStream, cookiePair, ';')) {
+      // Trim whitespace
+      size_t start = cookiePair.find_first_not_of(" \t");
+      if (start == string::npos)
+        continue;
+      cookiePair = cookiePair.substr(start);
+
+      // Split by equals sign
+      size_t equalPos = cookiePair.find('=');
+      if (equalPos != string::npos) {
+        string name = cookiePair.substr(0, equalPos);
+        string value = cookiePair.substr(equalPos + 1);
+
+        // Store the cookie
+        data.cookies[name] = value;
+        debuglog(GREEN, "Parsed cookie: %s = %s", name.c_str(), value.c_str());
       }
+    }
   }
 
   return PARSE_SUCCESS;
@@ -405,7 +462,7 @@ string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
   if (!data.headers.empty()) {
     oss << ", headers=[";
     size_t count = 0;
-    for (std::map<std::string, std::string>::const_iterator it =
+    for (map<string, string>::const_iterator it =
              data.headers.begin();
          it != data.headers.end() && count < 3; ++it, ++count) {
       if (count > 0)
@@ -425,7 +482,7 @@ string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
   if (!data.cookies.empty()) {
     oss << ", cookies=[";
     size_t count = 0;
-    for (std::map<std::string, std::string>::const_iterator it =
+    for (map<string, string>::const_iterator it =
              data.cookies.begin();
          it != data.cookies.end() && count < 2; ++it, ++count) {
       if (count > 0)
@@ -477,13 +534,13 @@ string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
 // Generate a unique session ID using timestamp
 string HTTPConnxData::generateSessionId() {
   // Get current time
-  time_t now = time(NULL);  
+  time_t now = time(NULL);
   // Convert to hex string with padding
-  std::stringstream ss;
-  ss << std::hex << std::setfill('0') << std::setw(16) << now;  
+  stringstream ss;
+  ss << std::hex << std::setfill('0') << std::setw(16) << now;
   // Add process ID for additional uniqueness
   ss << "_" << std::hex << getpid();
-  debuglog(YELLOW, "Generated session ID: %s", ss.str().c_str());  
+  debuglog(YELLOW, "Generated session ID: %s", ss.str().c_str());
   return ss.str();
 }
 
@@ -492,46 +549,46 @@ void HTTPConnxData::createSession() {
   data.session_id = generateSessionId();
   data.has_session = true;
   data.session_created = time(NULL);
-  data.session_last_accessed = time(NULL);  
+  data.session_last_accessed = time(NULL);
   // Reset any previous session data
-  data.session_data.clear();  
+  data.session_data.clear();
   // Add session cookie to response headers
-  string cookie = "Set-Cookie: sessionid=" + data.session_id + 
-                  "; Path=/; HttpOnly\r\n";
+  string cookie =
+      "Set-Cookie: sessionid=" + data.session_id + "; Path=/; HttpOnly\r\n";
   data.response_headers += cookie;
 }
 
 // Try to retrieve session from cookies
 bool HTTPConnxData::retrieveSession() {
-    // Check if we already have a session for this connection
-    if (data.has_session && !data.session_id.empty()) {
-        debuglog(GREEN, "Session already loaded: %s", data.session_id.c_str());
-        return true;
-    }
-    
-    // Check if a sessionid cookie exists
-    if (data.cookies.find("sessionid") != data.cookies.end()) {
-        data.session_id = data.cookies["sessionid"];
-        data.has_session = true;
+  // Check if we already have a session for this connection
+  if (data.has_session && !data.session_id.empty()) {
+    debuglog(GREEN, "Session already loaded: %s", data.session_id.c_str());
+    return true;
+  }
 
-        // Check if the session has expired
-        time_t now = time(NULL);
-        time_t sessionExpiry = data.session_last_accessed + 30; // 30 seconds expiry
-        if (now > sessionExpiry) {
-            debuglog(RED, "Session expired. Clearing session.");
-            data.has_session = false;
-            data.session_id.clear();
-            data.session_data.clear();
-            return false; // Session expired
-        }
+  // Check if a sessionid cookie exists
+  if (data.cookies.find("sessionid") != data.cookies.end()) {
+    data.session_id = data.cookies["sessionid"];
+    data.has_session = true;
 
-        // Update session_last_accessed
-        data.session_last_accessed = now;
-        debuglog(GREEN, "Session found in cookies: %s", data.session_id.c_str());
-        return true;
+    // Check if the session has expired
+    time_t now = time(NULL);
+    time_t sessionExpiry = data.session_last_accessed + 30; // 30 seconds expiry
+    if (now > sessionExpiry) {
+      debuglog(RED, "Session expired. Clearing session.");
+      data.has_session = false;
+      data.session_id.clear();
+      data.session_data.clear();
+      return false; // Session expired
     }
-    
-    debuglog(YELLOW, "No session cookie found");
-    return false;
+
+    // Update session_last_accessed
+    data.session_last_accessed = now;
+    debuglog(GREEN, "Session found in cookies: %s", data.session_id.c_str());
+    return true;
+  }
+
+  debuglog(YELLOW, "No session cookie found");
+  return false;
 }
 // end SESSION MANAGEMENT FUNCTIONS---------------------------------Rufus

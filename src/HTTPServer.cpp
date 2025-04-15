@@ -295,7 +295,31 @@ int run(std::string configFile) {
                           debug("POLLOUT event on CGI stdin fd %d", conn.cgiData.child_stdin_pipe[1]);
                           
                           //write to cgi the buffer if any remaining from the initialisation
-                      
+                        if (conn.data.chunked) {
+
+                            //handle chunks.. collect them in the one place and 
+                            // write in the end when getting the end
+                            debug("Chunked transfer encoding detected\n");
+                            if (conn.cgiData.buffer.find("0\r\n\r\n", 0) !=
+                                string::npos) {
+                              debug("End of chunking - Request complete");
+                              // dechunk the data
+
+                            } else {
+                              debug("Still reading chunked data");
+                              // copy to chunkedBody
+                              conn.data.chunkedBody = conn.cgiData.buffer;
+                              conn.cgiData.buffer.clear();
+                              
+               
+                              break;
+                            }
+
+
+
+                          } else {
+
+                           
                             ssize_t bytes_written = ::write(conn.cgiData.child_stdin_pipe[1], conn.cgiData.buffer.c_str(), conn.cgiData.buffer.size());
                             if (bytes_written < 0) {
                               perror("Failed to write to CGI stdin");
@@ -334,6 +358,10 @@ int run(std::string configFile) {
                               break;
                             }
                             break;
+
+
+
+                          }
                     }
                   
                   // so i wrote the remaining data to the cgi stdin which i got after the headers...
