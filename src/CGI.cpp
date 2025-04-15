@@ -139,7 +139,7 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set script name to %s", conn.cgiData.env["SCRIPT_NAME"].c_str());
   conn.cgiData.env["PATH_INFO"] = conn.cgiData.path_info.empty() ? "/" : conn.cgiData.path_info;
   debug("set path info to %s", conn.cgiData.env["PATH_INFO"].c_str());
-  conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string.empty() ? "N/A" : conn.cgiData.query_string;
+  conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string;
   debug("set query string to %s", conn.cgiData.env["QUERY_STRING"].c_str());
   string path_translated = conn.urlMatcherData.config->root + conn.cgiData.path_info;
   conn.cgiData.env["PATH_TRANSLATED"] = path_translated;
@@ -147,15 +147,11 @@ void setCGIEnv(HTTPConnxData &conn) {
 
   // Ensure Content-Type is always set
   debug("content type in urlmatcher", conn.urlMatcherData.content_type.c_str());
-  debug("content type in general", conn.data.headers["Content-Type"].c_str());
-  if (conn.urlMatcherData.content_type.empty() ) {
-    conn.cgiData.env["CONTENT_TYPE"] = "N/A";
-  } else {
-    conn.cgiData.env["CONTENT_TYPE"] = conn.urlMatcherData.content_type;
+  debug("content type in general", conn.data.headers["Content-Type"].c_str());  
+  conn.cgiData.env["CONTENT_TYPE"] = conn.urlMatcherData.content_type;
+  if (conn.data.content_length > 0) {
+    conn.cgiData.env["CONTENT_LENGTH"] = Utils::to_string(conn.data.content_length);
   }
-
-  debug("set content type to %s", conn.cgiData.env["CONTENT_TYPE"].c_str());
-  conn.cgiData.env["CONTENT_LENGTH"] = conn.data.content_length > 0 ? Utils::to_string(conn.data.content_length) : "0";
   debug("set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
   conn.cgiData.env["SERVER_NAME"] = conn.data.host;
   debug("set server name to %s", conn.cgiData.env["SERVER_NAME"].c_str());
