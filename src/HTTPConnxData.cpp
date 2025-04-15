@@ -9,6 +9,7 @@
 #include <vector>
 #include <sstream>
 #include "Utils.hpp"
+#include <signal.h>
 
 using std::map;
 using std::string;
@@ -72,14 +73,39 @@ void HTTPConnxData::reset() {
   bytes_received = 0;
 
   // Close open file descriptors
-  if (file_fd != -1)
+  if (file_fd != -1) {
     close(file_fd);
-  if (writeto_fd != -1)
-    close(writeto_fd);
+    unlink(filename); // Remove partial upload
+    file_fd = -1;
+    filename[0] = '\0';
+  }
 
-  file_fd = -1;
-  writeto_fd = -1;
-  filename[0] = '\0';
+  if (writeto_fd != -1) {
+    close(writeto_fd);
+    writeto_fd = -1;
+  }
+
+  //check for cgi and reset
+  if (cgiData.child_stdin_pipe[1] != -1) {
+    close(cgiData.child_stdin_pipe[1]);
+    cgiData.child_stdin_pipe[1] = -1;
+  }
+  if (cgiData.child_stdout_pipe[0] != -1) {
+    close(cgiData.child_stdout_pipe[0]);
+    cgiData.child_stdout_pipe[0] = -1;
+  }
+  if (cgiData.child_pid != -1) {
+    ::kill(cgiData.child_pid, SIGTERM);
+    cgiData.child_pid = -1;
+  }
+
+
+  data.request.clear();
+  // data.headers.clear();
+  // data.cookies.clear();
+  // data.response.clear();
+  // data.response_headers.clear();
+  // data.response_body.clear();
 }
 
 /**

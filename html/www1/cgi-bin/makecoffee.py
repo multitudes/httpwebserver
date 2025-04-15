@@ -1,29 +1,28 @@
 #!/usr/bin/env python3
-
 import os
-import cgi
 
 def main():
-	error_page_path = "www/error_pages/418.html"
-	error_page_url = "/error_pages/418.html"
-	form = cgi.FieldStorage()
-
-	try:
-		with open(error_page_path, "r") as file:
-			error_content = file.read()
-		
-		print("HTTP/1.1 302 Found")
-		print(f"Location: {error_page_url}")
-		print("Content-Type: text/html")
-		print()
-		print(f'<html><body><h1>302 Found</h1><p>Redirecting to <a href="{error_page_url}">{error_page_url}</a></p></body></html>')
-
-	
-	except FileNotFoundError:
-		print("HTTP/1.1 418 I'm a teapot")
-		print("Content-Type: text/html")
-		print("Content-Length: 0")
-		print()
+    # Path to your error page (adjust as needed)
+    error_page_path = "html/www1/error_pages/418.html"
+    
+    try:
+        # Read the error page file
+        with open(error_page_path, "r") as file:
+            error_content = file.read()
+        
+        # Serve the error page with 418 status
+        print("HTTP/1.1 418 I'm a teapot")
+        print("Content-Type: text/html")
+        print(f"Content-Length: {len(error_content)}")
+        print()  # End of headers
+        print(error_content)  # Send the HTML content
+    
+    except Exception as e:
+        # Fallback if file can't be read
+        print("HTTP/1.1 418 I'm a teapot")
+        print("Content-Type: text/html")
+        print()
+        print("<html><body><h1>418 I'm a teapot</h1><p>Error: Could not read the teapot error page.</p></body></html>")
 
 if __name__ == "__main__":
-	main()
+    main()
