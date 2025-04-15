@@ -51,7 +51,6 @@ extern std::map<int, std::time_t> lastActivityTime;
 extern vector<ServerData> configs_;
 
 int run(std::string configFile);
-void cleanup_upload(HTTPConnxData &conn);
 void finish_upload(HTTPConnxData &conn);
 int send_file(HTTPConnxData &conn);
 int send_headers(HTTPConnxData &conn);
