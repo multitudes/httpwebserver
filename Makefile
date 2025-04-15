@@ -55,7 +55,7 @@ OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
 HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )
 HDRS 			+= $(addprefix $(SRC_DIR), )
 
-all: $(NAME) #test
+all: $(NAME) test
 
 # # Add PIE flags only for Linux
 # ifeq ($(shell uname -s), Linux)
