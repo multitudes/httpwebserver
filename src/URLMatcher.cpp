@@ -20,7 +20,7 @@ using std::string;
 
 namespace URLMatcher {
 
-// handles %20 -> space, %2F -> /, $3F -> ?, +  -> space for quer parameters
+// handles %20 -> space, %2F -> /, $3F -> ?, +  -> space etc...
 string urlDecode(const string& encoded) {
     string decoded;
     for (size_t i = 0; i < encoded.length(); ++i) {
