@@ -1,6 +1,5 @@
 import pytest
 import requests
-import subprocess
 
 # Tests for NORMAL config (test.conf)
 def test_normal_config_responses(webserver_normal_config):

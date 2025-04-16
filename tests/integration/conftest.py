@@ -44,3 +44,10 @@ def webserver_redir_config():
     time.sleep(0.2)
     yield
     server.terminate()
+
+@pytest.fixture(scope="function")
+def webserver_error_codes_config():
+    server = subprocess.Popen(["./webserv", "tests/config/error_pages.conf"])
+    time.sleep(0.2)
+    yield
+    server.terminate()

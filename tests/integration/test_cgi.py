@@ -1,6 +1,4 @@
-import pytest
 import requests
-import os
 
 # Test for the CGI script
 def test_cgi_script(webserver_normal_config):
