@@ -54,12 +54,9 @@ bool getDIRListing(HTTPConnxData &connection, std::string full_path) {
   std::string htmlCode;
   // add html code to the directory string
   htmlCode = "<html><head><title>Directory Listing</title>";
-  htmlCode += "<style>";
-  htmlCode +=
-      "body {background-color: black; color: white;} a {color: lightblue;}";
-  htmlCode += "</style>";
-  htmlCode += "</head><body><h1>Index of " + connection.data.target +
-              "</h1><ul>" + dirString + "</ul></body></html>";
+  htmlCode += "<link rel=\"stylesheet\" type=\"text/css\" href=\"/css/style.css\">";
+  htmlCode += "</head><body><div style=\"text-align: left;\"><h1 style=\"margin: 0px;\">Index of " + connection.data.target +
+              "</h1><ul>" + dirString + "</ul></div></body></html>";
 
   debuglog(GREEN, "Directory contents: \n%s", dirString.c_str());
 

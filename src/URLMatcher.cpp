@@ -19,6 +19,37 @@
 using std::string;
 
 namespace URLMatcher {
+
+// handles %20 -> space, %2F -> /, $3F -> ?, +  -> space etc...
+string urlDecode(const string& encoded) {
+    string decoded;
+    for (size_t i = 0; i < encoded.length(); ++i) {
+        if (encoded[i] == '%' && i + 2 < encoded.length()) {
+            // Get the two hex characters after %
+            string hex = encoded.substr(i + 1, 2);
+            int value;
+            std::istringstream hex_chars(hex);
+            
+            // Convert hex to decimal
+            if (hex_chars >> std::hex >> value) {
+                // Common URL encodings:
+                // %20 = space (32)
+                // %2F = / (47)
+                // %3F = ? (63)
+                // %3D = = (61)
+                decoded += static_cast<char>(value);
+                i += 2;  // Skip the two hex chars
+            } else {
+                decoded += encoded[i];  // Invalid hex, keep the %
+            }
+        } else if (encoded[i] == '+') {
+            decoded += ' ';  // + in query strings means space
+        } else {
+            decoded += encoded[i];  // Normal character
+        }
+    }
+    return decoded;
+}
   
 /**
  * @brief Receives and processes initial request data
@@ -62,6 +93,9 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   case PARSE_SUCCESS:
     debuglog(YELLOW, "Headers parsed successfully");
     conn.data.headers_received = true;
+    // URL decode the target path
+    conn.urlMatcherData.target = urlDecode(conn.data.target);
+    debuglog(YELLOW, "Decoded target path: '%s'", conn.data.target.c_str());
     break;
   case PARSE_INCOMPLETE:
     debuglog(YELLOW, "Headers incomplete");
@@ -94,7 +128,7 @@ bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
     return false;
   }
 
-  string target = conn.data.target;
+  string target = conn.urlMatcherData.target;
   if (!target.empty() && target[0] == '/') {
     target = target.substr(1);
   }
