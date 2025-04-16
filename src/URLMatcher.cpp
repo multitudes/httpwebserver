@@ -94,7 +94,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     debuglog(YELLOW, "Headers parsed successfully");
     conn.data.headers_received = true;
     // URL decode the target path
-    conn.data.target = urlDecode(conn.data.target);
+    conn.urlMatcherData.target = urlDecode(conn.data.target);
     debuglog(YELLOW, "Decoded target path: '%s'", conn.data.target.c_str());
     break;
   case PARSE_INCOMPLETE:
@@ -128,7 +128,7 @@ bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
     return false;
   }
 
-  string target = conn.data.target;
+  string target = conn.urlMatcherData.target;
   if (!target.empty() && target[0] == '/') {
     target = target.substr(1);
   }

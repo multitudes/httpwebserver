@@ -4,9 +4,7 @@
   <meta charset="UTF-8">
   <link rel="icon" href="/favicon/favicon.ico" type="image/x-icon">
   <title>404 Not Found</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-  </style>
+  <link rel="stylesheet" type="text/css" href="/css/style.css">
 </head>
 <body>
   <!-- Include Three.js and the necessary example scripts -->
@@ -92,8 +90,12 @@
     var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 50;
 
-    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    var renderer = new THREE.WebGLRenderer({ 
+      antialias: true,
+      alpha: true  // Enable transparency
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 0); // Set clear color with 0 alpha
     document.body.appendChild(renderer.domElement);
 
     // Add ambient and point lighting
@@ -642,9 +644,6 @@
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     }, false);
-
-    // Add a console message to help with debugging
-    console.log("404 Error Page - Looking for images at:", imagePaths);
   </script>
 </body>
 </html>

@@ -77,7 +77,7 @@ body h1 {
 	height: auto;
 }
 
-/* body {
+body {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -122,4 +122,4 @@ ul {
 
 .file-list-ul li {
     margin: 5px 0;
-} */
+}
