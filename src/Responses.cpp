@@ -128,7 +128,7 @@ namespace Responses {
         htmlCode += "<head>\n";
         htmlCode += "<meta charset=\"UTF-8\">\n";
         htmlCode += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
-        htmlCode += "<title>" + Utils::to_string(statusCode) + " " + statusText + "</title>\n";
+        htmlCode += "<title>Server Generated " + Utils::to_string(statusCode) + " " + statusText + "</title>\n";
         htmlCode += "<link rel=\"icon\" href=\"../../favicon/favicon.ico\" type=\"image/x-icon\">\n";
         htmlCode += "<style> body {";
         htmlCode += "display: flex; flex-direction: column; justify-content: center;";
