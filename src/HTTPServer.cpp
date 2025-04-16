@@ -289,6 +289,7 @@ int run(std::string configFile) {
         continue;
       }
 
+      /*    -------- CGI -----------      */
       if (conn.state == CONN_CGI) {
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
         debug("CONN_CGI - current fd %d and is %s", current_fd,
@@ -656,10 +657,10 @@ void send_critical_error(int fd, int code) {
   debug("closing the connection %d", fd);
   // i dont check for errors here because the connection will be closed
   ::send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
-  ::close(fd);
-  lastActivityTime.erase(fd);
-  SocketUtils::remove_from_poll(fd);
-  HTTPServer::connections.erase(fd);
+  // ::close(fd);
+  // lastActivityTime.erase(fd);
+  // SocketUtils::remove_from_poll(fd);
+  // HTTPServer::connections.erase(fd);
 }
 
 void createServerSockets(const vector<ServerData> &configs,
@@ -772,20 +773,35 @@ bool checkPollErrors(pollfd currentfd) {
     debuglog(RED, "Error condition on fd %d", currentfd.fd);
     int error = 0;
     socklen_t len = sizeof(error);
-
+    HTTPConnxData &conn = getConnectionData(currentfd.fd);
     if (::getsockopt(currentfd.fd, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
       debug("Socket error on fd %d: %s", currentfd.fd, strerror(error));
       // Explicitly handle EPIPE (Broken pipe)
       if (error == EPIPE) {
         debug("Client disconnected (EPIPE) on fd %d", currentfd.fd);
         debuglog(YELLOW, "Client disconnected (EPIPE) on fd %d", currentfd.fd);
-        // close(currentfd.fd);
-      }
+        if (currentfd.fd == conn.cgiData.child_stdin_pipe[1]) {
+          debug("Closing CGI stdin pipe %d", currentfd.fd);
+          close(conn.cgiData.child_stdin_pipe[1]);
+          SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+          conn.cgiData.child_stdin_pipe[1] = -1; // Mark as closed
+        } else if (currentfd.fd == conn.cgiData.child_stdout_pipe[0]) {
+          debug("Closing CGI stdout pipe %d", currentfd.fd);
+          close(conn.cgiData.child_stdout_pipe[0]);
+          SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
+          conn.cgiData.child_stdout_pipe[0] = -1; // Mark as closed
+      } else {
+          debug("Closing client fd %d", currentfd.fd);
+          SocketUtils::remove_from_poll(currentfd.fd);
+          close(currentfd.fd);
+          lastActivityTime.erase(currentfd.fd);
+
+          debug("Erasing the connection %d from the map", currentfd.fd);
+          conn.reset();
+          HTTPServer::connections.erase(conn.client_fd);
+        }
+      } 
     }
-    debug("Erasing the connection %d from the map", currentfd.fd);
-    HTTPServer::connections.erase(currentfd.fd);
-    debug("removing fd %d from poll", currentfd.fd);
-    SocketUtils::remove_from_poll(currentfd.fd);
     return true;
   }
   return false; // No errors
@@ -960,7 +976,9 @@ HTTPConnxData &getConnectionData(int fd) {
     // Still not found? Throw exception
     if (conn_it == connections.end()) {
       debuglog(RED, "FD %d not found in connections", fd);
-      send_critical_error(fd, 500);
+      // SocketUtils::remove_from_poll(fd);
+      // close(fd);
+      // send_critical_error(fd, 500);
       debug("FD %d not found in connections", fd);
       throw std::runtime_error("FD not found in connections");
     }
