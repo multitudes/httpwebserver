@@ -87,3 +87,33 @@ def test_redirect_delete(webserver_normal_config):
     # Check if the file is deleted
     response = requests.get(delete_url)
     assert response.status_code == 404
+
+def test_normal_config_upload_large_file1(webserver_normal_config):
+    """Test file upload with screeenshot.jpeg 2 MB """
+    test_file = 'tests/screenshot.png'
+    upload_url = 'http://localhost:4244/upload/screenshot.png'
+
+    # Upload the file
+    with open(test_file, 'rb') as f:
+        response = requests.post(
+            upload_url,
+            data=f,
+            headers={'Content-Type': 'image/png'},  # Set appropriate content type
+            timeout=1
+        )
+    assert response.status_code in [200, 201], f"Upload failed with status code {response.status_code}"
+
+    # Download the file and verify its content
+    downloaded = requests.get(upload_url)
+    assert downloaded.status_code == 200, f"Download failed with status code {downloaded.status_code}"
+    with open(test_file, 'rb') as f:
+        assert downloaded.content == f.read(), "Uploaded content does not match the original file"
+        
+def test_delete_large_file(webserver_normal_config):
+    """Test file deletion (only works with normal config)"""
+    delete_url = 'http://localhost:4244/upload/screenshot.png' # must be the same as upload_url above
+    response = requests.delete(delete_url)
+    assert response.status_code == 200
+    # Check if the file is deleted
+    response = requests.get(delete_url)
+    assert response.status_code == 404
