@@ -1,4 +1,3 @@
-import pytest
 import requests
 
 def test_normal_config_delete(webserver_normal_config):

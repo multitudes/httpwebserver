@@ -1,6 +1,4 @@
 import requests
-import subprocess
-import pytest
 
 
 def test_cookie_update_request(webserver_redir_config):

@@ -1,6 +1,4 @@
 import requests
-import subprocess
-import pytest
 
 def test_redirections1(webserver_redir_config):
     """Test redirections for specific locations"""
