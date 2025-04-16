@@ -106,6 +106,7 @@ struct HTTPConnxData {
   struct URLMatcherData {
 
     const ServerData *config;
+    string target;
     string full_path;     // Full path to the requested resource
     string path_for_stat; // Path adjusted for stat() calls
     string content_type;  // Content type (MIME type) for the response

@@ -1,8 +1,5 @@
 import requests
-import subprocess
-import pytest
-
-       
+  
 # test for UPLOAD and DELETE, first in default uploads, then in a folder with return directive
 #first 2 tests are for the default upload folder
 def test_normal_config_upload(webserver_normal_config):
