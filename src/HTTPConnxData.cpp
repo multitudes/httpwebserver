@@ -57,7 +57,7 @@ string HTTPConnxData::dechunkData(string chunked_string) {
   }
   
   // Update buffer and headers
-  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.length());
+  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.size());
   data.headers.erase("Transfer-Encoding");  // Remove chunked header
   return dechunked;
 }
@@ -72,7 +72,7 @@ void HTTPConnxData::dechunkDataCGI() {
   std::string dechunked;
   size_t pos = 0;
   
-  while (pos < cgiData.buffer.length()) {
+  while (pos < cgiData.buffer.size()) {
       // Find chunk size line
       size_t chunk_size_end = cgiData.buffer.find("\r\n", pos);
       if (chunk_size_end == std::string::npos) break;
@@ -87,7 +87,7 @@ void HTTPConnxData::dechunkDataCGI() {
       
       // Move to chunk data start
       pos = chunk_size_end + 2;
-      if (pos + chunk_size > cgiData.buffer.length()) break;
+      if (pos + chunk_size > cgiData.buffer.size()) break;
       
       // Append chunk data
       dechunked.append(cgiData.buffer.substr(pos, chunk_size));
@@ -98,7 +98,7 @@ void HTTPConnxData::dechunkDataCGI() {
   
   // Update buffer and headers
   cgiData.buffer = dechunked;
-  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.length());
+  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.size());
   data.headers.erase("Transfer-Encoding");  // Remove chunked header
 }
 

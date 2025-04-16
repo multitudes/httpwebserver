@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
 import os
-import cgi
-import cgitb
+import sys
+import signal
 from urllib.parse import quote
 
-
-cgitb.enable()  # Enable detailed error messages
 
 # Get the upload directory from the environment variable
 UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
 
+# Handle broken pipes gracefully
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)  
+
 def main():
     try:
+        _ = sys.stdin.read()
         if not os.path.exists(UPLOAD_DIR):
             os.makedirs(UPLOAD_DIR)
             

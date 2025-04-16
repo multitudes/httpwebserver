@@ -9,11 +9,11 @@
 #include "Utils.hpp"
 #include "debug.h"
 #include <algorithm>
+#include <cassert>
 #include <ctime>
 #include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <cassert>
 
 using std::map;
 using std::string;
@@ -181,33 +181,33 @@ int run(std::string configFile) {
             debug("Failed to send headers for connection %d", conn.client_fd);
             debuglog(RED, "Failed to send headers for connection %d",
                      conn.client_fd);
-            throw std::runtime_error(
-                "Failed to send headers for connection " +
-                Utils::to_string(conn.client_fd));
+            throw std::runtime_error("Failed to send headers for connection " +
+                                     Utils::to_string(conn.client_fd));
             SocketUtils::remove_from_poll(conn.client_fd);
             conn.reset();
             continue;
-          } // else 
+          } // else
           continue;
         } else {
           int result = send_file(conn);
           if (result == -1) {
-              // Handle error during file transfer
-              debuglog(RED, "Error during file transfer for connection %d", conn.client_fd);
-              SocketUtils::remove_from_poll(conn.client_fd);
-              conn.reset();
+            // Handle error during file transfer
+            debuglog(RED, "Error during file transfer for connection %d",
+                     conn.client_fd);
+            SocketUtils::remove_from_poll(conn.client_fd);
+            conn.reset();
           } else if (result == 0) {
-              // File transfer complete
-              debug("File transfer complete for connection %d sent %lu bytes", conn.client_fd, 
-                    conn.data.bytes_sent);
-              debuglog(YELLOW,
-                       "Back to state INCOMING - File transfer complete for "
-                       "connection %d",
-                       conn.client_fd);
-              conn.reset();
+            // File transfer complete
+            debug("File transfer complete for connection %d sent %lu bytes",
+                  conn.client_fd, conn.data.bytes_sent);
+            debuglog(YELLOW,
+                     "Back to state INCOMING - File transfer complete for "
+                     "connection %d",
+                     conn.client_fd);
+            conn.reset();
           } else if (result == 1) {
-              // More data to send, keep the connection open
-              debug("More data to send for connection %d", conn.client_fd);
+            // More data to send, keep the connection open
+            debug("More data to send for connection %d", conn.client_fd);
           }
         }
         continue;
@@ -322,8 +322,6 @@ int run(std::string configFile) {
                 SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.child_stdout_pipe[0]);
-                close(conn.cgiData.child_stdin_pipe[1]);
-                close(conn.cgiData.child_stdout_pipe[0]);
                 conn.reset();
                 break;
               } else if (bytes_written < BUFFER_SIZE - conn.data.headers_end) {
@@ -354,8 +352,8 @@ int run(std::string configFile) {
                 // No data was written, this should not happen
                 debuglog(RED, "No data written to CGI stdin");
                 SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
-                close(conn.cgiData.child_stdin_pipe[1]);
-                close(conn.cgiData.child_stdout_pipe[0]);
+                SocketUtils::remove_from_poll(
+                    conn.cgiData.child_stdout_pipe[0]);
                 conn.reset();
                 break;
               }
@@ -383,8 +381,6 @@ int run(std::string configFile) {
                   ::recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
               if (bytes_read < 0) {
                 perror("Failed to read from client");
-                close(conn.cgiData.child_stdout_pipe[0]);
-                close(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.child_stdout_pipe[0]);
@@ -415,7 +411,8 @@ int run(std::string configFile) {
                   perror("Failed to write to CGI stdin");
                   SocketUtils::remove_from_poll(
                       conn.cgiData.child_stdin_pipe[1]);
-                  close(conn.cgiData.child_stdin_pipe[1]);
+                  SocketUtils::remove_from_poll(
+                      conn.cgiData.child_stdout_pipe[0]);
                   conn.reset();
                   break;
                 } else if (bytes_written <
@@ -449,8 +446,8 @@ int run(std::string configFile) {
                   debuglog(RED, "No data written to CGI stdin");
                   SocketUtils::remove_from_poll(
                       conn.cgiData.child_stdin_pipe[1]);
-                  close(conn.cgiData.child_stdin_pipe[1]);
-                  close(conn.cgiData.child_stdout_pipe[0]);
+                  SocketUtils::remove_from_poll(
+                      conn.cgiData.child_stdout_pipe[0]);
                   conn.reset();
                   break;
                 }
@@ -478,8 +475,7 @@ int run(std::string configFile) {
                                           buffer, BUFFER_SIZE);
               if (bytes_read < 0) {
                 perror("Failed to read from CGI stdout");
-
-                close(conn.cgiData.child_stdout_pipe[0]);
+                SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.child_stdout_pipe[0]);
                 conn.reset();
@@ -511,7 +507,7 @@ int run(std::string configFile) {
                 // i finished sending the data to the client
                 // close the read end of the pipe to signal EOF to the CGI
                 debuglog(YELLOW, "Closing read end of pipe");
-                close(conn.cgiData.child_stdout_pipe[0]);
+                SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.child_stdout_pipe[0]);
                 conn.reset();
@@ -536,7 +532,8 @@ int run(std::string configFile) {
 // maybe it should be somewhere else?
 bool send_headers(HTTPConnxData &conn) {
   if (!conn.data.response.empty()) {
-    assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 && "Headers must start with 'HTTP/1.1 ");
+    assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 &&
+           "Headers must start with 'HTTP/1.1 ");
     if (::send(conn.client_fd, conn.data.response.c_str(),
                conn.data.response.size(), 0) <= 0) {
       perror("Failed to send headers");
@@ -557,65 +554,56 @@ bool send_headers(HTTPConnxData &conn) {
 int send_file(HTTPConnxData &conn) {
   // 1. Read new data if buffer is empty (and file not fully read)
   if (conn.data.buffer.empty() && conn.file_fd != -1) {
-      char read_buf[BUFFER_SIZE];
-      ssize_t bytes_read = read(conn.file_fd, read_buf, sizeof(read_buf));
+    char read_buf[BUFFER_SIZE];
+    ssize_t bytes_read = read(conn.file_fd, read_buf, sizeof(read_buf));
 
-      if (bytes_read < 0) {
-          perror("Failed to read file");
-          return -1;
-      }
-      if (bytes_read == 0) {
-          debug("End of file reached for connection %d", conn.client_fd);
-          close(conn.file_fd);
-          conn.file_fd = -1;
-          // No return yet; might still have unsent data in buffer!
-      } else {
-          // Append new data to buffer
-          conn.data.buffer.insert(
-              conn.data.buffer.end(), 
-              read_buf, 
-              read_buf + bytes_read
-          );
-      }
+    if (bytes_read < 0) {
+      perror("Failed to read file");
+      return -1;
+    }
+    if (bytes_read == 0) {
+      debug("End of file reached for connection %d", conn.client_fd);
+      close(conn.file_fd);
+      conn.file_fd = -1;
+      // No return yet; might still have unsent data in buffer!
+    } else {
+      // Append new data to buffer
+      conn.data.buffer.insert(conn.data.buffer.end(), read_buf,
+                              read_buf + bytes_read);
+    }
   }
 
   // 2. Send data from buffer (if any)
   if (!conn.data.buffer.empty()) {
-      ssize_t bytes_sent = ::send(
-          conn.client_fd,
-          conn.data.buffer.data(),
-          conn.data.buffer.size(),
-          0
-      );
+    ssize_t bytes_sent = ::send(conn.client_fd, conn.data.buffer.data(),
+                                conn.data.buffer.size(), 0);
 
-      if (bytes_sent < 0) {
-          if (errno == EAGAIN || errno == EWOULDBLOCK) {
-              debug("Send would block, retrying later");
-              return 1;  // Poll will retry
-          }
-          perror("Failed to send data");
-          return -1;
+    if (bytes_sent < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        debug("Send would block, retrying later");
+        return 1; // Poll will retry
       }
+      perror("Failed to send data");
+      return -1;
+    }
 
-      // Remove sent bytes from buffer
-      if (bytes_sent > 0) {
-          conn.data.bytes_sent += bytes_sent;
-          conn.data.buffer.erase(
-              conn.data.buffer.begin(),
-              conn.data.buffer.begin() + bytes_sent
-          );
-          debug("Sent %zd bytes (%zu remaining in buffer)", 
-               bytes_sent, conn.data.buffer.size());
-      }
+    // Remove sent bytes from buffer
+    if (bytes_sent > 0) {
+      conn.data.bytes_sent += bytes_sent;
+      conn.data.buffer.erase(conn.data.buffer.begin(),
+                             conn.data.buffer.begin() + bytes_sent);
+      debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
+            conn.data.buffer.size());
+    }
   }
 
   // 3. Check completion conditions
   if (conn.file_fd == -1 && conn.data.buffer.empty()) {
-      debug("File sent completely for connection %d", conn.client_fd);
-      return 0;  // EOF + no pending data
+    debug("File sent completely for connection %d", conn.client_fd);
+    return 0; // EOF + no pending data
   }
 
-  return 1;  // More data to send or read
+  return 1; // More data to send or read
 }
 
 /**
@@ -790,7 +778,7 @@ bool checkPollErrors(pollfd currentfd) {
           close(conn.cgiData.child_stdout_pipe[0]);
           SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
           conn.cgiData.child_stdout_pipe[0] = -1; // Mark as closed
-      } else {
+        } else if (currentfd.fd == conn.client_fd) {
           debug("Closing client fd %d", currentfd.fd);
           SocketUtils::remove_from_poll(currentfd.fd);
           close(currentfd.fd);
@@ -800,7 +788,7 @@ bool checkPollErrors(pollfd currentfd) {
           conn.reset();
           HTTPServer::connections.erase(conn.client_fd);
         }
-      } 
+      }
     }
     return true;
   }
@@ -979,8 +967,8 @@ HTTPConnxData &getConnectionData(int fd) {
       // SocketUtils::remove_from_poll(fd);
       // close(fd);
       // send_critical_error(fd, 500);
-      debug("FD %d not found in connections", fd);
-      throw std::runtime_error("FD not found in connections");
+      // debug("FD %d not found in connections", fd);
+      // throw std::runtime_error("FD not found in connections");
     }
   }
 
