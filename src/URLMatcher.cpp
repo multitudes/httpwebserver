@@ -57,11 +57,40 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
                            static_cast<std::string::size_type>(bytes_read));
   debuglog(YELLOW, "URLMatcher: Received %lu bytes for fd %d", bytes_read,
            conn.client_fd);
+  if (conn.data.headers_received && conn.data.chunked) {
+    debuglog(YELLOW, "URLMatcher: Chunked Request so far: %s",
+             conn.data.request.c_str());
+    // check if the buffer contains the end of chunking
+    if (conn.data.request.find("0\r\n\r\n", 0) != string::npos) {
+      debug("End of chunking - Request complete");
+      // dechunk the data
+      std::string chunked_string = conn.data.request.substr(conn.data.headers_end);
+      string dechunked = conn.dechunkData(chunked_string);
+      conn.data.chunked = false;
+      debug("Dechunked data: %s", dechunked.c_str());
 
+  
+      conn.data.headers["Content-Length"] =
+          Utils::to_string(dechunked.length());
+      conn.data.content_length = dechunked.length();
+      debuglog(YELLOW, "Content length after dechunking: %zu", conn.data.content_length);
+      debug("Content lenght after dechunking %zu",
+            conn.data.content_length);
+      conn.data.headers.erase("Transfer-Encoding"); // Remove chunked header
+      
+      return true;
+    } else {
+      debug("Still reading chunked data");
+      conn.state = CONN_RECV_CHUNKS;
+      
+      return false; // Still reading chunked data
+    }
+  }
   switch (conn.parseHeaders(conn)) {
   case PARSE_SUCCESS:
     debuglog(YELLOW, "Headers parsed successfully");
     conn.data.headers_received = true;
+    // TODO add dechunking here and if chunked and not finished
     break;
   case PARSE_INCOMPLETE:
     debuglog(YELLOW, "Headers incomplete");
@@ -307,7 +336,7 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
     conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
     debuglog(BLUE, "URLMatcher: Updated full path to CGI: '%s'",
              conn.urlMatcherData.full_path.c_str());
-
+    conn.cgiData.script_name = conn.urlMatcherData.full_path;
     conn.state = CONN_CGI;
     debug("CGI request detected");
     // Start CGI process for this connection
@@ -473,6 +502,7 @@ bool handleCookieUpdateRequest(HTTPConnxData &conn)
  * @param conn The connection data structure.
  */
 void validateRequest(HTTPConnxData &conn) {
+
     if (!receiveAndParseRequest(conn))
         return; // Request handling complete or failed
 

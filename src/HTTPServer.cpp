@@ -143,6 +143,12 @@ int run(std::string configFile) {
         continue;
       }
 
+      /* -------------  CONN_RECV_CHUNKS  ---------------- */
+      if (pollfds[i].revents & POLLIN && conn.state == CONN_RECV_CHUNKS) {
+        debug("CONN_RECV_CHUNKS fd %d", conn.client_fd);
+        URLMatcher::validateRequest(conn);
+        continue;
+      }
       /*  -----------  SIMPLE_RESPONSE -----------  */
       if (pollfds[i].revents & POLLOUT && conn.state == CONN_SIMPLE_RESPONSE) {
         debug("CONN_SIMPLE_RESPONSE fd %d", conn.client_fd);

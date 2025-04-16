@@ -27,8 +27,7 @@ enum ConnectionState {
   CONN_FILE_REQUEST,   // Serving a file
   CONN_SIMPLE_RESPONSE,
   CONN_UPLOAD, // Handling file upload
-  CONN_DONE,   // File transfer or other operation completed
-  CONN_CLOSING // Ready to close
+  CONN_RECV_CHUNKS, // Receiving chunked data
 };
 
 /**
@@ -124,6 +123,7 @@ struct HTTPConnxData {
 
   struct CGIData {
     string buffer;
+    string script_name;
     bool is_sending;
     bool is_receiving;
     string path_info;
@@ -136,7 +136,7 @@ struct HTTPConnxData {
     bool cgi_finished;
 
     CGIData()
-        : buffer(""), is_sending(false), is_receiving(true), child_pid(-1),
+        : buffer(""), script_name(""), is_sending(false), is_receiving(true), child_pid(-1),
           path_info(""), query_string(), env() {
 
       child_stdin_pipe[0] = -1;
@@ -196,5 +196,6 @@ struct HTTPConnxData {
   string generateSessionId();
   void createSession();
   bool retrieveSession();
-  void dechunkData();
+  void dechunkDataCGI();
+  string dechunkData(string chunked_string);
 };

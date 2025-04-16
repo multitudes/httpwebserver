@@ -25,7 +25,7 @@ int prepareCGI(HTTPConnxData &conn) {
     if (conn.cgiData.buffer.find("0\r\n\r\n", 0) != string::npos) {
       debug("End of chunking - Request complete");
       // dechunk the data
-      conn.dechunkData();
+      conn.dechunkDataCGI();
       conn.data.chunked = false;
       debug("Dechunked data: %s", conn.cgiData.buffer.c_str());
       // set the environment variable
@@ -169,7 +169,7 @@ void setCGIEnv(HTTPConnxData &conn) {
         conn.cgiData.env["HTTP_TRANSFER_ENCODING"].c_str());
   conn.cgiData.env["REQUEST_METHOD"] = conn.data.method;
   debug("set request method to %s", conn.cgiData.env["REQUEST_METHOD"].c_str());
-  conn.cgiData.env["SCRIPT_NAME"] = conn.urlMatcherData.full_path;
+  conn.cgiData.env["SCRIPT_NAME"] = conn.cgiData.script_name;
   debug("set script name to %s", conn.cgiData.env["SCRIPT_NAME"].c_str());
   conn.cgiData.env["PATH_INFO"] =
       conn.cgiData.path_info.empty() ? "/" : conn.cgiData.path_info;

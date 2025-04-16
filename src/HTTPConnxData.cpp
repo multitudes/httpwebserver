@@ -16,6 +16,51 @@ using std::string;
 using std::vector;
 
 
+/**
+ * @brief Dechunk the data from the string
+ * 
+ * This function processes the buffer to remove chunked transfer encoding.
+ * It will be called once we have the final chunk (0\r\n\r\n).
+ * returns the dechunked string
+ */
+string HTTPConnxData::dechunkData(string chunked_string) {
+  std::string dechunked;
+  size_t pos = 0;
+  
+  if (chunked_string.empty() || chunked_string.find("0\r\n\r\n", 0) == string::npos ) {
+    debug("ERROR End of chunking not found");
+    return dechunked; // Return empty string if end of chunking not found
+  }
+
+  while (pos < chunked_string.length()) {
+      // Find chunk size line
+      size_t chunk_size_end = chunked_string.find("\r\n", pos);
+      if (chunk_size_end == std::string::npos) break;
+      
+      // Parse hex chunk size
+      std::string hex_size = chunked_string.substr(pos, chunk_size_end - pos);
+      unsigned int chunk_size;
+      std::istringstream iss(hex_size);
+      iss >> std::hex >> chunk_size;
+      
+      if (chunk_size == 0) break;  // Last chunk
+      
+      // Move to chunk data start
+      pos = chunk_size_end + 2;
+      if (pos + chunk_size > chunked_string.length()) break;
+      
+      // Append chunk data
+      dechunked.append(chunked_string.substr(pos, chunk_size));
+      
+      // Move to next chunk
+      pos += chunk_size + 2;
+  }
+  
+  // Update buffer and headers
+  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.length());
+  data.headers.erase("Transfer-Encoding");  // Remove chunked header
+  return dechunked;
+}
 
 /**
  * @brief Dechunk the data in the buffer
@@ -23,7 +68,7 @@ using std::vector;
  * This function processes the buffer to remove chunked transfer encoding.
  * It will be called once we have the final chunk (0\r\n\r\n).
  */
-void HTTPConnxData::dechunkData() {
+void HTTPConnxData::dechunkDataCGI() {
   std::string dechunked;
   size_t pos = 0;
   
@@ -98,14 +143,8 @@ void HTTPConnxData::reset() {
     ::kill(cgiData.child_pid, SIGTERM);
     cgiData.child_pid = -1;
   }
-
-
   data.request.clear();
-  // data.headers.clear();
-  // data.cookies.clear();
-  // data.response.clear();
-  // data.response_headers.clear();
-  // data.response_body.clear();
+
 }
 
 /**
