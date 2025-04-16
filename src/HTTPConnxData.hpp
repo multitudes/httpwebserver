@@ -63,6 +63,7 @@ struct HTTPConnxData {
     map<std::string, std::string> cookies;
 
     bool headers_received;
+    vector<char> buffer;
     bool chunked;
     string chunkedBody;
 

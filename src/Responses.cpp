@@ -92,7 +92,6 @@ namespace Responses {
         // Check if a custom error page is defined for this status code
         if (connection.urlMatcherData.config->error_pages.find(statusCode) != connection.urlMatcherData.config->error_pages.end())
         {
-            // Replace 'auto' with the explicit iterator type
             std::map<int, std::string>::const_iterator it = connection.urlMatcherData.config->error_pages.find(statusCode);
             if (it != connection.urlMatcherData.config->error_pages.end())
             {
@@ -168,7 +167,7 @@ namespace Responses {
         conn.data.response = header;
         conn.headers_sent = false;
         conn.data.bytes_sent = 0;
-        
+        debug("File response headers prepared using stored content type: %s", conn.data.response.c_str());
         debuglog(GREEN, "File response headers prepared using stored content type: %s\n%s", 
                  conn.urlMatcherData.content_type.c_str(), conn.data.response.c_str());
     }

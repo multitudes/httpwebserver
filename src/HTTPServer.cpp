@@ -13,6 +13,7 @@
 #include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <cassert>
 
 using std::map;
 using std::string;
@@ -171,23 +172,42 @@ int run(std::string configFile) {
 
       /*    -------- FILE REQUEST -----------      */
       if (pollfds[i].revents & POLLOUT && conn.state == CONN_FILE_REQUEST) {
-        debug("CONN_FILE_REQUEST fd %d", conn.client_fd);
-        debuglog(YELLOW, "Handling write event for connection fd %d",
+        debug("CONN_FILE_REQUEST client fd %d", conn.client_fd);
+        debuglog(YELLOW, "Handling write event for connection client fd %d",
                  conn.client_fd);
         if (!conn.headers_sent) {
           debug("Sending buffer headers for connection %d", conn.client_fd);
-          if (send_headers(conn) < 0) {
+          if (!send_headers(conn)) {
+            debug("Failed to send headers for connection %d", conn.client_fd);
+            debuglog(RED, "Failed to send headers for connection %d",
+                     conn.client_fd);
+            throw std::runtime_error(
+                "Failed to send headers for connection " +
+                Utils::to_string(conn.client_fd));
+            SocketUtils::remove_from_poll(conn.client_fd);
             conn.reset();
-          } // else continue
+            continue;
+          } // else 
+          continue;
         } else {
           int result = send_file(conn);
-          if (result <= 0) {
-            conn.reset();
-            debug("File transfer complete for connection %d", conn.client_fd);
-            debuglog(YELLOW,
-                     "Back to state INCOMING - File transfer complete for "
-                     "connection %d",
-                     conn.client_fd);
+          if (result == -1) {
+              // Handle error during file transfer
+              debuglog(RED, "Error during file transfer for connection %d", conn.client_fd);
+              SocketUtils::remove_from_poll(conn.client_fd);
+              conn.reset();
+          } else if (result == 0) {
+              // File transfer complete
+              debug("File transfer complete for connection %d sent %lu bytes", conn.client_fd, 
+                    conn.data.bytes_sent);
+              debuglog(YELLOW,
+                       "Back to state INCOMING - File transfer complete for "
+                       "connection %d",
+                       conn.client_fd);
+              conn.reset();
+          } else if (result == 1) {
+              // More data to send, keep the connection open
+              debug("More data to send for connection %d", conn.client_fd);
           }
         }
         continue;
@@ -513,16 +533,18 @@ int run(std::string configFile) {
 
 // Send HTTP response headers
 // maybe it should be somewhere else?
-int send_headers(HTTPConnxData &conn) {
+bool send_headers(HTTPConnxData &conn) {
   if (!conn.data.response.empty()) {
+    assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 && "Headers must start with 'HTTP/1.1 ");
     if (::send(conn.client_fd, conn.data.response.c_str(),
-               conn.data.response.size(), 0) < 0) {
+               conn.data.response.size(), 0) <= 0) {
       perror("Failed to send headers");
-      return -1;
+      return false;
     }
     conn.headers_sent = true;
+    return true;
   }
-  return 0;
+  return false;
 }
 
 /**
@@ -532,34 +554,67 @@ int send_headers(HTTPConnxData &conn) {
  * @return 0 if the file is sent completely, -1 on error, 1 if more data to send
  */
 int send_file(HTTPConnxData &conn) {
-  char buffer[BUFFER_SIZE];
-  ssize_t bytes_read = read(conn.file_fd, buffer, sizeof(buffer));
+  // 1. Read new data if buffer is empty (and file not fully read)
+  if (conn.data.buffer.empty() && conn.file_fd != -1) {
+      char read_buf[BUFFER_SIZE];
+      ssize_t bytes_read = read(conn.file_fd, read_buf, sizeof(read_buf));
 
-  if (bytes_read < 0) {
-    perror("Failed to read file");
-    return -1;
-  }
-  if (bytes_read == 0) {
-    close(conn.file_fd);
-    conn.file_fd = -1;
-    return 0; // EOF
-  }
-
-  ssize_t bytes_sent =
-      ::send(conn.client_fd, buffer, static_cast<size_t>(bytes_read), 0);
-  if (bytes_sent < 0) {
-    perror("Failed to send data");
-    return -1;
-  }
-
-  conn.data.bytes_sent += static_cast<size_t>(bytes_sent);
-
-  // Check if we've sent the entire file
-  if (conn.data.bytes_sent >= conn.file_size) {
-    return 0; // File sent completely
+      if (bytes_read < 0) {
+          perror("Failed to read file");
+          return -1;
+      }
+      if (bytes_read == 0) {
+          debug("End of file reached for connection %d", conn.client_fd);
+          close(conn.file_fd);
+          conn.file_fd = -1;
+          // No return yet; might still have unsent data in buffer!
+      } else {
+          // Append new data to buffer
+          conn.data.buffer.insert(
+              conn.data.buffer.end(), 
+              read_buf, 
+              read_buf + bytes_read
+          );
+      }
   }
 
-  return 1; // More data to send
+  // 2. Send data from buffer (if any)
+  if (!conn.data.buffer.empty()) {
+      ssize_t bytes_sent = ::send(
+          conn.client_fd,
+          conn.data.buffer.data(),
+          conn.data.buffer.size(),
+          0
+      );
+
+      if (bytes_sent < 0) {
+          if (errno == EAGAIN || errno == EWOULDBLOCK) {
+              debug("Send would block, retrying later");
+              return 1;  // Poll will retry
+          }
+          perror("Failed to send data");
+          return -1;
+      }
+
+      // Remove sent bytes from buffer
+      if (bytes_sent > 0) {
+          conn.data.bytes_sent += bytes_sent;
+          conn.data.buffer.erase(
+              conn.data.buffer.begin(),
+              conn.data.buffer.begin() + bytes_sent
+          );
+          debug("Sent %zd bytes (%zu remaining in buffer)", 
+               bytes_sent, conn.data.buffer.size());
+      }
+  }
+
+  // 3. Check completion conditions
+  if (conn.file_fd == -1 && conn.data.buffer.empty()) {
+      debug("File sent completely for connection %d", conn.client_fd);
+      return 0;  // EOF + no pending data
+  }
+
+  return 1;  // More data to send or read
 }
 
 /**
