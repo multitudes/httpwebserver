@@ -177,6 +177,7 @@ int run(std::string configFile) {
         debug("CONN_FILE_REQUEST client fd %d", conn.client_fd);
         debuglog(YELLOW, "Handling write event for connection client fd %d",
                  conn.client_fd);
+        // 0. Add headers to the buffer to be sent if needed
         if (!conn.headers_set) {
           if (!conn.data.response.empty()) {
             assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 &&
@@ -272,75 +273,24 @@ int run(std::string configFile) {
       if (conn.state == CONN_UPLOAD) {
         debuglog(YELLOW, "Connection fd %d in state UPLOAD", conn.client_fd);
         debug("CONN_UPLOAD fd %d", conn.client_fd);
-        // First handle any buffered payload data left over from header parsing
-        if (!conn.data.response.empty()) {
-          debuglog(
-              YELLOW,
-              "HTTPServer - first writing leftover payload for connection %d",
-              conn.client_fd);
-          ssize_t bytes_written =
-              write(conn.file_fd, conn.data.response.c_str(),
-                    conn.data.response.size());
-          if (bytes_written <= 0) {
-            perror(bytes_written < 0
-                       ? "Failed to write to file"
-                       : "No data written to file");
-            conn.reset();
-            continue;
-          }
 
-          conn.data.bytes_sent += static_cast<size_t>(bytes_written);
-          conn.data.response.clear();
-
-          if (conn.data.bytes_sent >= conn.data.content_length) {
-            finish_upload(conn);
-            continue;
-          }
+        if (writingFirstPayloadCompletesUpload(conn)) {
+          continue;
         }
 
         if (pollfds[i].revents & POLLIN) {
           debug("POLLIN event on upload connection %d", conn.client_fd);
-          // Then read more data from socket
-          debuglog(YELLOW,
-                   "HTTPServer - Handling upload event for connection %d",
+          debuglog(YELLOW, "Handling upload event for connection %d",
                    conn.client_fd);
-          debug("read from client %d", conn.client_fd);
-          char buffer[BUFFER_SIZE];
-          ssize_t bytes_read =
-              ::recv(conn.client_fd, buffer, sizeof(buffer), MSG_DONTWAIT);
-
-          if (bytes_read <= 0) {
-            if (bytes_read == 0) {
-              debug("Client disconnected during upload");
-            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-              debug("No data available yet - keep in reading state");
-              continue;
-            }
-            debug("%s", strerror(errno));
-            perror("recv failed during upload");
-            conn.reset();
-            continue;
-          }
-          debug("Received %ld bytes from client", bytes_read);
-          debug("writing to file %d", conn.file_fd);
-          ssize_t bytes_written = write(conn.file_fd, buffer, static_cast<size_t>(bytes_read));
-          if (bytes_written <= 0) {
-            perror(bytes_written < 0 ? "Failed to write to file"
-                                     : "No data written to file");
-            conn.reset();
+          
+          if (!readFromClientForUpload(conn) || !writeUploadToFile(conn)) {
             continue;
           }
 
-          conn.data.bytes_sent += static_cast<size_t>(bytes_written);
-          debug("Wrote %ld bytes to file", bytes_written);
-          debug("total bytes sent %zu", conn.data.bytes_sent);
-          debug("content length %zu", conn.data.content_length);
-          if (conn.data.bytes_sent >= conn.data.content_length) {
-            debug("Upload complete");
-            finish_upload(conn);
+          if (uploadComplete(conn)) {
+            continue;
           }
         }
-        continue;
       }
 
       /*    -------- CGI -----------      */
@@ -395,7 +345,8 @@ int run(std::string configFile) {
                          static_cast<ssize_t>(conn.cgiData.buffer.size())) {
                 // Not all data was written, handle partial write
                 debuglog(YELLOW, "Partial write to CGI stdin");
-                conn.cgiData.buffer.erase(0, static_cast<std::string::size_type>(bytes_written));
+                conn.cgiData.buffer.erase(
+                    0, static_cast<std::string::size_type>(bytes_written));
                 break;
               } else if (bytes_written ==
                          static_cast<ssize_t>(conn.cgiData.buffer.size())) {
@@ -458,7 +409,9 @@ int run(std::string configFile) {
                 buffer[bytes_read] = '\0'; // Null-terminate the buffer
 
                 // now write to cgi the buffer
-                ssize_t bytes_written = ::write(conn.cgiData.child_stdin_pipe[1], buffer, static_cast<size_t>(bytes_read));
+                ssize_t bytes_written =
+                    ::write(conn.cgiData.child_stdin_pipe[1], buffer,
+                            static_cast<size_t>(bytes_read));
 
                 if (bytes_written < 0) {
                   perror("Failed to write to CGI stdin");
@@ -487,7 +440,8 @@ int run(std::string configFile) {
                            static_cast<ssize_t>(conn.cgiData.buffer.size())) {
                   // Not all data was written, handle partial write
                   debuglog(YELLOW, "Partial write to CGI stdin");
-                  conn.cgiData.buffer.erase(0, static_cast<std::string::size_type>(bytes_written));
+                  conn.cgiData.buffer.erase(
+                      0, static_cast<std::string::size_type>(bytes_written));
                   break;
                 } else if (bytes_written ==
                            static_cast<ssize_t>(conn.cgiData.buffer.size())) {
@@ -579,28 +533,6 @@ int run(std::string configFile) {
   // Cleanup
   // TODO
   return 0;
-}
-
-/**
- * @brief Finish the upload process
- *
- * @param conn the connection data
- * @return void
- *
- * It closes the file descriptor and sends a 201 response to the client
- * updates the poll events to POLLOUT
- * and sets the state to CONN_SIMPLE_RESPONSE
- */
-void finish_upload(HTTPConnxData &conn) {
-  debug("Finishing upload for connection %d", conn.client_fd);
-  debuglog(YELLOW, "Upload complete. Written %zu bytes to %s",
-           conn.data.bytes_sent, conn.filename);
-  close(conn.file_fd);
-  conn.upload_completed = true;
-
-  Responses::createResponse(conn, "text/plain", "File uploaded successfully.",
-                            201);
-  conn.state = CONN_SIMPLE_RESPONSE;
 }
 
 /**
@@ -950,6 +882,101 @@ HTTPConnxData &getConnectionData(int fd) {
   }
 
   return conn_it->second;
+}
+
+/**
+ * @brief Check if the upload is complete
+ *
+ * @param conn The connection data
+ * @return true if the upload is complete, false otherwise
+ *
+ * This function checks if the number of bytes sent is greater than or equal to
+ * the content length. If so, it resets the connection and sends a response to
+ * the client.
+ */
+bool uploadComplete(HTTPConnxData &conn) {
+  if (conn.data.bytes_sent >= conn.data.content_length) {
+    debug("Upload complete");
+    conn.reset();
+    Responses::createResponse(conn, "text/plain", "File uploaded successfully.",
+                              201);
+    conn.state = CONN_SIMPLE_RESPONSE;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Check if writing the first payload completes the upload
+ *
+ * @param conn The connection data
+ * @return true if the upload is complete, false otherwise
+ *
+ * This function checks if there is any leftover payload data from the header
+ * parsing. If so, it writes that data to the file and checks if the upload is
+ * complete.
+ */
+bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn) {
+  if (!conn.data.response.empty()) {
+    debug("Writing leftover payload for connection %d", conn.client_fd);
+    debuglog(YELLOW, "writing leftover payload for client %d", conn.client_fd);
+    ssize_t bytes_written = write(conn.file_fd, conn.data.response.c_str(),
+                                  conn.data.response.size());
+    if (bytes_written <= 0) {
+      perror(bytes_written < 0 ? "Failed to write to file"
+                               : "No data written to file");
+      conn.reset();
+      return true;
+    }
+    conn.data.bytes_sent += bytes_written;
+    conn.data.response.clear();
+
+    if (uploadComplete(conn)) {
+      return true;
+      ;
+    }
+  }
+  return false;
+}
+
+bool readFromClientForUpload(HTTPConnxData &conn) {
+  conn.data.buffer.resize(BUFFER_SIZE);
+  ssize_t bytes_read = ::recv(conn.client_fd, conn.data.buffer.data(),
+                              conn.data.buffer.size(), MSG_DONTWAIT);
+  if (bytes_read <= 0) {
+    if (bytes_read == 0) {
+      debug("Client disconnected during upload");
+    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      debug("No data available yet - keep in reading state");
+      return false;
+    }
+    debug("%s", strerror(errno));
+    perror("recv failed during upload");
+    conn.reset();
+    return false;
+  }
+  // Resize the buffer to the actual amount of data read
+  conn.data.buffer.resize(static_cast<size_t>(bytes_read));
+
+  debug("Received %ld bytes from client", bytes_read);
+  return true;
+}
+
+bool writeUploadToFile(HTTPConnxData &conn) {
+  ssize_t bytes_written =
+      write(conn.file_fd, conn.data.buffer.data(), conn.data.buffer.size());
+  if (bytes_written <= 0) {
+    perror(bytes_written < 0 ? "Failed to write to file"
+                             : "No data written to file");
+    conn.reset();
+    return false;
+  }
+  conn.data.bytes_sent += bytes_written;
+  debug("Wrote %ld bytes to file", bytes_written);
+  debug("total bytes sent %zu/%zu", conn.data.bytes_sent,
+        conn.data.content_length);
+  conn.data.buffer.clear();
+  return true;
 }
 
 } // namespace HTTPServer

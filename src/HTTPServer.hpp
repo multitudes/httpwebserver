@@ -51,7 +51,6 @@ extern std::map<int, std::time_t> lastActivityTime;
 extern vector<ServerData> configs_;
 
 int run(std::string configFile);
-void finish_upload(HTTPConnxData &conn);
 bool send_headers(HTTPConnxData &conn);
 void createServerSockets(const vector<ServerData> &configs,
                          vector<int> &serverSockets);
@@ -66,5 +65,9 @@ bool maxConnectionsCheck(int clientfd);
 bool printLocalAddress(int clientfd);
 HTTPConnxData &getConnectionData(int fd);
 void send_critical_error(int fd, int code); 
+bool uploadComplete(HTTPConnxData &conn); 
+bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn);
+bool readFromClientForUpload(HTTPConnxData &conn);
+bool writeUploadToFile(HTTPConnxData &conn);
 
 } // namespace HTTPServer
