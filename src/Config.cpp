@@ -133,7 +133,7 @@ Config::Config(std::string filename) {
    * http://localhost:4245/ or nc localhost 4244 and GET / HTTP/1.1 Host:
    * myWebserver
    *
-/*
+
 server1.server_names.push_back("myWebserver");
 server1.server_names.push_back("someWebserver");
 server1.root = "html/www1";
@@ -187,11 +187,5 @@ for (size_t i = 0; i < servers.size(); ++i) {
   }
 }
 debuglog(YELLOW, "Config initialized with %zu servers", servers.size());
-}*/
-/**
- * @brief Prints all server configurations in the servers vector
- *
- * This function prints detailed information about all server configurations
- * including ports, server names, locations, CGI settings, etc.
-//
+}
 */

@@ -52,7 +52,6 @@ extern vector<ServerData> configs_;
 
 int run(std::string configFile);
 void finish_upload(HTTPConnxData &conn);
-int send_file(HTTPConnxData &conn);
 bool send_headers(HTTPConnxData &conn);
 void createServerSockets(const vector<ServerData> &configs,
                          vector<int> &serverSockets);

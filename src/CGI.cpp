@@ -216,7 +216,7 @@ void setCGIEnv(HTTPConnxData &conn) {
         Utils::to_string(conn.data.content_length);
   }
   debug("set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
-  debug("content length in data? %d", conn.data.content_length);
+  debug("content length in data? %zu", conn.data.content_length);
   conn.cgiData.env["SERVER_NAME"] = conn.data.host;
   debug("set server name to %s", conn.cgiData.env["SERVER_NAME"].c_str());
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
