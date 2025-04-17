@@ -57,7 +57,7 @@ string HTTPConnxData::dechunkData(string chunked_string) {
   }
   
   // Update buffer and headers
-  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.length());
+  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.size());
   data.headers.erase("Transfer-Encoding");  // Remove chunked header
   return dechunked;
 }
@@ -72,7 +72,7 @@ void HTTPConnxData::dechunkDataCGI() {
   std::string dechunked;
   size_t pos = 0;
   
-  while (pos < cgiData.buffer.length()) {
+  while (pos < cgiData.buffer.size()) {
       // Find chunk size line
       size_t chunk_size_end = cgiData.buffer.find("\r\n", pos);
       if (chunk_size_end == std::string::npos) break;
@@ -87,7 +87,7 @@ void HTTPConnxData::dechunkDataCGI() {
       
       // Move to chunk data start
       pos = chunk_size_end + 2;
-      if (pos + chunk_size > cgiData.buffer.length()) break;
+      if (pos + chunk_size > cgiData.buffer.size()) break;
       
       // Append chunk data
       dechunked.append(cgiData.buffer.substr(pos, chunk_size));
@@ -98,7 +98,7 @@ void HTTPConnxData::dechunkDataCGI() {
   
   // Update buffer and headers
   cgiData.buffer = dechunked;
-  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.length());
+  data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.size());
   data.headers.erase("Transfer-Encoding");  // Remove chunked header
 }
 
@@ -114,7 +114,7 @@ void HTTPConnxData::reset() {
   data = ConnectionData();
   cgiData = CGIData();
   urlMatcherData = URLMatcherData();
-  headers_sent = false;
+  headers_set = false;
   bytes_received = 0;
 
   // Close open file descriptors
@@ -479,7 +479,7 @@ string HTTPConnxData::formatConnectionData(const ConnectionData &data) {
 
   // Flags at the end
   oss << (data.headers_received ? " HDRS_RCVD" : "")
-      << (data.headers_sent ? " HDRS_SENT" : "")
+      << (data.headers_set ? " HDRS_SENT" : "")
       << (data.response_sent ? " RESP_SENT" : "");
 
   oss << "}";
@@ -551,7 +551,7 @@ string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
   // Response info
   oss << ", response_status=" << data.response_status;
   oss << ", bytes_sent=" << data.bytes_sent;
-  oss << ", headers_sent=" << (data.headers_sent ? "true" : "false");
+  oss << ", headers_set=" << (data.headers_set ? "true" : "false");
   oss << ", sending_response=" << (data.sending_response ? "true" : "false");
   oss << ", response_sent=" << (data.response_sent ? "true" : "false");
 

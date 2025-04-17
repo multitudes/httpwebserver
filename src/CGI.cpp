@@ -9,6 +9,27 @@ namespace CGI {
 
 // Start a CGI process for a connection
 int prepareCGI(HTTPConnxData &conn) {
+    // 1. CLEAN UP PREVIOUS PIPES IF THEY EXIST
+    if (conn.cgiData.child_stdin_pipe[0] != -1) {
+      close(conn.cgiData.child_stdin_pipe[0]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[0]);
+      conn.cgiData.child_stdin_pipe[0] = -1;
+  }
+  if (conn.cgiData.child_stdin_pipe[1] != -1) {
+      close(conn.cgiData.child_stdin_pipe[1]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+      conn.cgiData.child_stdin_pipe[1] = -1;
+  }
+  if (conn.cgiData.child_stdout_pipe[0] != -1) {
+      close(conn.cgiData.child_stdout_pipe[0]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
+      conn.cgiData.child_stdout_pipe[0] = -1;
+  }
+  if (conn.cgiData.child_stdout_pipe[1] != -1) {
+      close(conn.cgiData.child_stdout_pipe[1]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[1]);
+      conn.cgiData.child_stdout_pipe[1] = -1;
+  }
 
   setCGIEnv(conn);
 
@@ -195,7 +216,7 @@ void setCGIEnv(HTTPConnxData &conn) {
         Utils::to_string(conn.data.content_length);
   }
   debug("set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
-  debug("content length in data? %d", conn.data.content_length);
+  debug("content length in data? %zu", conn.data.content_length);
   conn.cgiData.env["SERVER_NAME"] = conn.data.host;
   debug("set server name to %s", conn.cgiData.env["SERVER_NAME"].c_str());
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);

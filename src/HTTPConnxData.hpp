@@ -63,6 +63,7 @@ struct HTTPConnxData {
     map<std::string, std::string> cookies;
 
     bool headers_received;
+    vector<char> buffer;
     bool chunked;
     string chunkedBody;
 
@@ -76,7 +77,7 @@ struct HTTPConnxData {
     string response_headers;
     string response_body;
     size_t bytes_sent;
-    bool headers_sent;
+    bool headers_set;
     bool sending_response;
     bool response_sent;
     enum ParseStatus { PARSE_SUCCESS, PARSE_INCOMPLETE, PARSE_ERROR };
@@ -95,7 +96,7 @@ struct HTTPConnxData {
           headers_received(false), chunked(false), chunkedBody(""),
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
-          headers_sent(false), sending_response(false), response_sent(false),
+          headers_set(false), sending_response(false), response_sent(false),
           parse_status(PARSE_INCOMPLETE), session_id(""),
           has_session(false), // for session management
           session_created(0), session_last_accessed(0),
@@ -154,7 +155,7 @@ struct HTTPConnxData {
 
   int client_fd;
   char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
-  bool headers_sent;
+  bool headers_set;
 
   // File handling
   int file_fd;
@@ -172,7 +173,7 @@ struct HTTPConnxData {
   CGIData cgiData;
 
   HTTPConnxData()
-      : state(CONN_INCOMING), data(), client_fd(-1), headers_sent(false),
+      : state(CONN_INCOMING), data(), client_fd(-1), headers_set(false),
         file_fd(-1), file_size(0), file_offset(0), writeto_fd(-1),
         upload_completed(false), bytes_received(0) {
     filename[0] = '\0';

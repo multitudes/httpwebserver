@@ -20,7 +20,7 @@
 #include "SocketUtils.hpp"
 #include "debug.h"
 
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 8192
 
 using std::map;
 using std::string;
@@ -52,8 +52,7 @@ extern vector<ServerData> configs_;
 
 int run(std::string configFile);
 void finish_upload(HTTPConnxData &conn);
-int send_file(HTTPConnxData &conn);
-int send_headers(HTTPConnxData &conn);
+bool send_headers(HTTPConnxData &conn);
 void createServerSockets(const vector<ServerData> &configs,
                          vector<int> &serverSockets);
 void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
