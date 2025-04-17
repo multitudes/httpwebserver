@@ -163,54 +163,21 @@ int run(std::string configFile) {
 
       /*    -------- FILE REQUEST -----------      */
       if (pollfds[i].revents & POLLOUT && conn.state == CONN_FILE_REQUEST) {
-        debug("CONN_FILE_REQUEST client fd %d", conn.client_fd);
-        debuglog(YELLOW, "Handling write event for connection client fd %d",
+        debug("CONN_FILE_REQUEST client fd %d POLLOUT", conn.client_fd);
+        debuglog(YELLOW, "CONN_FILE_REQUEST client fd %d POLLOUT",
                  conn.client_fd);
-        // 0. Add headers to the buffer to be sent if needed
-        if (!conn.headers_set) {
-          if (!conn.data.response.empty()) {
-            assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 &&
-                   "Headers must start with 'HTTP/1.1 ");
-            conn.data.buffer.assign(conn.data.response.begin(),
-                                    conn.data.response.end());
-            conn.data.response.clear();
-            conn.headers_set = true;
-            debug("Added headers for connection %d", conn.client_fd);
-          } else {
-            debug("Failed to set headers for connection %d", conn.client_fd);
-            debuglog(RED, "Failed to send headers for connection %d",
-                     conn.client_fd);
-            SocketUtils::remove_from_poll(conn.client_fd);
-            lastActivityTime.erase(conn.client_fd);
-            conn.reset();
-            continue;
-          }
+        // 0. Add headers to the buffer to be sent if not yed sent
+        if (!settingHeadersIfNeeded(conn)) {
+          debug("Failed to set headers for connection %d", conn.client_fd);
+          debuglog(RED, "Failed to send headers for connection %d",
+                   conn.client_fd);
+          continue;
         }
 
-        // 1. Read new data if buffer is empty (and file not fully read)
-        if (conn.data.buffer.empty() && conn.file_fd != -1) {
-          char read_buf[BUFFER_SIZE];
-          ssize_t bytes_read = read(conn.file_fd, read_buf, sizeof(read_buf));
-
-          if (bytes_read < 0) {
-            perror("Failed to read file");
-            debuglog(RED, "Error during file transfer for connection %d",
-                     conn.client_fd);
-            SocketUtils::remove_from_poll(conn.client_fd);
-            lastActivityTime.erase(conn.client_fd);
-            conn.reset();
-            continue;
-          } else if (bytes_read == 0) {
-            debug("End of file reached for connection %d", conn.client_fd);
-            close(conn.file_fd);
-            conn.file_fd = -1;
-            // keep going, there might be more data in the buffer to send to
-            // client
-          } else {
-            // Append new data to buffer
-            conn.data.buffer.insert(conn.data.buffer.end(), read_buf,
-                                    read_buf + bytes_read);
-          }
+        if (!readNewDataFromFile(conn)) {
+          debuglog(RED, "Error during file transfer for connection %d",
+            conn.client_fd);
+          continue;
         }
 
         // 2. Send data from buffer (if any)
@@ -543,6 +510,13 @@ void send_critical_error(int fd, int code) {
   ::send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
 }
 
+/**
+ * @brief create bind listen sockets for the server
+ *
+ * This function creates server sockets for each port in the configuration
+ * and adds them to the poll vector. It also sets the server sockets to
+ * non-blocking mode and sets the timeout for the client sockets.
+ */
 void createServerSockets(const vector<ServerData> &configs,
                          vector<int> &serverSockets) {
   for (size_t i = 0; i < configs.size(); i++) {
@@ -613,12 +587,11 @@ bool checkPollErrors(pollfd currentfd) {
   if (SocketUtils::gotPollhupShouldSkip(currentfd)) {
     return true;
   }
-  
+
   if (SocketUtils::gotPollerrShouldSkip(currentfd)) {
     return true;
   }
 
- 
   return false; // No errors
 }
 
@@ -750,7 +723,7 @@ bool maxConnectionsCheck(int clientfd) {
 }
 
 /**
- * 
+ *
  */
 HTTPConnxData &getConnectionData(int fd) {
   // First try to find as normal connection
@@ -898,6 +871,57 @@ bool finishedSendingSimpleResponse(HTTPConnxData &conn) {
     }
   }
   conn.reset();
+  return true;
+}
+
+bool settingHeadersIfNeeded(HTTPConnxData &conn) {
+  if (!conn.headers_set) {
+    if (!conn.data.response.empty()) {
+      assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 &&
+             "Headers must start with 'HTTP/1.1 ");
+      conn.data.buffer.assign(conn.data.response.begin(),
+                              conn.data.response.end());
+      conn.data.response.clear();
+      conn.headers_set = true;
+      debug("Added headers for connection %d", conn.client_fd);
+    } else {
+      SocketUtils::remove_from_poll(conn.client_fd);
+      lastActivityTime.erase(conn.client_fd);
+      conn.reset();
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @brief Read new data from the file if the buffer is empty
+ * 
+ */
+bool readNewDataFromFile(HTTPConnxData &conn) {
+  // 1. Read new data if buffer is empty (and file not fully read)
+  if (conn.data.buffer.empty() && conn.file_fd != -1) {
+    char read_buf[BUFFER_SIZE];
+    ssize_t bytes_read = read(conn.file_fd, read_buf, sizeof(read_buf));
+
+    if (bytes_read < 0) {
+      perror("Failed to read file");
+      SocketUtils::remove_from_poll(conn.client_fd);
+      lastActivityTime.erase(conn.client_fd);
+      conn.reset();
+      return false;
+    } else if (bytes_read == 0) {
+      debug("End of file reached for connection %d", conn.client_fd);
+      close(conn.file_fd);
+      conn.file_fd = -1;
+      // keep going, there might be more data in the buffer to send to
+      // client
+    } else {
+      // Append new data to buffer
+      conn.data.buffer.insert(conn.data.buffer.end(), read_buf,
+                              read_buf + bytes_read);
+    }
+  }
   return true;
 }
 
