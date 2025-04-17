@@ -725,6 +725,8 @@ bool checkPollErrors(pollfd currentfd) {
     debug("Connection closed on fd %d ", currentfd.fd);
     // Now safely get reference
     HTTPConnxData &conn = getConnectionData(currentfd.fd);
+
+
     if (currentfd.fd == conn.client_fd) {
       debug("Closing client fd %d", currentfd.fd);
       SocketUtils::remove_from_poll(currentfd.fd);
@@ -965,7 +967,8 @@ HTTPConnxData &getConnectionData(int fd) {
     if (conn_it == connections.end()) {
       debuglog(RED, "FD %d not found in connections", fd);
       // SocketUtils::remove_from_poll(fd);
-      // close(fd);
+      close(fd);
+      SocketUtils::remove_from_poll(fd);
       // send_critical_error(fd, 500);
       // debug("FD %d not found in connections", fd);
       // throw std::runtime_error("FD not found in connections");

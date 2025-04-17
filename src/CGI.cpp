@@ -9,7 +9,34 @@ namespace CGI {
 
 // Start a CGI process for a connection
 int prepareCGI(HTTPConnxData &conn) {
+    // 1. CLEAN UP PREVIOUS PIPES IF THEY EXIST
+    if (conn.cgiData.child_stdin_pipe[0] != -1) {
+      close(conn.cgiData.child_stdin_pipe[0]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[0]);
+      conn.cgiData.child_stdin_pipe[0] = -1;
+  }
+  if (conn.cgiData.child_stdin_pipe[1] != -1) {
+      close(conn.cgiData.child_stdin_pipe[1]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+      conn.cgiData.child_stdin_pipe[1] = -1;
+  }
+  if (conn.cgiData.child_stdout_pipe[0] != -1) {
+      close(conn.cgiData.child_stdout_pipe[0]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
+      conn.cgiData.child_stdout_pipe[0] = -1;
+  }
+  if (conn.cgiData.child_stdout_pipe[1] != -1) {
+      close(conn.cgiData.child_stdout_pipe[1]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[1]);
+      conn.cgiData.child_stdout_pipe[1] = -1;
+  }
 
+  // 2. TERMINATE PREVIOUS CGI PROCESS IF RUNNING
+  if (conn.cgiData.child_pid > 0) {
+      kill(conn.cgiData.child_pid, SIGTERM);
+      waitpid(conn.cgiData.child_pid, NULL, 0); // Reap zombie
+      conn.cgiData.child_pid = -1;
+  }
   setCGIEnv(conn);
 
   conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
