@@ -31,12 +31,6 @@ int prepareCGI(HTTPConnxData &conn) {
       conn.cgiData.child_stdout_pipe[1] = -1;
   }
 
-  // 2. TERMINATE PREVIOUS CGI PROCESS IF RUNNING
-  if (conn.cgiData.child_pid > 0) {
-      kill(conn.cgiData.child_pid, SIGTERM);
-      waitpid(conn.cgiData.child_pid, NULL, 0); // Reap zombie
-      conn.cgiData.child_pid = -1;
-  }
   setCGIEnv(conn);
 
   conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
