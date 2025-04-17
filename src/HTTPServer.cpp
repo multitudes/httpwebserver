@@ -156,20 +156,9 @@ int run(std::string configFile) {
         debug("CONN_SIMPLE_RESPONSE fd %d", conn.client_fd);
         debuglog(YELLOW, "Connection fd %d in state SIMPLE_RESPONSE",
                  conn.client_fd);
-        ssize_t sent = ::send(conn.client_fd, conn.data.response.c_str(),
-                              conn.data.response.size(), 0);
-        if (sent < 0) {
-          perror("Failed to send simple response");
-          SocketUtils::remove_from_poll(conn.client_fd);
-          lastActivityTime.erase(conn.client_fd);
-          conn.reset();
-        } else if (sent == 0) {
-          debug("No data sent to client %d", conn.client_fd);
-        } else {
-          debug("Sent %ld bytes to client %d", sent, conn.client_fd);
-        }
-        conn.reset();
-        continue;
+          if (!finishedSendingSimpleResponse(conn)) {
+            continue;
+          }
       }
 
       /*    -------- FILE REQUEST -----------      */
@@ -976,6 +965,34 @@ bool writeUploadToFile(HTTPConnxData &conn) {
   debug("total bytes sent %zu/%zu", conn.data.bytes_sent,
         conn.data.content_length);
   conn.data.buffer.clear();
+  return true;
+}
+
+bool finishedSendingSimpleResponse(HTTPConnxData &conn) {
+  conn.data.response.reserve(BUFFER_SIZE);
+  ssize_t bytes_sent = ::send(conn.client_fd, conn.data.response.c_str(),
+                        conn.data.response.size(), 0);
+  if (bytes_sent < 0) {
+    perror("Failed to send simple response");
+    SocketUtils::remove_from_poll(conn.client_fd);
+    lastActivityTime.erase(conn.client_fd);
+    conn.reset();
+  } else if (bytes_sent == 0) {
+    debug("No data sent to client %d", conn.client_fd);
+  } else {
+    debug("Sent %ld bytes to client %d", bytes_sent, conn.client_fd);
+    // defensive programming - handle partial send
+    // Remove sent bytes from buffer
+    conn.data.response.erase(conn.data.response.begin(),
+    conn.data.response.begin() + bytes_sent);
+    debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
+          conn.data.buffer.size());
+    if (!conn.data.response.empty()) {
+      debug("Still data in response buffer %zu", conn.data.response.size());
+      return false;
+    } 
+  }
+  conn.reset();
   return true;
 }
 

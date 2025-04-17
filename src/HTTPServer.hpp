@@ -69,5 +69,6 @@ bool uploadComplete(HTTPConnxData &conn);
 bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn);
 bool readFromClientForUpload(HTTPConnxData &conn);
 bool writeUploadToFile(HTTPConnxData &conn);
+bool finishedSendingSimpleResponse(HTTPConnxData &conn);
 
 } // namespace HTTPServer
