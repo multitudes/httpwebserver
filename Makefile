@@ -109,15 +109,22 @@ PYTEST = $(VENV_DIR)/bin/pytest
 # Virtual environment setup
 venv:
 	@echo "Setting up virtual environment..."
-	@if [ ! -d "$(VENV_DIR)" ]; then \
-		$(PYTHON) -m venv $(VENV_DIR) || $(PYTHON) -m virtualenv $(VENV_DIR); \
-		$(PIP) install --upgrade pip; \
-		$(PIP) install pytest; \
-		if [ -f "tests/requirements.txt" ]; then $(PIP) install -r tests/requirements.txt; fi; \
-		echo "Virtual environment ready"; \
-	else \
-		echo "Virtual environment already exists"; \
+	@$(PYTHON) -m pip install virtualenv
+	@$(PYTHON) -m virtualenv $(VENV_DIR)
+	@if [ ! -f "$(VENV_DIR)/bin/activate" ]; then \
+		echo "Error: Virtual environment not created properly"; \
+		exit 1; \
 	fi
+	@echo "Installing packages..."
+	@. $(VENV_DIR)/bin/activate && \
+		pip install --upgrade pip && \
+		pip install pytest && \
+		if [ -f "tests/requirements.txt" ]; then \
+			pip install -r tests/requirements.txt; \
+		fi
+	@echo "Verifying installation..."
+	@. $(VENV_DIR)/bin/activate && python3 -m pytest --version || \
+		(echo "Failed to install pytest"; exit 1)
 
 # Run tests in the venv
 test: $(NAME) venv
