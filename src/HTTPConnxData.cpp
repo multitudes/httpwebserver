@@ -114,7 +114,7 @@ void HTTPConnxData::reset() {
   data = ConnectionData();
   cgiData = CGIData();
   urlMatcherData = URLMatcherData();
-  headers_sent = false;
+  headers_set = false;
   bytes_received = 0;
 
   // Close open file descriptors
@@ -479,7 +479,7 @@ string HTTPConnxData::formatConnectionData(const ConnectionData &data) {
 
   // Flags at the end
   oss << (data.headers_received ? " HDRS_RCVD" : "")
-      << (data.headers_sent ? " HDRS_SENT" : "")
+      << (data.headers_set ? " HDRS_SENT" : "")
       << (data.response_sent ? " RESP_SENT" : "");
 
   oss << "}";
@@ -551,7 +551,7 @@ string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
   // Response info
   oss << ", response_status=" << data.response_status;
   oss << ", bytes_sent=" << data.bytes_sent;
-  oss << ", headers_sent=" << (data.headers_sent ? "true" : "false");
+  oss << ", headers_set=" << (data.headers_set ? "true" : "false");
   oss << ", sending_response=" << (data.sending_response ? "true" : "false");
   oss << ", response_sent=" << (data.response_sent ? "true" : "false");
 

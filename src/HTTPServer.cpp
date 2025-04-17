@@ -175,20 +175,27 @@ int run(std::string configFile) {
         debug("CONN_FILE_REQUEST client fd %d", conn.client_fd);
         debuglog(YELLOW, "Handling write event for connection client fd %d",
                  conn.client_fd);
-        if (!conn.headers_sent) {
-          debug("Sending buffer headers for connection %d", conn.client_fd);
-          if (!send_headers(conn)) {
-            debug("Failed to send headers for connection %d", conn.client_fd);
+        if (!conn.headers_set) {
+          if (!conn.data.response.empty()) {
+            assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 &&
+                   "Headers must start with 'HTTP/1.1 ");
+            conn.data.buffer.assign(conn.data.response.begin(), 
+                                    conn.data.response.end());
+            conn.data.response.clear();
+            conn.headers_set = true;
+            debug("Added headers for connection %d", conn.client_fd);
+          } else {      
+            debug("Failed to set headers for connection %d", conn.client_fd);
             debuglog(RED, "Failed to send headers for connection %d",
                      conn.client_fd);
-            throw std::runtime_error("Failed to send headers for connection " +
-                                     Utils::to_string(conn.client_fd));
+            // throw std::runtime_error("Failed to send headers for connection " +
+            //                          Utils::to_string(conn.client_fd));
             SocketUtils::remove_from_poll(conn.client_fd);
             conn.reset();
             continue;
-          } // else
-          continue;
-        } else {
+          }
+        }
+        
           int result = send_file(conn);
           if (result == -1) {
             // Handle error during file transfer
@@ -209,7 +216,7 @@ int run(std::string configFile) {
             // More data to send, keep the connection open
             debug("More data to send for connection %d", conn.client_fd);
           }
-        }
+        
         continue;
       }
 
@@ -528,23 +535,6 @@ int run(std::string configFile) {
   return 0;
 }
 
-// Send HTTP response headers
-// maybe it should be somewhere else?
-bool send_headers(HTTPConnxData &conn) {
-  if (!conn.data.response.empty()) {
-    assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 &&
-           "Headers must start with 'HTTP/1.1 ");
-    if (::send(conn.client_fd, conn.data.response.c_str(),
-               conn.data.response.size(), 0) <= 0) {
-      perror("Failed to send headers");
-      return false;
-    }
-    conn.headers_sent = true;
-    return true;
-  }
-  return false;
-}
-
 /**
  * @brief read the file in buffers and send it to the client
  *
@@ -589,7 +579,7 @@ int send_file(HTTPConnxData &conn) {
 
     // Remove sent bytes from buffer
     if (bytes_sent > 0) {
-      conn.data.bytes_sent += bytes_sent;
+      conn.data.bytes_sent += static_cast<size_t>(bytes_sent);;
       conn.data.buffer.erase(conn.data.buffer.begin(),
                              conn.data.buffer.begin() + bytes_sent);
       debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,

@@ -165,7 +165,7 @@ namespace Responses {
         addStandardHeaders(conn, header, 200, conn.urlMatcherData.content_type, fileSize);
         
         conn.data.response = header;
-        conn.headers_sent = false;
+        conn.headers_set = false;
         conn.data.bytes_sent = 0;
         debug("File response headers prepared using stored content type: %s", conn.data.response.c_str());
         debuglog(GREEN, "File response headers prepared using stored content type: %s\n%s", 
@@ -202,7 +202,7 @@ namespace Responses {
       addStandardHeaders(conn, header, statusCode, conn.urlMatcherData.content_type, conn.file_size);
       
       conn.data.response = header;
-      conn.headers_sent = false;
+      conn.headers_set = false;
       conn.data.bytes_sent = 0;
       
       debuglog(GREEN, "URLMatcher: Custom error page prepared with status %d", statusCode);
