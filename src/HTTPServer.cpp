@@ -156,9 +156,9 @@ int run(std::string configFile) {
         debug("CONN_SIMPLE_RESPONSE fd %d", conn.client_fd);
         debuglog(YELLOW, "Connection fd %d in state SIMPLE_RESPONSE",
                  conn.client_fd);
-          if (!finishedSendingSimpleResponse(conn)) {
-            continue;
-          }
+        if (!finishedSendingSimpleResponse(conn)) {
+          continue;
+        }
       }
 
       /*    -------- FILE REQUEST -----------      */
@@ -271,7 +271,7 @@ int run(std::string configFile) {
           debug("POLLIN event on upload connection %d", conn.client_fd);
           debuglog(YELLOW, "Handling upload event for connection %d",
                    conn.client_fd);
-          
+
           if (!readFromClientForUpload(conn) || !writeUploadToFile(conn)) {
             continue;
           }
@@ -614,45 +614,10 @@ bool checkPollErrors(pollfd currentfd) {
     return true; // No events on this fd
   }
 
-  // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
-  // requested
-  if (currentfd.revents & POLLHUP) {
-    debuglog(RED, "Connection closed on fd %d ", currentfd.fd);
-    debug("Connection closed on fd %d ", currentfd.fd);
-    // Now safely get reference
-    HTTPConnxData &conn = getConnectionData(currentfd.fd);
-
-    if (currentfd.fd == conn.client_fd) {
-      debug("Closing client fd %d", currentfd.fd);
-      SocketUtils::remove_from_poll(currentfd.fd);
-      close(currentfd.fd);
-      lastActivityTime.erase(currentfd.fd);
-
-      debug("Erasing the connection %d from the map", currentfd.fd);
-      conn.reset();
-      HTTPServer::connections.erase(conn.client_fd);
-      return true;
-    }
-
-    if (currentfd.fd == conn.cgiData.child_stdin_pipe[1]) {
-      debug("POLLHUP on CGI stdin pipe %d", conn.cgiData.child_stdin_pipe[1]);
-      close(conn.cgiData.child_stdin_pipe[1]);
-      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
-      conn.cgiData.child_stdin_pipe[1] = -1; // Mark as closed
-    } else if (currentfd.fd == conn.cgiData.child_stdout_pipe[0]) {
-      debug("POLLHUP on CGI stdout pipe %d", conn.cgiData.child_stdout_pipe[0]);
-      close(conn.cgiData.child_stdout_pipe[0]);
-      SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
-      conn.cgiData.child_stdout_pipe[0] = -1; // Mark as closed
-    }
-
-    // Check if both pipes are closed, and reset the connection if needed
-    if (conn.cgiData.child_stdin_pipe[1] == -1 &&
-        conn.cgiData.child_stdout_pipe[0] == -1) {
-      debug("Both CGI pipes closed, resetting connection");
-      conn.reset();
-    }
+  if (SocketUtils::gotPollhupShouldSkip(currentfd)) {
+    return true;
   }
+  
 
   if (currentfd.revents & (POLLERR | POLLNVAL)) {
     debuglog(RED, "Error condition on fd %d", currentfd.fd);
@@ -740,7 +705,7 @@ void acceptNewClient(int server_fd) {
 
     // Get the local address of the accepted socket and print it
     // for debugging purposes
-    if (!printLocalAddress(client_fd)) {
+    if (!SocketUtils::printLocalAddress(client_fd)) {
       send_critical_error(client_fd, 500);
       debug("Failed to get local address");
       continue;
@@ -786,7 +751,7 @@ void setSendRecTimeout(int clientfd) {
   tv.tv_usec = 0;
   if (::setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
     debug("setsockopt SO_RCVTIMEO failed");
-    //   NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
+    send_critical_error(clientfd, 500);
     close(clientfd);
   }
 
@@ -794,7 +759,7 @@ void setSendRecTimeout(int clientfd) {
   tv.tv_sec = Constants::responseTimeout;
   if (::setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
     debug("setsockopt SO_SNDTIMEO failed"); // todo check if this works in cgi
-    //   NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
+    send_critical_error(clientfd, 500);
     close(clientfd);
   }
 }
@@ -812,42 +777,21 @@ bool maxConnectionsCheck(int clientfd) {
 
   if (pollfds.size() >= Constants::maxConnections) {
     debug("Maximum connections reached, rejecting new connection");
-    // NetUtils::sendErrorResponse(clientfd, 503, "Service Unavailable");
+    send_critical_error(clientfd, 503);
+    close(clientfd);
     return false;
   }
   return true;
 }
 
 /**
- * @brief Print the local address of the client
- *
- * @param clientfd The client socket file descriptor
- * @return bool True if the address was printed successfully, false otherwise
- *
- * The local address refers to the IP address and port number assigned to the
- * server's socket on the local machine. This is the address that the server
- * uses to listen for incoming connections from clients.
+ * 
  */
-bool printLocalAddress(int clientfd) {
-  struct sockaddr_in local_addr;
-  socklen_t addr_len = sizeof(local_addr);
-  if (::getsockname(clientfd, (struct sockaddr *)&local_addr, &addr_len) ==
-      -1) {
-    debug("[Server] getsockname error: %s\n", strerror(errno));
-    //   NetUtils::sendErrorResponse(clientfd, 500, "Internal Server Error");
-    return false;
-  }
-  uint16_t local_port = ntohs(local_addr.sin_port);
-  debug("[Server] Accepted new connection on client socket %d, port %d",
-        clientfd, local_port);
-  return true;
-}
-
 HTTPConnxData &getConnectionData(int fd) {
   // First try to find as normal connection
   std::map<int, HTTPConnxData>::iterator conn_it = connections.find(fd);
 
-  // If not found, check for CGI pipes
+  // If not found, check for its CGI pipes
   if (conn_it == connections.end()) {
     for (std::map<int, HTTPConnxData>::iterator it = connections.begin();
          it != connections.end(); ++it) {
@@ -857,16 +801,12 @@ HTTPConnxData &getConnectionData(int fd) {
         break;
       }
     }
-
-    // Still not found? Throw exception
+    // Still not found?
     if (conn_it == connections.end()) {
       debuglog(RED, "FD %d not found in connections", fd);
-      // SocketUtils::remove_from_poll(fd);
       close(fd);
       SocketUtils::remove_from_poll(fd);
-      // send_critical_error(fd, 500);
-      // debug("FD %d not found in connections", fd);
-      // throw std::runtime_error("FD not found in connections");
+      lastActivityTime.erase(fd);
     }
   }
 
@@ -971,7 +911,7 @@ bool writeUploadToFile(HTTPConnxData &conn) {
 bool finishedSendingSimpleResponse(HTTPConnxData &conn) {
   conn.data.response.reserve(BUFFER_SIZE);
   ssize_t bytes_sent = ::send(conn.client_fd, conn.data.response.c_str(),
-                        conn.data.response.size(), 0);
+                              conn.data.response.size(), 0);
   if (bytes_sent < 0) {
     perror("Failed to send simple response");
     SocketUtils::remove_from_poll(conn.client_fd);
@@ -984,13 +924,13 @@ bool finishedSendingSimpleResponse(HTTPConnxData &conn) {
     // defensive programming - handle partial send
     // Remove sent bytes from buffer
     conn.data.response.erase(conn.data.response.begin(),
-    conn.data.response.begin() + bytes_sent);
+                             conn.data.response.begin() + bytes_sent);
     debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
           conn.data.buffer.size());
     if (!conn.data.response.empty()) {
       debug("Still data in response buffer %zu", conn.data.response.size());
       return false;
-    } 
+    }
   }
   conn.reset();
   return true;

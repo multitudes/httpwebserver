@@ -7,8 +7,10 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <poll.h>
 
 namespace SocketUtils {
+
 void initialize();
 void setSignalHandlers();
 void handleSignal(int signal);
@@ -26,5 +28,7 @@ void remove_from_poll(int fd);
 void shutdownServer();
 const char *custom_inet_ntop(int af, const void *src, char *dst,
 	socklen_t size);
+bool printLocalAddress(int clientfd);
+bool gotPollhupShouldSkip(pollfd &currentfd);
 
 } // namespace SocketUtils

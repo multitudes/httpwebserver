@@ -397,4 +397,72 @@ errno = EAFNOSUPPORT;
 return NULL;
 }
 
+/**
+ * @brief Print the local address of the client
+ *
+ * @param clientfd The client socket file descriptor
+ * @return bool True if the address was printed successfully, false otherwise
+ *
+ * The local address refers to the IP address and port number assigned to the
+ * server's socket on the local machine. This is the address that the server
+ * uses to listen for incoming connections from clients.
+ */
+bool printLocalAddress(int clientfd) {
+  struct sockaddr_in local_addr;
+  socklen_t addr_len = sizeof(local_addr);
+  if (::getsockname(clientfd, (struct sockaddr *)&local_addr, &addr_len) ==
+      -1) {
+    debug("[Server] getsockname error: %s\n", strerror(errno));
+    return false;
+  }
+  uint16_t local_port = ntohs(local_addr.sin_port);
+  debug("[Server] Accepted new connection on client socket %d, port %d",
+        clientfd, local_port);
+  return true;
+}
+
+
+bool gotPollhupShouldSkip(pollfd &currentfd) {
+    // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
+  // requested
+  if (currentfd.revents & POLLHUP) {
+    debuglog(RED, "Connection closed on fd %d ", currentfd.fd);
+    debug("Connection closed on fd %d ", currentfd.fd);
+    // Now safely get reference
+    HTTPConnxData &conn = HTTPServer::getConnectionData(currentfd.fd);
+
+    if (currentfd.fd == conn.client_fd) {
+      debug("POLLHUP on client fd %d", currentfd.fd);
+      SocketUtils::remove_from_poll(currentfd.fd);
+      close(currentfd.fd);
+      HTTPServer::lastActivityTime.erase(currentfd.fd);
+      debug("Closing and erasing the connection %d from the map", currentfd.fd);
+      conn.reset();
+      HTTPServer::connections.erase(conn.client_fd);
+      return true;
+    }
+    
+    // non fatal pollhups
+    if (currentfd.fd == conn.cgiData.child_stdin_pipe[1]) {
+      debug("POLLHUP on CGI stdin pipe %d", conn.cgiData.child_stdin_pipe[1]);
+      close(conn.cgiData.child_stdin_pipe[1]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+      conn.cgiData.child_stdin_pipe[1] = -1; // Mark as closed
+    } else if (currentfd.fd == conn.cgiData.child_stdout_pipe[0]) {
+      debug("POLLHUP on CGI stdout pipe %d", conn.cgiData.child_stdout_pipe[0]);
+      close(conn.cgiData.child_stdout_pipe[0]);
+      SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
+      conn.cgiData.child_stdout_pipe[0] = -1; // Mark as closed
+    }
+
+    // Check if both pipes are closed, and reset the connection if needed
+    if (conn.cgiData.child_stdin_pipe[1] == -1 &&
+        conn.cgiData.child_stdout_pipe[0] == -1) {
+      debug("Both CGI pipes closed, resetting connection");
+      conn.reset();
+    }
+  }
+  return false;
+}
+
 } // namespace SocketUtils

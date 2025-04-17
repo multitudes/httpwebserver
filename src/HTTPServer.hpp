@@ -62,7 +62,6 @@ bool gotServerSocketAddNewConnx(int fd);
 void acceptNewClient(int server_fd);
 void setSendRecTimeout(int clientfd);
 bool maxConnectionsCheck(int clientfd);
-bool printLocalAddress(int clientfd);
 HTTPConnxData &getConnectionData(int fd);
 void send_critical_error(int fd, int code); 
 bool uploadComplete(HTTPConnxData &conn); 
