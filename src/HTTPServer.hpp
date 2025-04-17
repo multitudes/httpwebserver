@@ -70,5 +70,7 @@ bool writeUploadToFile(HTTPConnxData &conn);
 bool finishedSendingSimpleResponse(HTTPConnxData &conn);
 bool settingHeadersIfNeeded(HTTPConnxData &conn); 
 bool readNewDataFromFile(HTTPConnxData &conn);
+bool sendNewDataFromFileToClient(HTTPConnxData &conn);
+void checkCompletionConditions(HTTPConnxData &conn);
 
 } // namespace HTTPServer
