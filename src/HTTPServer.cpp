@@ -166,7 +166,7 @@ int run(std::string configFile) {
         debug("CONN_FILE_REQUEST client fd %d POLLOUT", conn.client_fd);
         debuglog(YELLOW, "CONN_FILE_REQUEST client fd %d POLLOUT",
                  conn.client_fd);
-        // 0. Add headers to the buffer to be sent if not yed sent
+
         if (!settingHeadersIfNeeded(conn)) {
           debug("Failed to set headers for connection %d", conn.client_fd);
           debuglog(RED, "Failed to send headers for connection %d",
@@ -174,18 +174,11 @@ int run(std::string configFile) {
           continue;
         }
 
-        if (!readNewDataFromFile(conn)) {
-          debuglog(RED, "Error during file transfer for connection %d",
-            conn.client_fd);
-          continue;
-        }
-
-        if (!sendNewDataFromFileToClient(conn)) {
+        if (!readNewDataFromFile(conn) || !sendNewDataFromFileToClient(conn)) {
           debuglog(YELLOW, "cound not send data to client for connection %d",
                    conn.client_fd);
           continue;
         }
-        
         checkCompletionConditions(conn);
         continue;
       }
@@ -199,19 +192,7 @@ int run(std::string configFile) {
           continue;
         }
 
-        if (pollfds[i].revents & POLLIN) {
-          debug("POLLIN event on upload connection %d", conn.client_fd);
-          debuglog(YELLOW, "Handling upload event for connection %d",
-                   conn.client_fd);
-
-          if (!readFromClientForUpload(conn) || !writeUploadToFile(conn)) {
-            continue;
-          }
-
-          if (uploadComplete(conn)) {
-            continue;
-          }
-        }
+        uploadLoop(conn, pollfds[i]);
       }
 
       /*    -------- CGI -----------      */
@@ -445,6 +426,8 @@ int run(std::string configFile) {
             }
           }
         }
+
+
 
       } // end of the state cgi check
 
@@ -861,7 +844,7 @@ bool settingHeadersIfNeeded(HTTPConnxData &conn) {
 
 /**
  * @brief Read new data from the file if the buffer is empty
- * 
+ *
  */
 bool readNewDataFromFile(HTTPConnxData &conn) {
   // 1. Read new data if buffer is empty (and file not fully read)
@@ -891,43 +874,43 @@ bool readNewDataFromFile(HTTPConnxData &conn) {
 }
 
 bool sendNewDataFromFileToClient(HTTPConnxData &conn) {
-       // 2. Send data from buffer (if any)
-       if (!conn.data.buffer.empty()) {
-        ssize_t bytes_sent = ::send(conn.client_fd, conn.data.buffer.data(),
-                                    conn.data.buffer.size(), 0);
+  // 2. Send data from buffer (if any)
+  if (!conn.data.buffer.empty()) {
+    ssize_t bytes_sent = ::send(conn.client_fd, conn.data.buffer.data(),
+                                conn.data.buffer.size(), 0);
 
-        if (bytes_sent < 0) {
-          if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            debug("Send would block, retrying later");
-            return false; // Poll will retry
-          }
-          perror("Failed to send data");
-          debuglog(RED, "Error during file transfer for connection %d",
-                   conn.client_fd);
-          SocketUtils::remove_from_poll(conn.client_fd);
-          lastActivityTime.erase(conn.client_fd);
-          conn.reset();
-          return false;
-        } else if (bytes_sent == 0) {
-          debug("No data sent to client %d", conn.client_fd);
-        }
-        // Remove sent bytes from buffer
-        if (bytes_sent > 0) {
-          conn.data.bytes_sent += static_cast<size_t>(bytes_sent);
-          conn.data.buffer.erase(conn.data.buffer.begin(),
-                                 conn.data.buffer.begin() + bytes_sent);
-          debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
-                conn.data.buffer.size());
-        }
+    if (bytes_sent < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        debug("Send would block, retrying later");
+        return false; // Poll will retry
       }
-      return true;
+      perror("Failed to send data");
+      debuglog(RED, "Error during file transfer for connection %d",
+               conn.client_fd);
+      SocketUtils::remove_from_poll(conn.client_fd);
+      lastActivityTime.erase(conn.client_fd);
+      conn.reset();
+      return false;
+    } else if (bytes_sent == 0) {
+      debug("No data sent to client %d", conn.client_fd);
+    }
+    // Remove sent bytes from buffer
+    if (bytes_sent > 0) {
+      conn.data.bytes_sent += static_cast<size_t>(bytes_sent);
+      conn.data.buffer.erase(conn.data.buffer.begin(),
+                             conn.data.buffer.begin() + bytes_sent);
+      debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
+            conn.data.buffer.size());
+    }
+  }
+  return true;
 }
 
 /**
  * @brief Check completion conditions for file transfer
- * 
+ *
  * @param conn The connection data
- * 
+ *
  * This function checks if the file transfer is complete. If the file
  * descriptor is -1 and the buffer is empty, it means the file has been
  * sent completely. In this case, it resets the connection and
@@ -943,6 +926,19 @@ void checkCompletionConditions(HTTPConnxData &conn) {
              "connection %d",
              conn.client_fd);
     conn.reset();
+  }
+}
+
+void uploadLoop(HTTPConnxData &conn, pollfd currentfd) {
+  if (currentfd.revents & POLLIN) {
+    debug("POLLIN event on upload connection %d", conn.client_fd);
+    debuglog(YELLOW, "Handling upload event for connection %d",
+             conn.client_fd);
+
+    if (!readFromClientForUpload(conn) || !writeUploadToFile(conn)) {
+      return;
+    }
+    uploadComplete(conn);
   }
 }
 

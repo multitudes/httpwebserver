@@ -72,5 +72,6 @@ bool settingHeadersIfNeeded(HTTPConnxData &conn);
 bool readNewDataFromFile(HTTPConnxData &conn);
 bool sendNewDataFromFileToClient(HTTPConnxData &conn);
 void checkCompletionConditions(HTTPConnxData &conn);
+void uploadLoop(HTTPConnxData &conn, pollfd currentfd);
 
 } // namespace HTTPServer
