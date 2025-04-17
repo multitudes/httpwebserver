@@ -437,11 +437,10 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
       close(currentfd.fd);
       HTTPServer::lastActivityTime.erase(currentfd.fd);
       debug("Closing and erasing the connection %d from the map", currentfd.fd);
-      conn.reset();
       HTTPServer::connections.erase(conn.client_fd);
       return true;
     }
-    
+
     // non fatal pollhups
     if (currentfd.fd == conn.cgiData.child_stdin_pipe[1]) {
       debug("POLLHUP on CGI stdin pipe %d", conn.cgiData.child_stdin_pipe[1]);
@@ -464,5 +463,44 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
   }
   return false;
 }
+
+bool gotPollerrShouldSkip(pollfd &currentfd) {
+  if (currentfd.revents & (POLLERR | POLLNVAL)) {
+    debuglog(RED, "Error condition on fd %d", currentfd.fd);
+    int error = 0;
+    socklen_t len = sizeof(error);
+    HTTPConnxData &conn = HTTPServer::getConnectionData(currentfd.fd);
+    if (::getsockopt(currentfd.fd, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
+      debug("Socket error on fd %d: %s", currentfd.fd, strerror(error));
+      // handle EPIPE (Broken pipe)
+      if (error == EPIPE) {
+        debug("Client disconnected (EPIPE) on fd %d", currentfd.fd);
+        debuglog(YELLOW, "Client disconnected (EPIPE) on fd %d", currentfd.fd);
+        if (currentfd.fd == conn.cgiData.child_stdin_pipe[1]) {
+          debug("Closing CGI stdin pipe %d", currentfd.fd);
+          close(conn.cgiData.child_stdin_pipe[1]);
+          SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+          conn.cgiData.child_stdin_pipe[1] = -1; // Mark as closed
+        } else if (currentfd.fd == conn.cgiData.child_stdout_pipe[0]) {
+          debug("Closing CGI stdout pipe %d", currentfd.fd);
+          close(conn.cgiData.child_stdout_pipe[0]);
+          SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
+          conn.cgiData.child_stdout_pipe[0] = -1; // Mark as closed
+        } else if (currentfd.fd == conn.client_fd) {
+          debug("Closing client fd %d", currentfd.fd);
+          SocketUtils::remove_from_poll(currentfd.fd);
+          close(currentfd.fd);
+          HTTPServer::lastActivityTime.erase(currentfd.fd);
+
+          debug("Erasing the connection %d from the map", currentfd.fd);
+          HTTPServer::connections.erase(conn.client_fd);
+        }
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 
 } // namespace SocketUtils
