@@ -62,7 +62,7 @@
             statusMessage.textContent = 'Button already clicked previously, Session still Active! Expiry reset';
 
             // Calculate expiry time (30 seconds from when the cookie was set)
-            const expiryTime = new Date().getTime() + 30 * 1000;
+            const expiryTime = new Date().getTime() + 15 * 1000;
             startCountdown(expiryTime);
         }
 

@@ -743,7 +743,7 @@ bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn) {
       conn.reset();
       return true;
     }
-    conn.data.bytes_sent += bytes_written;
+    conn.data.bytes_sent += static_cast<size_t>(bytes_written);
     conn.data.response.clear();
 
     if (uploadComplete(conn)) {
@@ -786,7 +786,7 @@ bool writeUploadToFile(HTTPConnxData &conn) {
     conn.reset();
     return false;
   }
-  conn.data.bytes_sent += bytes_written;
+  conn.data.bytes_sent += static_cast<size_t>(bytes_written);
   debug("Wrote %ld bytes to file", bytes_written);
   debug("total bytes sent %zu/%zu", conn.data.bytes_sent,
         conn.data.content_length);
