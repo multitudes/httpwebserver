@@ -27,7 +27,7 @@ enum ConnectionState {
   CONN_FILE_REQUEST,   // Serving a file
   CONN_SIMPLE_RESPONSE,
   CONN_UPLOAD, // Handling file upload
-  CONN_RECV_CHUNKS, // Receiving chunked data
+  CONN_RECV_CHUNKS // Receiving chunked data
 };
 
 /**

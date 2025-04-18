@@ -5,13 +5,13 @@
 
 namespace Parser {
 
-long long starttime = 0;
+long starttime = 0;
 
 void parse(std::string filename, std::vector<ServerData> &servers,
            std::map<uint16_t, ServerData *> &port_map_) {
   servers.clear();
   port_map_.clear();
-  long long starttime = getCurrentTimeMillis();
+  long starttime = getCurrentTimeMillis();
   debuglog(GREEN, "Parsing configuration file at time: %lld", starttime);
   std::ifstream configFile(filename.c_str());
   if (!configFile.is_open()) {
@@ -717,10 +717,10 @@ size_t findClosingBrace(const std::string &content, size_t start) {
   return std::string::npos;
 }
 
-long long getCurrentTimeMillis() {
+long getCurrentTimeMillis() {
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  return (long long)(tv.tv_sec) * 1000 + (long long)(tv.tv_usec) / 1000;
+  return (long)(tv.tv_sec) * 1000 + (long)(tv.tv_usec) / 1000;
 }
 
 void debugprintConfigs(std::vector<ServerData> &servers,

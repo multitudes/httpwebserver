@@ -78,7 +78,7 @@ int run(std::string configFile) {
   while (true) {
 
     // when autoreload is 1 then reload the config file
-    long long currentTime = Parser::getCurrentTimeMillis();
+    long currentTime = Parser::getCurrentTimeMillis();
     if (Constants::autoReload) {
       if (!reload(configFile, currentTime)) {
         exit(EXIT_FAILURE);
@@ -240,6 +240,7 @@ int run(std::string configFile) {
                 debuglog(YELLOW, "Closing write end of pipe");
                 SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 close(conn.cgiData.child_stdin_pipe[1]);
+                conn.cgiData.child_stdin_pipe[1] = -1;
                 conn.cgiData.is_receiving = false;
                 conn.cgiData.is_sending = true;
                 conn.cgiData.buffer.clear();
@@ -524,7 +525,7 @@ void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
  * 
  * Used when we set the autoreload option in the config file
  */
-bool reload(string configFile, long long currentTime) {
+bool reload(string configFile, long currentTime) {
   if (currentTime - Parser::starttime > 5000) {
     debuglog(GREEN, "Reloading configuration file %s\n\n", configFile.c_str());
     Parser::starttime = currentTime;

@@ -29,6 +29,11 @@ In the same way I can send malformed requests and see how the server responds.
 echo -e "\r\n\r\na" | nc localhost 4243
 ```
 
+For a POST
+```
+echo -e "POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 3\r\n\r\na=1" | nc localhost 4243
+```
+
 ## Googletest
 
 For this project we will be using the Googletest framework.

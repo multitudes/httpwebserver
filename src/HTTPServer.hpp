@@ -55,7 +55,7 @@ void createServerSockets(const vector<ServerData> &configs,
                          vector<int> &serverSockets);
 void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
                       vector<ServerData> &configs_);
-bool reload(string configFile, long long currentTime);
+bool reload(string configFile, long currentTime);
 bool checkPollErrors(pollfd fd);
 bool gotServerSocketAddNewConnx(int fd);
 void acceptNewClient(int server_fd);
