@@ -206,7 +206,7 @@ struct ConnectionData {
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_set(false), sending_response(false), response_sent(false),
-          parse_status(PARSE_INCOMPLETE), 
+          parse_status(HEADERS_PARSE_INCOMPLETE), 
           session_id(""), has_session(false), 
           session_created(0), session_last_accessed(0), session_data() {
         memset(client_ip, 0, sizeof(client_ip)); 

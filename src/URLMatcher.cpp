@@ -58,6 +58,7 @@ string urlDecode(const string& encoded) {
  * complete
  */
 bool receiveAndParseRequest(HTTPConnxData &conn) {
+  conn.urlMatcherData.config = Config::getConfigByPort(conn.data.port);
   debug("checking the request");
   char buffer[BUFFER_SIZE + 1];
 
@@ -91,21 +92,21 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
 
   // Remove old chunking code and just handle headers
   switch (conn.parseHeaders(conn)) {
-  case PARSE_SUCCESS:
+  case HEADERS_PARSE_SUCCESS:
     debuglog(YELLOW, "Headers parsed successfully");
     conn.data.headers_received = true;
     conn.urlMatcherData.target = urlDecode(conn.data.target);
     debuglog(YELLOW, "Decoded target path: '%s'", conn.data.target.c_str());
     break;
-  case PARSE_INCOMPLETE:
+  case HEADERS_PARSE_INCOMPLETE:
     debuglog(YELLOW, "Headers incomplete");
     conn.state = CONN_PARSING_HEADER;
     return false;
-  case PARSE_ERROR:
+  case HEADERS_PARSE_ERROR:
     debuglog(RED, "Error parsing headers");
-    HTTPServer::send_critical_error(conn.client_fd, 400);
+    debug("Error parsing headers");
+    Responses::htmlErrorResponse(conn, 400); // Bad Request
     conn.state = CONN_SIMPLE_RESPONSE;
-    debuglog(RED, "Error parsing headers");
     return false;
   }
 
@@ -121,7 +122,6 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
  * complete
  */
 bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
-  conn.urlMatcherData.config = Config::getConfigByPort(conn.data.port);
   if (!conn.urlMatcherData.config) {
     debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
     Responses::htmlErrorResponse(conn, 500); // Internal Server Error

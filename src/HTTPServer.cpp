@@ -166,14 +166,12 @@ int run(std::string configFile) {
         debug("CONN_FILE_REQUEST client fd %d POLLOUT", conn.client_fd);
         debuglog(YELLOW, "CONN_FILE_REQUEST client fd %d POLLOUT",
                  conn.client_fd);
-
         if (!settingHeadersIfNeeded(conn)) {
           debug("Failed to set headers for connection %d", conn.client_fd);
           debuglog(RED, "Failed to send headers for connection %d",
                    conn.client_fd);
           continue;
         }
-
         if (!readNewDataFromFile(conn) || !sendNewDataFromFileToClient(conn)) {
           debuglog(YELLOW, "cound not send data to client for connection %d",
                    conn.client_fd);
@@ -187,11 +185,9 @@ int run(std::string configFile) {
       if (conn.state == CONN_UPLOAD) {
         debuglog(YELLOW, "Connection fd %d in state UPLOAD", conn.client_fd);
         debug("CONN_UPLOAD fd %d", conn.client_fd);
-
         if (writingFirstPayloadCompletesUpload(conn)) {
           continue;
         }
-
         uploadLoop(conn, pollfds[i]);
       }
 
@@ -206,8 +202,8 @@ int run(std::string configFile) {
         debug("CGI fd in %d", conn.cgiData.child_stdin_pipe[1]);
         debug("CGI fd out %d", conn.cgiData.child_stdout_pipe[0]);
 
-        // check if the child process is pollin and i have data in buffer from
-        // the preparecgi function
+        // check if the child process is pollout ready to be written to  
+        // and i have data in buffer from the preparecgi function
         if (conn.cgiData.is_receiving && !conn.cgiData.buffer.empty()) {
           debug("cgiData is receiving");
           for (size_t j = 0; j < pollfds.size(); j++) {
@@ -223,11 +219,16 @@ int run(std::string configFile) {
               ssize_t bytes_written = ::write(conn.cgiData.child_stdin_pipe[1],
                                               conn.cgiData.buffer.c_str(),
                                               conn.cgiData.buffer.size());
+              if (pollfds[i].revents & POLLHUP) {
+                debug("client closed connection - giving EOF to CGI stdin");
+              }
+
               if (bytes_written < 0) {
                 perror("Failed to write to CGI stdin");
                 SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.child_stdout_pipe[0]);
+                lastActivityTime.erase(conn.client_fd);
                 conn.reset();
                 break;
               } else if (bytes_written < BUFFER_SIZE - conn.data.headers_end) {
@@ -261,6 +262,7 @@ int run(std::string configFile) {
                 SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.child_stdout_pipe[0]);
+                lastActivityTime.erase(conn.client_fd);
                 conn.reset();
                 break;
               }
@@ -270,7 +272,7 @@ int run(std::string configFile) {
             // so i wrote the remaining data to the cgi stdin which i got after
             // the headers... now i read from client again
           }
-          // continue;
+
         } else if (conn.cgiData.is_receiving && current_fd == conn.client_fd &&
                    (pollfds[i].revents & POLLIN)) {
           // first read from the client
@@ -291,6 +293,7 @@ int run(std::string configFile) {
                 SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.child_stdout_pipe[0]);
+                lastActivityTime.erase(conn.client_fd);
                 conn.reset();
 
                 break;
@@ -321,6 +324,7 @@ int run(std::string configFile) {
                       conn.cgiData.child_stdin_pipe[1]);
                   SocketUtils::remove_from_poll(
                       conn.cgiData.child_stdout_pipe[0]);
+                  lastActivityTime.erase(conn.client_fd);
                   conn.reset();
                   break;
                 } else if (bytes_written <
@@ -357,6 +361,7 @@ int run(std::string configFile) {
                       conn.cgiData.child_stdin_pipe[1]);
                   SocketUtils::remove_from_poll(
                       conn.cgiData.child_stdout_pipe[0]);
+                  lastActivityTime.erase(conn.client_fd);
                   conn.reset();
                   break;
                 }
@@ -387,6 +392,7 @@ int run(std::string configFile) {
                 SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.child_stdout_pipe[0]);
+                lastActivityTime.erase(conn.client_fd);
                 conn.reset();
                 // todo send the error to the client
                 break;
@@ -408,6 +414,7 @@ int run(std::string configFile) {
               if (bytes_written < 0) {
                 perror("Failed to send data to client");
                 close(conn.cgiData.child_stdout_pipe[0]);
+                lastActivityTime.erase(conn.client_fd);
                 conn.reset();
                 continue;
               }
@@ -419,6 +426,7 @@ int run(std::string configFile) {
                 SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.child_stdout_pipe[0]);
+                lastActivityTime.erase(conn.client_fd);
                 conn.reset();
               }
 
@@ -453,7 +461,6 @@ void send_critical_error(int fd, int code) {
                          "Content-Length: 0\r\n"
                          "\r\n";
   debug("Sending the error response %s", response.c_str());
-  debug("closing the connection %d", fd);
   // i dont check for errors here because the connection will be closed
   ::send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
 }
@@ -488,6 +495,11 @@ void createServerSockets(const vector<ServerData> &configs,
   }
 }
 
+/**
+ * @brief Reload the configuration file called by reload
+ * 
+ * It is a throwable function 
+ */
 void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
                       vector<ServerData> &configs_) {
   SocketUtils::shutdownServer();
@@ -506,8 +518,12 @@ void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
            Config::getServerData().size());
 }
 
+/**
+ * @brief Reload the configuration file if needed
+ * 
+ * Used when we set the autoreload option in the config file
+ */
 bool reload(string configFile, long long currentTime) {
-
   if (currentTime - Parser::starttime > 5000) {
     debuglog(GREEN, "Reloading configuration file %s\n\n", configFile.c_str());
     Parser::starttime = currentTime;
@@ -531,12 +547,8 @@ bool checkPollErrors(pollfd currentfd) {
   if (!(currentfd.revents & (POLLIN | POLLOUT))) {
     return true; // No events on this fd
   }
-
-  if (SocketUtils::gotPollhupShouldSkip(currentfd)) {
-    return true;
-  }
-
-  if (SocketUtils::gotPollerrShouldSkip(currentfd)) {
+  if (SocketUtils::gotPollhupShouldSkip(currentfd) || \
+      SocketUtils::gotPollerrShouldSkip(currentfd)) {
     return true;
   }
 
@@ -712,6 +724,7 @@ HTTPConnxData &getConnectionData(int fd) {
 bool uploadComplete(HTTPConnxData &conn) {
   if (conn.data.bytes_sent >= conn.data.content_length) {
     debug("Upload complete");
+    lastActivityTime.erase(conn.client_fd);
     conn.reset();
     Responses::createResponse(conn, "text/plain", "File uploaded successfully.",
                               201);
@@ -740,6 +753,7 @@ bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn) {
     if (bytes_written <= 0) {
       perror(bytes_written < 0 ? "Failed to write to file"
                                : "No data written to file");
+      lastActivityTime.erase(conn.client_fd);
       conn.reset();
       return true;
     }
@@ -767,6 +781,7 @@ bool readFromClientForUpload(HTTPConnxData &conn) {
     }
     debug("%s", strerror(errno));
     perror("recv failed during upload");
+    lastActivityTime.erase(conn.client_fd);
     conn.reset();
     return false;
   }
@@ -816,9 +831,13 @@ bool finishedSendingSimpleResponse(HTTPConnxData &conn) {
     if (!conn.data.response.empty()) {
       debug("Still data in response buffer %zu", conn.data.response.size());
       return false;
+    } else {
+      debug("Finished sending response to client %d", conn.client_fd);
+      conn.state = CONN_INCOMING;
+      lastActivityTime.erase(conn.client_fd);
+      conn.reset();
     }
   }
-  conn.reset();
   return true;
 }
 

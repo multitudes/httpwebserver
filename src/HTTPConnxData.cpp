@@ -187,14 +187,14 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
   std::istringstream lineStream(line);
   if (!(lineStream >> data.method >> data.target >> data.version)) {
     debuglog(RED, "Failed to parse request line");
-    return PARSE_ERROR;
+    return HEADERS_PARSE_ERROR;
   }
 
   // Validate HTTP version
   if (data.version != "HTTP/1.1" && data.version != "HTTP/1.0") {
     debuglog(RED, "Unsupported HTTP version: %s", data.version.c_str());
     debug("Unsupported HTTP version: %s", data.version.c_str());
-    return PARSE_ERROR;
+    return HEADERS_PARSE_ERROR;
   }
 
   // Validate method
@@ -208,7 +208,7 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
   }
   if (!valid) {
     debuglog(RED, "Invalid HTTP method: %s", data.method.c_str());
-    return PARSE_ERROR;
+    return HEADERS_PARSE_ERROR;
   }
 
   // Parse target into path and query string
@@ -235,14 +235,14 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
     }
   }
 
-  return PARSE_SUCCESS;
+  return HEADERS_PARSE_SUCCESS;
 }
 
 ParseStatus HTTPConnxData::parseHeaderLine(const string &line) {
   size_t delimiter = line.find(":");
   if (delimiter == string::npos) {
     debugcolor(RED, "Invalid header line: %s", line.c_str());
-    return PARSE_ERROR;
+    return HEADERS_PARSE_ERROR;
   }
 
   string key = trim(line.substr(0, delimiter));
@@ -253,7 +253,7 @@ ParseStatus HTTPConnxData::parseHeaderLine(const string &line) {
   }
 
   data.headers[key] = value;
-  return PARSE_SUCCESS;
+  return HEADERS_PARSE_SUCCESS;
 }
 
 ParseStatus HTTPConnxData::parseCookies(const string &cookieHeader) {
@@ -270,7 +270,7 @@ ParseStatus HTTPConnxData::parseCookies(const string &cookieHeader) {
     string cookieValue = trim(cookiePair.substr(cookieDelimiter + 1));
     data.cookies[cookieName] = cookieValue;
   }
-  return PARSE_SUCCESS;
+  return HEADERS_PARSE_SUCCESS;
 }
 
 ParseStatus HTTPConnxData::extractPortFromHost(string &host,
@@ -279,7 +279,7 @@ ParseStatus HTTPConnxData::extractPortFromHost(string &host,
 
   if (colon_pos == string::npos) {
     debuglog(RED, "No port specified in Host header");
-    return PARSE_ERROR;
+    return HEADERS_PARSE_ERROR;
   }
 
   // Extract port substring
@@ -293,18 +293,18 @@ ParseStatus HTTPConnxData::extractPortFromHost(string &host,
   // Validate conversion
   if (*endptr != '\0') {
     debuglog(RED, "Port contains non-numeric characters: %s", port_str.c_str());
-    return PARSE_ERROR;
+    return HEADERS_PARSE_ERROR;
   }
 
   // Validate range
   if (port_long < 1 || port_long > 65535) { // Port 0 is reserved
     debuglog(RED, "Port out of range (1-65535): %ld", port_long);
-    return PARSE_ERROR;
+    return HEADERS_PARSE_ERROR;
   }
 
   port = static_cast<uint16_t>(port_long);
   debuglog(YELLOW, "Extracted port: %u", port);
-  return PARSE_SUCCESS;
+  return HEADERS_PARSE_SUCCESS;
 }
 
 ParseStatus HTTPConnxData::processContentHeaders() {
@@ -312,13 +312,13 @@ ParseStatus HTTPConnxData::processContentHeaders() {
   if (!checkHeader(*this, "Host", data.host)) {
     debug("Missing Host header");
     debuglog(RED, "Missing Host header");
-    return PARSE_ERROR;
+    return HEADERS_PARSE_ERROR;
   }
 
   // Extract port (mandatory )
-  if (extractPortFromHost(data.host, data.port) != PARSE_SUCCESS) {
+  if (extractPortFromHost(data.host, data.port) != HEADERS_PARSE_SUCCESS) {
     debug("POrt extraction failed");
-    return PARSE_ERROR;
+    return HEADERS_PARSE_ERROR;
   }
 
   // Process Content-Length
@@ -347,7 +347,7 @@ ParseStatus HTTPConnxData::processContentHeaders() {
       size_t boundary_pos = content_type.find("boundary=");
       if (boundary_pos == string::npos) {
         debuglog(RED, "No boundary found in multipart form data");
-        return PARSE_ERROR;
+        return HEADERS_PARSE_ERROR;
       }
 
       boundary_pos += 9; // Skip "boundary="
@@ -391,20 +391,20 @@ ParseStatus HTTPConnxData::processContentHeaders() {
     }
   }
 
-  return PARSE_SUCCESS;
+  return HEADERS_PARSE_SUCCESS;
 }
 
 ParseStatus HTTPConnxData::parseHeaders(HTTPConnxData &conn) {
   ConnectionData &data = conn.data;
   if (data.request.empty()) {
     debug("Empty request received");
-    return PARSE_INCOMPLETE;
+    return HEADERS_PARSE_INCOMPLETE;
   }
 
   data.headers_end = data.request.find("\r\n\r\n");
   if (data.headers_end == string::npos) {
     debug("Headers not complete");
-    return PARSE_INCOMPLETE;
+    return HEADERS_PARSE_INCOMPLETE;
   }
 
   data.headers_end += 4; // Skip \r\n\r\n
@@ -414,16 +414,16 @@ ParseStatus HTTPConnxData::parseHeaders(HTTPConnxData &conn) {
   string line;
 
   // Parse request line
-  if (!std::getline(iss, line) || parseRequestLine(line) != PARSE_SUCCESS) {
-    return PARSE_ERROR;
+  if (!std::getline(iss, line) || parseRequestLine(line) != HEADERS_PARSE_SUCCESS) {
+    return HEADERS_PARSE_ERROR;
   }
 
   // Parse headers
   while (std::getline(iss, line)) {
     if (line.empty() || line == "\r")
       break;
-    if (parseHeaderLine(line) != PARSE_SUCCESS) {
-      return PARSE_ERROR;
+    if (parseHeaderLine(line) != HEADERS_PARSE_SUCCESS) {
+      return HEADERS_PARSE_ERROR;
     }
   }
 

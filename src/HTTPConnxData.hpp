@@ -33,7 +33,7 @@ enum ConnectionState {
 /**
  * @brief Tracks the state of the header parsing
  */
-enum ParseStatus { PARSE_SUCCESS, PARSE_INCOMPLETE, PARSE_ERROR };
+enum ParseStatus { HEADERS_PARSE_SUCCESS, HEADERS_PARSE_INCOMPLETE, HEADERS_PARSE_ERROR };
 
 /**
  * @brief Connection state struct
@@ -80,7 +80,7 @@ struct HTTPConnxData {
     bool headers_set;
     bool sending_response;
     bool response_sent;
-    enum ParseStatus { PARSE_SUCCESS, PARSE_INCOMPLETE, PARSE_ERROR };
+    enum ParseStatus { HEADERS_PARSE_SUCCESS, HEADERS_PARSE_INCOMPLETE, HEADERS_PARSE_ERROR };
     ParseStatus parse_status;
 
     // Session management for Cookies -------------------Rufus
@@ -97,7 +97,7 @@ struct HTTPConnxData {
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_set(false), sending_response(false), response_sent(false),
-          parse_status(PARSE_INCOMPLETE), session_id(""),
+          parse_status(HEADERS_PARSE_INCOMPLETE), session_id(""),
           has_session(false), // for session management
           session_created(0), session_last_accessed(0),
           session_data() // for session management
