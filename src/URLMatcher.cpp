@@ -88,40 +88,12 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
                            static_cast<std::string::size_type>(bytes_read));
   debuglog(YELLOW, "URLMatcher: Received %lu bytes for fd %d", bytes_read,
            conn.client_fd);
-  if (conn.data.headers_received && conn.data.chunked) {
-    debuglog(YELLOW, "URLMatcher: Chunked Request so far: %s",
-             conn.data.request.c_str());
-    // check if the buffer contains the end of chunking
-    if (conn.data.request.find("0\r\n\r\n", 0) != string::npos) {
-      debug("End of chunking - Request complete");
-      // dechunk the data
-      std::string chunked_string = conn.data.request.substr(conn.data.headers_end);
-      string dechunked = conn.dechunkData(chunked_string);
-      conn.data.chunked = false;
-      debug("Dechunked data: %s", dechunked.c_str());
 
-  
-      conn.data.headers["Content-Length"] =
-          Utils::to_string(dechunked.length());
-      conn.data.content_length = dechunked.length();
-      debuglog(YELLOW, "Content length after dechunking: %zu", conn.data.content_length);
-      debug("Content lenght after dechunking %zu",
-            conn.data.content_length);
-      conn.data.headers.erase("Transfer-Encoding"); // Remove chunked header
-      
-      return true;
-    } else {
-      debug("Still reading chunked data");
-      conn.state = CONN_RECV_CHUNKS;
-      
-      return false; // Still reading chunked data
-    }
-  }
+  // Remove old chunking code and just handle headers
   switch (conn.parseHeaders(conn)) {
   case PARSE_SUCCESS:
     debuglog(YELLOW, "Headers parsed successfully");
     conn.data.headers_received = true;
-    // URL decode the target path
     conn.urlMatcherData.target = urlDecode(conn.data.target);
     debuglog(YELLOW, "Decoded target path: '%s'", conn.data.target.c_str());
     break;
@@ -529,15 +501,49 @@ bool handleCookieUpdateRequest(HTTPConnxData &conn)
     return false;
 }
 
+bool handleChunkedData(HTTPConnxData &conn) {
+  if (!conn.data.headers_received || !conn.data.chunked) {
+      return true;  // Not chunked, continue processing
+  }
+
+  debuglog(YELLOW, "Processing chunked data...");
+  
+  // Check for end marker
+  if (conn.data.request.find("0\r\n\r\n") == string::npos) {
+      debuglog(YELLOW, "Still reading chunked data");
+      conn.state = CONN_RECV_CHUNKS;
+      return false;
+  }
+
+  // Get data after headers
+  string chunked_string = conn.data.request.substr(conn.data.headers_end);
+  string dechunked = conn.dechunkData(chunked_string);
+  
+  // Replace the request payload with dechunked data
+  conn.data.request = conn.data.request.substr(0, conn.data.headers_end) + dechunked;
+  
+  // Update headers and state
+  conn.data.chunked = false;
+  conn.data.headers["Content-Length"] = Utils::to_string(dechunked.length());
+  conn.data.content_length = dechunked.length();
+  conn.data.headers.erase("Transfer-Encoding");
+  
+  debuglog(GREEN, "Successfully dechunked data (size: %zu)", dechunked.length());
+  return true;
+}
+
 /**
  * @brief Validates incoming request, handles file/directory serving.
  *        Prioritizes index file check, then autoindex check, then listing.
  * @param conn The connection data structure.
  */
 void validateRequest(HTTPConnxData &conn) {
-
     if (!receiveAndParseRequest(conn))
         return; // Request handling complete or failed
+
+    // Handle chunked data if present
+    if (!handleChunkedData(conn))
+        return; // Still receiving chunks
 
     // Handle cookie update requests first
     if (handleCookieUpdateRequest(conn)) {
@@ -718,5 +724,7 @@ void validateRequest(HTTPConnxData &conn) {
       }
     } // end GET
 } // end of validateRequest
+
+
 
 } // end of namespace URLMatcher

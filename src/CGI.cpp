@@ -33,40 +33,8 @@ int prepareCGI(HTTPConnxData &conn) {
 
   setCGIEnv(conn);
 
+  // Just get the request body - chunking already handled in URLMatcher
   conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
-  // check for chunking
-  if (conn.data.chunked == true) {
-    // handle chunked data first
-    // collect them in the one place and
-    //  write in the end when getting the end
-    debug("Chunked transfer encoding detected\n");
-    debug("Buffer: %s", conn.cgiData.buffer.c_str());
- 
-    // check if the buffer contains the end of chunking
-    if (conn.cgiData.buffer.find("0\r\n\r\n", 0) != string::npos) {
-      debug("End of chunking - Request complete");
-      // dechunk the data
-      conn.dechunkDataCGI();
-      conn.data.chunked = false;
-      debug("Dechunked data: %s", conn.cgiData.buffer.c_str());
-      // set the environment variable
-      conn.cgiData.env["CONTENT_LENGTH"] = Utils::to_string(conn.cgiData.buffer.size());
-      debug("Set content length to %s",
-            conn.cgiData.env["CONTENT_LENGTH"].c_str());
-      conn.data.headers["Content-Length"] =
-          Utils::to_string(conn.cgiData.buffer.length());
-          conn.data.content_length = conn.cgiData.buffer.length();
-      conn.data.headers.erase("Transfer-Encoding"); // Remove chunked header
-    } else {
-      debug("Still reading chunked data");
-      conn.state = CONN_INCOMING;
-      
-      return 0; // Still reading chunked data
-    }
-  }
-
-
-
 
   // Create pipes
   debug("create pipes");
