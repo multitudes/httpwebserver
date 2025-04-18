@@ -1,4 +1,5 @@
 #include "CGI.hpp"
+#include "Config.hpp"
 #include "HTTPConnxData.hpp"
 #include "HTTPServer.hpp"
 #include "URLMatcher.hpp"
@@ -63,7 +64,7 @@ int prepareCGI(HTTPConnxData &conn) {
     // Child process
 
     // Close unused pipe ends
-    ::close(conn.cgiData.child_stdin_pipe[1]);  // Close write end of stdin pipe
+    ::close(conn.cgiData.child_stdin_pipe[1]); // Close write end of stdin pipe
     ::close(conn.cgiData.child_stdout_pipe[0]); // Close read end of stdout pipe
 
     // Redirect stdin and stdout
@@ -113,8 +114,7 @@ int prepareCGI(HTTPConnxData &conn) {
   } else {
     // Parent process
     // Close unused pipe ends
-    ::close(
-        conn.cgiData.child_stdout_pipe[1]);    // Close write end of stdout pipe
+    ::close(conn.cgiData.child_stdout_pipe[1]);    // Close write end of stdout pipe
     ::close(conn.cgiData.child_stdin_pipe[0]); // Close read end of stdin pipe
 
     // assign the fds to the connection data
@@ -145,9 +145,20 @@ int prepareCGI(HTTPConnxData &conn) {
 }
 
 void setCGIEnv(HTTPConnxData &conn) {
+  // get the config for the connection
+  const ServerData *conf = Config::getConfigByPort(conn.data.port);
+  if (conf == NULL) {
+    debug("No config found for port %d", conn.data.port);
+    throw std::runtime_error(
+        "No config found for port " + Utils::to_string(conn.data.port));
+    return;
+  }
+
   conn.cgiData.env.clear();
   // Set environment variables for CGI - some are already init to defaults
   // int he struct constructor - ex REMOTE_USER which we dont use
+  conn.cgiData.env["UPLOAD_DIR"] = conf->cgiData.upload_dir;
+  debug("set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
   conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
   debug("set remote host to %s", conn.cgiData.env["REMOTE_HOST"].c_str());
   // for the body of the request if chunked
@@ -202,11 +213,6 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set remote user to %s", conn.cgiData.env["REMOTE_USER"].c_str());
   conn.cgiData.env["AUTH_TYPE"] = "N/A";
   debug("set auth type to %s", conn.cgiData.env["AUTH_TYPE"].c_str());
-  // this is extra
-  // conn.cgiData.env["UPLOAD_DIR"] =
-  // conn.urlMatcherData.config->cgiData.upload_dir;
-  conn.cgiData.env["UPLOAD_DIR"] = "html/www1/upload";
-  debug("set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
 }
 
 std::string ensureTrailinSlash(std::string path) {

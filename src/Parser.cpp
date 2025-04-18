@@ -12,7 +12,7 @@ void parse(std::string filename, std::vector<ServerData> &servers,
   servers.clear();
   port_map_.clear();
   long starttime = getCurrentTimeMillis();
-  debuglog(GREEN, "Parsing configuration file at time: %lld", starttime);
+  debuglog(GREEN, "Parsing configuration file at time: %ld", starttime);
   std::ifstream configFile(filename.c_str());
   if (!configFile.is_open()) {
     throw std::runtime_error("Failed to open config file: " + filename);

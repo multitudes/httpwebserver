@@ -79,11 +79,11 @@ int run(std::string configFile) {
 
     // when autoreload is 1 then reload the config file
     long currentTime = Parser::getCurrentTimeMillis();
-    if (Constants::autoReload) {
-      if (!reload(configFile, currentTime)) {
-        exit(EXIT_FAILURE);
-      }
-    }
+    // if (Constants::autoReload) {
+    //   if (!reload(configFile, currentTime)) {
+    //     exit(EXIT_FAILURE);
+    //   }
+    // }
 
     int poll_result =
         poll(&pollfds[0], static_cast<nfds_t>(pollfds.size()), 10000);
@@ -208,7 +208,15 @@ int run(std::string configFile) {
           debug("cgiData is receiving");
           for (size_t j = 0; j < pollfds.size(); j++) {
             // and the cgi process is ready to be read from
-
+            // if (pollfds[j].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            //   perror("Failed to write to CGI stdin");
+            //   SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+            //   SocketUtils::remove_from_poll(
+            //       conn.cgiData.child_stdout_pipe[0]);
+            //   lastActivityTime.erase(conn.client_fd);
+            //   conn.reset();
+            //   break;
+            // }
             if (pollfds[j].fd == conn.cgiData.child_stdin_pipe[1] &&
                 (pollfds[j].revents & POLLOUT)) {
               debug("POLLOUT event on CGI stdin fd %d",
@@ -219,9 +227,9 @@ int run(std::string configFile) {
               ssize_t bytes_written = ::write(conn.cgiData.child_stdin_pipe[1],
                                               conn.cgiData.buffer.c_str(),
                                               conn.cgiData.buffer.size());
-              if (pollfds[i].revents & POLLHUP) {
-                debug("client closed connection - giving EOF to CGI stdin");
-              }
+              // if (pollfds[i].revents & POLLHUP) {
+              //   debug("client closed connection - giving EOF to CGI stdin");
+              // }
 
               if (bytes_written < 0) {
                 perror("Failed to write to CGI stdin");
@@ -280,6 +288,15 @@ int run(std::string configFile) {
           debug("POLLIN event on client fd %d", conn.client_fd);
           for (size_t j = 0; j < pollfds.size(); j++) {
             // and the cgi process is ready to be read from
+            // if (pollfds[j].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            //   perror("Failed to write to CGI stdin");
+            //   SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+            //   SocketUtils::remove_from_poll(
+            //       conn.cgiData.child_stdout_pipe[0]);
+            //   lastActivityTime.erase(conn.client_fd);
+            //   conn.reset();
+            //   break;
+            // }
             if (pollfds[j].fd == conn.cgiData.child_stdin_pipe[1] &&
                 (pollfds[j].revents & POLLOUT)) {
               debug("POLLOUT event on CGI stdin fd %d",
