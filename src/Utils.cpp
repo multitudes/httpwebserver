@@ -1,8 +1,10 @@
 #include "Utils.hpp"
 #include <cstring>
 
-using string;
+using std::string;
+
 namespace Utils {
+
 /**
  * @brief [Debug func] Convert a binary buffer to a hex string
  *
@@ -38,7 +40,6 @@ char *binToHex(const unsigned char *input, size_t len) {
   return (result);
 }
 
-
 string trim(const string &str) {
   string trimmed = str;
   string whitespaces = " \r\n\t";
@@ -50,4 +51,4 @@ string trim(const string &str) {
   return trimmed.substr(start, end - start + 1);
 }
 
-}
+} // namespace Utils

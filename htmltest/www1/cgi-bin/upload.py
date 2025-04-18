@@ -8,12 +8,12 @@ import mimetypes
 
 cgitb.enable()  # Enable detailed error messages
 
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', './www/uploads')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', './http/www1/upload')
 
 def main():
     try:
 		# Get the upload directory from environment variable
-        UPLOAD_DIR = os.getenv('UPLOAD_DIR')
+        # UPLOAD_DIR = os.getenv('UPLOAD_DIR')
         if not os.path.exists(UPLOAD_DIR):
             os.makedirs(UPLOAD_DIR)
         # cgi,maxlen = 100 * 1024 * 1024
@@ -38,7 +38,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>No file uploaded.</p>
-    <form action="/cgi-bin/fileupload.py" method="get"><button type="submit">Go Back</button></form>
+    <form action="/cgi/fileupload.py" method="get"><button type="submit">Go Back</button></form>
 </body>
 </html>
             """
@@ -76,7 +76,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>Invalid file type. Only PDF, JPEG, and PNG files are allowed.</p>
-    <form action="/cgi-bin/fileupload.py" method="get"><button type="submit">Go Back</button></form>
+    <form action="/cgi/fileupload.py" method="get"><button type="submit">Go Back</button></form>
 </body>
 </html>
                     """
@@ -100,7 +100,7 @@ def main():
                 
                 # Redirect to the file upload form
                 print("HTTP/1.1 303 See Other")
-                print("Location: /cgi-bin/fileupload.py")
+                print("Location: /cgi/fileupload.py")
                 print("Content-Type: text/html")
                 print("Content-Length: 0")
                 print()  # End of headers
@@ -118,7 +118,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>Error uploading file.</p>
-    <form action="/cgi-bin/fileupload.py" method="get"><button type="submit">Go Back</button></form>
+    <form action="/cgi/fileupload.py" method="get"><button type="submit">Go Back</button></form>
 </body>
 </html>
                 """
@@ -143,7 +143,7 @@ def main():
 <body>
     <h1>Error</h1>
     <p>{e}</p>
-    <form action='/cgi-bin/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
+    <form action='/cgi/fileupload.py' method='get'><button type='submit'>Go Back</button></form>
 </body>
 </html>
         """

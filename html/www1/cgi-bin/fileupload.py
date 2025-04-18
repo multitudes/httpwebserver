@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
 import os
-import cgi
-import cgitb
+import sys
+import signal
 from urllib.parse import quote
 
 
-cgitb.enable()  # Enable detailed error messages
-
 # Get the upload directory from the environment variable
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', './www/uploads')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
+
+# Handle broken pipes gracefully
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)  
 
 def main():
     try:
+        _ = sys.stdin.read()
         if not os.path.exists(UPLOAD_DIR):
             os.makedirs(UPLOAD_DIR)
             
@@ -78,7 +80,7 @@ def main():
             html_content += f"""
 <li>
     <input type="checkbox" class="check" name="delete_files" value="{filename}" onclick="checkFiles()">
-    <a href="/uploads/{quote(filename)}" target="_blank">{filename}</a>
+    <a href="/upload/{quote(filename)}" target="_blank">{filename}</a>
 </li>
             """
 
@@ -107,7 +109,7 @@ def main():
         print("HTTP/1.1 200 OK")
         print("Content-Type: text/html")
         print(f"Content-Length: {len(html_content)}")
-        print()  # End of headers
+        print()
         # Print the HTML content
         print(html_content)
 

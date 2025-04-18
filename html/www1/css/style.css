@@ -1,31 +1,41 @@
 /* reset default browser styles */
 * {
-	margin: 0;
-	padding: 0;
-	box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
 body {
-	font-family: Arial, Helvetica, sans-serif;
-	background-color: #222222;
-	color: #333333;
-	line-height: 1.6;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	align-items: center;
-	text-align: center;
-	height: 100vh;
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #1a1b1e;
+    color: #e0e0e0;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    height: 100vh;
+}
+
+a {
+    color: #7aa2f7;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #bb9af7;
+    text-decoration: underline;
 }
 
 body h1 {
-	margin: 20px;
-	color: black
+    margin: 20px;
+    color: #e0e0e0;
 }
 
 .rectangle {
-    background-color: #f0f3f4;
-    color: #333333;
+    background-color: #24272e;
+    color: #e0e0e0;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -39,87 +49,115 @@ body h1 {
 }
 
 .rectangle p {
-	margin: 0;
-	font-size: 0.9em;
-	font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
-	color: #333333;
+    margin: 0;
+    font-size: 0.9em;
+    font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+    color: #e0e0e0;
 }
 
 .circle {
-	width: 25vw;
-	height: 25vw;
-	border: 1px solid lightgrey;
-	background-color: white;
-	color: black;
-	border-radius: 50%;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	align-items: center;
-	text-align: center;
-	margin: 20px;
+    width: 25vw;
+    height: 25vw;
+    border: 1px solid #414868;
+    background-color: #24272e;
+    color: #e0e0e0;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    margin: 20px;
 }
 
 .circle h1 {
-	margin: 0;
-	font-size: 5.5em;
+    margin: 0;
+    font-size: 5.5em;
+    color: #e0e0e0;
 }
 
 .circle p {
-	margin: 0;
-	font-size: 1.3em;
-	font-weight: bold;
-	color: #333333;
+    margin: 0;
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #9aa5ce;
 }
 
 .teapot {
-	width: 60%;
-	height: auto;
+    width: 60%;
+    height: auto;
 }
 
-body {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	height: 100vh;
-	margin: 0;
-	font-family: Arial, sans-serif;
-	background-color: #f0f0f0;
-}
 h1 {
-	margin-bottom: 20px;
+    margin-bottom: 20px;
+    color: #ffffff;
 }
+
 .box {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	background: white;
-	padding: 20px;
-	border-radius: 8px;
-	box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-	width: 80%;
-	max-width: 600px;
-	margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #24272e;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    width: 80%;
+    max-width: 600px;
+    margin-bottom: 20px;
 }
+
 label, input, button {
-	margin: 10px 0;
+    margin: 10px 0;
+    color: #e0e0e0;
 }
+
 .file-list {
-	width: 80%;
-	max-width: 600px;
-	background: white;
-	padding: 20px;
-	border-radius: 8px;
-	box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 80%;
+    max-width: 600px;
+    background: #24272e;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    color: #e0e0e0;
 }
 
 /* Remove bullet points from the file list */
 ul {
-	list-style-type: none;
+    list-style-type: none;
     padding: 0;
 }
 
 .file-list-ul li {
     margin: 5px 0;
+    color: #e0e0e0;
+}
+
+#statusButton, button {
+    background-color: #414868;
+    border: none;
+    border-radius: 4px;
+    color: #e0e0e0;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 12px 24px;
+    transition: background-color 0.3s ease;
+}
+
+#statusButton:hover, button:hover {
+    background-color: #545c7e;
+}
+
+#statusButton.clicked {
+    background-color: #73daca;
+    color: #1a1b1e;
+}
+
+#statusMessage {
+    margin-top: 20px;
+    color: #9aa5ce;
+}
+
+#expiryMessage {
+    margin-top: 10px;
+    color: #787c99;
 }

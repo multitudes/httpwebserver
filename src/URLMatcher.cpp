@@ -19,6 +19,38 @@
 using std::string;
 
 namespace URLMatcher {
+
+// handles %20 -> space, %2F -> /, $3F -> ?, +  -> space etc...
+string urlDecode(const string& encoded) {
+    string decoded;
+    for (size_t i = 0; i < encoded.length(); ++i) {
+        if (encoded[i] == '%' && i + 2 < encoded.length()) {
+            // Get the two hex characters after %
+            string hex = encoded.substr(i + 1, 2);
+            int value;
+            std::istringstream hex_chars(hex);
+            
+            // Convert hex to decimal
+            if (hex_chars >> std::hex >> value) {
+                // Common URL encodings:
+                // %20 = space (32)
+                // %2F = / (47)
+                // %3F = ? (63)
+                // %3D = = (61)
+                decoded += static_cast<char>(value);
+                i += 2;  // Skip the two hex chars
+            } else {
+                decoded += encoded[i];  // Invalid hex, keep the %
+            }
+        } else if (encoded[i] == '+') {
+            decoded += ' ';  // + in query strings means space
+        } else {
+            decoded += encoded[i];  // Normal character
+        }
+    }
+    return decoded;
+}
+  
 /**
  * @brief Receives and processes initial request data
  * @param conn The connection data structure
@@ -57,10 +89,13 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   debuglog(YELLOW, "URLMatcher: Received %lu bytes for fd %d", bytes_read,
            conn.client_fd);
 
+  // Remove old chunking code and just handle headers
   switch (conn.parseHeaders(conn)) {
   case PARSE_SUCCESS:
     debuglog(YELLOW, "Headers parsed successfully");
     conn.data.headers_received = true;
+    conn.urlMatcherData.target = urlDecode(conn.data.target);
+    debuglog(YELLOW, "Decoded target path: '%s'", conn.data.target.c_str());
     break;
   case PARSE_INCOMPLETE:
     debuglog(YELLOW, "Headers incomplete");
@@ -93,7 +128,7 @@ bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
     return false;
   }
 
-  string target = conn.data.target;
+  string target = conn.urlMatcherData.target;
   if (!target.empty() && target[0] == '/') {
     target = target.substr(1);
   }
@@ -306,7 +341,7 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
     conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
     debuglog(BLUE, "URLMatcher: Updated full path to CGI: '%s'",
              conn.urlMatcherData.full_path.c_str());
-
+    conn.cgiData.script_name = conn.urlMatcherData.full_path;
     conn.state = CONN_CGI;
     debug("CGI request detected");
     // Start CGI process for this connection
@@ -466,6 +501,37 @@ bool handleCookieUpdateRequest(HTTPConnxData &conn)
     return false;
 }
 
+bool handleChunkedData(HTTPConnxData &conn) {
+  if (!conn.data.headers_received || !conn.data.chunked) {
+      return true;  // Not chunked, continue processing
+  }
+
+  debuglog(YELLOW, "Processing chunked data...");
+  
+  // Check for end marker
+  if (conn.data.request.find("0\r\n\r\n") == string::npos) {
+      debuglog(YELLOW, "Still reading chunked data");
+      conn.state = CONN_RECV_CHUNKS;
+      return false;
+  }
+
+  // Get data after headers
+  string chunked_string = conn.data.request.substr(conn.data.headers_end);
+  string dechunked = conn.dechunkData(chunked_string);
+  
+  // Replace the request payload with dechunked data
+  conn.data.request = conn.data.request.substr(0, conn.data.headers_end) + dechunked;
+  
+  // Update headers and state
+  conn.data.chunked = false;
+  conn.data.headers["Content-Length"] = Utils::to_string(dechunked.length());
+  conn.data.content_length = dechunked.length();
+  conn.data.headers.erase("Transfer-Encoding");
+  
+  debuglog(GREEN, "Successfully dechunked data (size: %zu)", dechunked.length());
+  return true;
+}
+
 /**
  * @brief Validates incoming request, handles file/directory serving.
  *        Prioritizes index file check, then autoindex check, then listing.
@@ -474,6 +540,10 @@ bool handleCookieUpdateRequest(HTTPConnxData &conn)
 void validateRequest(HTTPConnxData &conn) {
     if (!receiveAndParseRequest(conn))
         return; // Request handling complete or failed
+
+    // Handle chunked data if present
+    if (!handleChunkedData(conn))
+        return; // Still receiving chunks
 
     // Handle cookie update requests first
     if (handleCookieUpdateRequest(conn)) {
@@ -654,5 +724,7 @@ void validateRequest(HTTPConnxData &conn) {
       }
     } // end GET
 } // end of validateRequest
+
+
 
 } // end of namespace URLMatcher

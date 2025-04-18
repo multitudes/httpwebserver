@@ -17,6 +17,10 @@ CXX				= 	c++
 # CXXFLAGS        += -pedantic-errors
 CXXFLAGS		+= -std=c++98 
 CXXFLAGS 		+= -Wconversion -Wunreachable-code 
+ifeq ($(CXX), clang++)
+    CXXFLAGS += -fno-limit-debug-info
+endif
+
 CXXFLAGS		+= -g
 CXXFLAGS 		+= -O0
 

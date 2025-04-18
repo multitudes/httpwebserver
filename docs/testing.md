@@ -299,3 +299,106 @@ git push origin main
 ```
 
 once the workflow is pushed to the repository, go to the actions tab in github and you will see the workflow running.
+
+
+## on the mac the vscode debugger is LLDB
+
+Okay, here are the equivalent `curl` commands for your terminal testing, along with ways to stop a hanging debugger in VS Code on macOS.
+
+### `curl` Command Equivalents
+
+Remember to run your C++ web server so it's listening on `localhost:4244` before executing these commands. The `-v` flag is added for verbose output, which helps see the request headers sent and the response headers received.
+
+1.  **POST with multipart/form-data**
+
+    * First, create the dummy file content:
+        ```bash
+        echo -e "This is the content of the file.\nSecond line." > report.txt 
+        ```
+    * Then, run `curl`:
+        ```bash
+        curl -v -X POST \
+             -F "text_field=Simple text value" \
+             -F "file_upload=@report.txt;type=text/plain" \
+             http://localhost:4244/cgi/hello.py
+        ```
+    * Clean up the dummy file:
+        ```bash
+        rm report.txt
+        ```
+    * **Explanation:**
+        * `-X POST`: Specifies the POST method (though `-F` implies POST).
+        * `-F "field=value"`: Sends a simple form field.
+        * `-F "name=@filename;type=mimetype"`: Sends a file. `@report.txt` tells curl to read the content from `report.txt`. `;type=text/plain` explicitly sets the Content-Type for this part of the multipart message.
+        * `curl` automatically generates the `Content-Type: multipart/form-data; boundary=...` header and formats the request body.
+
+2.  **POST with Chunked Transfer Encoding**
+
+    ```bash
+    # Pipe the data to curl using echo -n (to avoid extra newline) and -e (to interpret escapes like \n)
+    echo -n -e "This is the first chunk.\nAnd this is the second chunk.\nFinally, the third chunk." | \
+    curl -v -X POST \
+         -H "Content-Type: text/plain" \
+         -H "Transfer-Encoding: chunked" \
+         --data-binary @- \
+         http://localhost:4244/cgi/hello.py
+    ```
+    * **Explanation:**
+        * `-X POST`: Specifies the POST method.
+        * `echo -n -e "..." |`: Pipes the raw data string to curl's standard input. `-n` prevents echo adding a trailing newline, `-e` enables interpretation of backslash escapes.
+        * `-H "Content-Type: text/plain"`: Sets the content type header.
+        * `-H "Transfer-Encoding: chunked"`: Explicitly tells curl (and the server) that you intend to send chunked data. When combined with `--data-binary @-`, curl will correctly format it.
+        * `--data-binary @-`: Tells curl to read raw binary data from standard input (`-`). This combination often triggers chunked encoding automatically in curl for HTTP/1.1, but the explicit header makes the intent clear for testing.
+
+3.  **DELETE Request**
+
+    ```bash
+    curl -v -X DELETE http://localhost:4244/cgi/hello.py/resource/to/delete
+    ```
+    * **Explanation:**
+        * `-X DELETE`: Specifies the DELETE method.
+        * The URL includes the path info `/resource/to/delete`.
+        * No data is sent with this request.
+
+### Stopping a Hanging Debugger in VS Code on macOS
+
+When the VS Code debugger hangs (the UI might become unresponsive, the stop button doesn't work, or the debugged process just sits there), here are several ways to stop it, from least to most disruptive:
+
+1.  **Use the VS Code Debug Toolbar/Command Palette:**
+    * Try clicking the red square **Stop** button on the floating debug toolbar again.
+    * Open the Command Palette (`Cmd + Shift + P`), type "Debug: Stop", and press Enter. Sometimes this works even if the button is unresponsive.
+
+2.  **Restart the Debug Session:**
+    * Try the **Restart** button (the curved arrow) on the debug toolbar. This might detach the faulty session and start a new one.
+
+3.  **Close the Project Window:**
+    * Simply closing the VS Code window (`Cmd + W`) where the debugger is running will usually terminate the debug session. Reopen the project afterwards.
+
+4.  **Use Activity Monitor:**
+    * Open **Activity Monitor** (Applications -> Utilities -> Activity Monitor).
+    * In the search bar, look for processes related to your debug session. Common names include:
+        * `lldb` (the default C++ debugger on macOS) or `lldb-mi`
+        * `gdb` (if you configured VS Code to use it)
+        * `debugserver` (a process lldb might use)
+        * The name of your **executable** (your webserver). It might be stuck.
+    * Select the suspect process (start with `lldb` or your executable).
+    * Click the **"X" button** in the Activity Monitor toolbar.
+    * Choose **"Quit"**. If that doesn't work after a few seconds, click "X" again and choose **"Force Quit"**. Be cautious with Force Quit.
+
+5.  **Use the Terminal:**
+    * Open a new Terminal window.
+    * Find the Process ID (PID) of the debugger or your server process. Use `ps aux | grep <name>`, replacing `<name>` with `lldb`, `gdb`, or the name of your executable.
+        ```bash
+        ps aux | grep lldb 
+        ps aux | grep your_server_executable_name 
+        ```
+    * Look for the relevant process and note its PID (the second column).
+    * Try to terminate it gracefully: `kill <PID>`
+    * If it doesn't stop after a few seconds, force kill it: `kill -9 <PID>` (Use `-9` as a last resort, as it doesn't allow the process to clean up).
+
+6.  **Force Quit VS Code:**
+    * If VS Code itself is completely frozen, press `Option + Command + Esc` to open the "Force Quit Applications" window.
+    * Select "Visual Studio Code".
+    * Click **"Force Quit"**. This will kill VS Code and any child processes, including the debugger.
+
+Usually, starting with the VS Code controls and escalating to Activity Monitor or `kill` if necessary will resolve the issue.
