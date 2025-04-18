@@ -451,7 +451,8 @@ int run(std::string configFile) {
  * @brief send error and close the connection
  *
  * include the Connection: close header in the response to inform the client.
- *
+ * This is when the headers are not yet received. In this case
+ * I cannot send custom error pages. Example: malformed requests.
  */
 void send_critical_error(int fd, int code) {
   std::string response = "HTTP/1.1 " + Utils::to_string(code) + " " +

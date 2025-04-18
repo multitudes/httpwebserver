@@ -38,6 +38,13 @@ def webserver_empty_config4():
     yield
     server.terminate()
 
+# invalid syntax
+@pytest.fixture(scope="function")
+def webserver_empty_config5():
+    server = start_webserver("tests/config/empty5.conf")
+    yield
+    server.terminate()
+
 @pytest.fixture(scope="function")
 def webserver_redir_config():
     server = start_webserver("tests/config/redirections.conf")

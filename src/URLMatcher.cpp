@@ -58,7 +58,6 @@ string urlDecode(const string& encoded) {
  * complete
  */
 bool receiveAndParseRequest(HTTPConnxData &conn) {
-  conn.urlMatcherData.config = Config::getConfigByPort(conn.data.port);
   debug("checking the request");
   char buffer[BUFFER_SIZE + 1];
 
@@ -105,8 +104,12 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   case HEADERS_PARSE_ERROR:
     debuglog(RED, "Error parsing headers");
     debug("Error parsing headers");
-    Responses::htmlErrorResponse(conn, 400); // Bad Request
-    conn.state = CONN_SIMPLE_RESPONSE;
+    HTTPServer::send_critical_error(conn.client_fd, 400);
+    conn.reset();
+    SocketUtils::remove_from_poll(conn.client_fd);
+    close(conn.client_fd);
+    HTTPServer::lastActivityTime.erase(conn.client_fd);
+    HTTPServer::connections.erase(conn.client_fd);
     return false;
   }
 
@@ -235,7 +238,6 @@ bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat,
   conn.file_size = path_stat.st_size;
   conn.state = CONN_FILE_REQUEST;
 
-  // Use the overloaded version that doesn't need the content type parameter
   Responses::prepareFileResponse(conn, conn.file_size);
 
   debuglog(GREEN,
@@ -538,9 +540,13 @@ bool handleChunkedData(HTTPConnxData &conn) {
  * @param conn The connection data structure.
  */
 void validateRequest(HTTPConnxData &conn) {
-    if (!receiveAndParseRequest(conn))
-        return; // Request handling complete or failed
-
+  
+  if (!receiveAndParseRequest(conn))
+    return; // Request handling complete or failed
+  
+  conn.urlMatcherData.config = Config::getConfigByPort(conn.data.port);
+  debug("conf root is %s", conn.urlMatcherData.config->root.c_str());
+  debug("target is %s", conn.data.target.c_str());
     // Handle chunked data if present
     if (!handleChunkedData(conn))
         return; // Still receiving chunks
