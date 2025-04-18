@@ -198,6 +198,6 @@ struct HTTPConnxData {
   string generateSessionId();
   void createSession();
   bool retrieveSession();
-  void dechunkDataCGI();
+ // void dechunkDataCGI();
   string dechunkData(string chunked_string);
 };
