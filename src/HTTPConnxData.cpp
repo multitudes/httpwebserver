@@ -143,7 +143,6 @@ void HTTPConnxData::reset() {
     ::kill(cgiData.child_pid, SIGTERM);
     cgiData.child_pid = -1;
   }
-  data.request.clear();
 
 }
 
