@@ -432,6 +432,13 @@ int run(std::string configFile) {
 
               break;
             }
+            // todo remove
+            if (pollfds[j].fd == conn.cgiData.child_stdout_pipe[0] &&
+                pollfds[j].revents & POLLHUP) {
+                debug("POLLHUP event on CGI stdout fd %d",
+                    conn.cgiData.child_stdout_pipe[0]);
+                    throw std::runtime_error("POLLHUP event on CGI stdout");
+                } 
           }
         }
 
