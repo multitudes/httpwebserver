@@ -122,7 +122,9 @@ int run(std::string configFile) {
         }
       }
 
-      // Now safely get reference
+      // Now safely get reference - the connection data is in a map
+      // and it has been added in accept. the fd could be an fd cgi and
+      // it will return the parent connection data - 
       HTTPConnxData &conn = getConnectionData(current_fd);
 
       // Update activity time ONLY when I/O actually happens
@@ -193,9 +195,12 @@ int run(std::string configFile) {
 
       /*    -------- CGI FINISHED -----------      */
       if (conn.state == CONN_CGI_FINISHED) {
-        SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-        SocketUtils::remove_from_poll(
-            conn.cgiData.cgi_stdout_fd);
+        if (conn.cgiData.cgi_stdin_fd != -1) {
+          SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+        }
+        if (conn.cgiData.cgi_stdout_fd != -1) {
+          SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+        }
         lastActivityTime.erase(conn.client_fd);
         conn.reset();
         break;
@@ -269,16 +274,6 @@ int run(std::string configFile) {
           // first read from the client
           debug("POLLIN event on client fd %d", conn.client_fd);
           for (size_t j = 0; j < pollfds.size(); j++) {
-            // and the cgi process is ready to be read from
-            // if (pollfds[j].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            //   perror("Failed to write to CGI stdin");
-            //   SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-            //   SocketUtils::remove_from_poll(
-            //       conn.cgiData.cgi_stdout_fd);
-            //   lastActivityTime.erase(conn.client_fd);
-            //   conn.reset();
-            //   break;
-            // }
             if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
                 (pollfds[j].revents & POLLOUT)) {
               debug("POLLOUT event on CGI stdin fd %d",
@@ -290,21 +285,17 @@ int run(std::string configFile) {
                   ::recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
               if (bytes_read < 0) {
                 perror("Failed to read from client");
-                SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-                SocketUtils::remove_from_poll(
-                    conn.cgiData.cgi_stdout_fd);
-                lastActivityTime.erase(conn.client_fd);
-                conn.reset();
-
+                conn.state = CONN_CGI_FINISHED;
                 break;
               } else if (bytes_read == 0) {
                 debug("Client closed connection - giving EOF to CGI stdin");
                 close(conn.cgiData.cgi_stdin_fd);
                 SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+                conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
                 conn.cgiData.is_receiving = false;
                 conn.cgiData.is_sending = true;
                 buffer[0] = '\0'; //
-
+                break;
               } else {
 
                 debug("Received %ld bytes from client", bytes_read);
@@ -320,12 +311,7 @@ int run(std::string configFile) {
 
                 if (bytes_written < 0) {
                   perror("Failed to write to CGI stdin");
-                  SocketUtils::remove_from_poll(
-                      conn.cgiData.cgi_stdin_fd);
-                  SocketUtils::remove_from_poll(
-                      conn.cgiData.cgi_stdout_fd);
-                  lastActivityTime.erase(conn.client_fd);
-                  conn.reset();
+                  conn.state = CONN_CGI_FINISHED;
                   break;
                 } else if (bytes_written <
                            BUFFER_SIZE - conn.data.headers_end) {
@@ -338,6 +324,7 @@ int run(std::string configFile) {
                   SocketUtils::remove_from_poll(
                       conn.cgiData.cgi_stdin_fd);
                   close(conn.cgiData.cgi_stdin_fd);
+                  conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
                   conn.cgiData.is_receiving = false;
                   conn.cgiData.is_sending = true;
                   conn.cgiData.buffer.clear();
@@ -357,12 +344,7 @@ int run(std::string configFile) {
                 } else if (bytes_written == 0) {
                   // No data was written, this should not happen
                   debuglog(RED, "No data written to CGI stdin");
-                  SocketUtils::remove_from_poll(
-                      conn.cgiData.cgi_stdin_fd);
-                  SocketUtils::remove_from_poll(
-                      conn.cgiData.cgi_stdout_fd);
-                  lastActivityTime.erase(conn.client_fd);
-                  conn.reset();
+                  conn.state = CONN_CGI_FINISHED;
                   break;
                 }
               }
@@ -432,12 +414,13 @@ int run(std::string configFile) {
 
               break;
             }
-            // todo remove
             if (pollfds[j].fd == conn.cgiData.cgi_stdout_fd &&
                 pollfds[j].revents & POLLHUP) {
                 debug("POLLHUP event on CGI stdout fd %d",
                     conn.cgiData.cgi_stdout_fd);
-                    throw std::runtime_error("POLLHUP event on CGI stdout");
+                conn.state = CONN_CGI_FINISHED;
+                break;
+                    // throw std::runtime_error("POLLHUP event on CGI stdout");
                 } 
           }
         }
