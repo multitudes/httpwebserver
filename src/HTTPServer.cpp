@@ -258,8 +258,10 @@ int run(std::string configFile) {
                     debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
                     // If we have written all data, clear the buffer
                     conn.cgiData.buffer.clear();
+                    conn.cgiData.bytes_received = 0;
                     conn.cgiData.is_receiving = false; // No more data to send
                     conn.cgiData.is_sending = true;    // Data to receive from CGI stdout
+                    // conn.state = CONN_CGI_SENDING;
                   }
               }
               break; // whatever happens to the state we break the for loop because we found 
