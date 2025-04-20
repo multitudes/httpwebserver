@@ -127,6 +127,7 @@ int prepareCGI(HTTPConnxData &conn) {
       debug("GET request in cgi - closing child stdin pipe[1]");
       conn.cgiData.is_receiving = false; // No data to send to CGI stdin
       conn.cgiData.is_sending = true;    // Data to receive from CGI stdout
+      conn.state = CONN_CGI_SENDING;
       SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
       ::close(conn.cgiData.child_stdin_pipe[1]);
     } else {

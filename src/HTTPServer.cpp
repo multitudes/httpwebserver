@@ -261,7 +261,7 @@ int run(std::string configFile) {
                     conn.cgiData.bytes_received = 0;
                     conn.cgiData.is_receiving = false; // No more data to send
                     conn.cgiData.is_sending = true;    // Data to receive from CGI stdout
-                    // conn.state = CONN_CGI_SENDING;
+                    conn.state = CONN_CGI_SENDING;
                   }
               }
               break; // whatever happens to the state we break the for loop because we found 
@@ -296,6 +296,7 @@ int run(std::string configFile) {
                 conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
                 conn.cgiData.is_receiving = false;
                 conn.cgiData.is_sending = true;
+                conn.state = CONN_CGI_SENDING;
                 break;
               } else {
 
@@ -326,6 +327,7 @@ int run(std::string configFile) {
                   conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
                   conn.cgiData.is_receiving = false;
                   conn.cgiData.is_sending = true;
+                  conn.state = CONN_CGI_SENDING;
                   conn.cgiData.buffer.clear();
                   break;
                 } else if (bytes_written <
@@ -350,7 +352,10 @@ int run(std::string configFile) {
             }
           }
         }
-
+      }
+      if (conn.state == CONN_CGI_SENDING) {
+        debuglog(YELLOW, "Connection fd %d in state CGI SENDING", conn.client_fd);
+        debug("CONN_CGI_SENDING fd %d", conn.client_fd);
         // Handle data FROM CGI process (ready to write to client from cgi)
         // my client is ready to be written to
         if (conn.cgiData.is_sending && current_fd == conn.client_fd &&
