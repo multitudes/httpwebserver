@@ -10,7 +10,7 @@ namespace CGI {
 
 // Start a CGI process for a connection
 int prepareCGI(HTTPConnxData &conn) {
-    // 1. CLEAN UP PREVIOUS PIPES IF THEY EXIST
+    // CLEAN UP PREVIOUS PIPES IF THEY EXIST
     if (conn.cgiData.child_stdin_pipe[0] != -1) {
       ::close(conn.cgiData.child_stdin_pipe[0]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[0]);
