@@ -128,8 +128,6 @@ struct HTTPConnxData {
   struct CGIData {
     string buffer;
     string script_name;
-    bool is_sending;
-    bool is_receiving;
     string path_info;
     string query_string;
     pid_t child_pid;
@@ -144,7 +142,7 @@ struct HTTPConnxData {
 
 
     CGIData()
-        : buffer(""), script_name(""), is_sending(false), is_receiving(true), child_pid(-1),
+        : buffer(""), script_name(""), child_pid(-1),
           path_info(""), query_string(), env(), bytes_received(0), bytes_sent(0), cgi_stdin_fd(-1),
           cgi_stdout_fd(-1) {
 

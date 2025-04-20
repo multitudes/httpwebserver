@@ -219,7 +219,7 @@ int run(std::string configFile) {
 
         // check if the child process is pollout ready to be written to  
         // and i have data in buffer from the preparecgi function
-        if (conn.cgiData.is_receiving && !conn.cgiData.buffer.empty()) {
+        if (!conn.cgiData.buffer.empty()) {
           debug("cgiData is receiving");
           for (size_t j = 0; j < pollfds.size(); j++) {
             if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
@@ -269,7 +269,7 @@ int run(std::string configFile) {
 
           } // end for loop
 
-        } else if (conn.cgiData.is_receiving && current_fd == conn.client_fd &&
+        } else if (current_fd == conn.client_fd &&
                    (pollfds[i].revents & POLLIN) && conn.cgiData.buffer.empty())  {
           // first read from the client
           debug("POLLIN event on client fd %d", conn.client_fd);
@@ -354,7 +354,7 @@ int run(std::string configFile) {
         // my client is ready to be written to
         if (current_fd == conn.client_fd &&
             (pollfds[i].revents & POLLOUT)) {
-          debug("cgiData.is_sending  and client fd %d is POLLOUT",
+          debug("cgiData is sending  and client fd %d is POLLOUT",
                 conn.client_fd);
           for (size_t j = 0; j < pollfds.size(); j++) {
             // and the cgi process is ready to be read from
