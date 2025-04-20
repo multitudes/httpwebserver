@@ -23,8 +23,8 @@ using std::vector;
 enum ConnectionState {
   CONN_INCOMING,       // New connection, nothing processed yet
   CONN_PARSING_HEADER, 
-  CONN_CGI,           
-  CONN_CGI_FINISHED, 
+  CONN_CGI_INCOMING,           
+  CONN_CGI_INCOMING_FINISHED, 
   CONN_FILE_REQUEST,   // Serving a file
   CONN_SIMPLE_RESPONSE,
   CONN_UPLOAD, 

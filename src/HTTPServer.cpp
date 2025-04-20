@@ -194,7 +194,7 @@ int run(std::string configFile) {
       }
 
       /*    -------- CGI FINISHED -----------      */
-      if (conn.state == CONN_CGI_FINISHED) {
+      if (conn.state == CONN_CGI_INCOMING_FINISHED) {
         if (conn.cgiData.cgi_stdin_fd != -1) {
           SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
         }
@@ -207,13 +207,13 @@ int run(std::string configFile) {
       }
 
       /*    -------- CGI -----------      */
-      if (conn.state == CONN_CGI) {
+      if (conn.state == CONN_CGI_INCOMING) {
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
-        debug("CONN_CGI - current fd %d and is %s", current_fd,
+        debug("CONN_CGI_INCOMING - current fd %d and is %s", current_fd,
               (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
 
         debug("poll_result %d", poll_result);
-        debug("CONN_CGI fd %d", conn.client_fd);
+        debug("CONN_CGI_INCOMING fd %d", conn.client_fd);
         debug("CGI fd in %d", conn.cgiData.cgi_stdin_fd);
         debug("CGI fd out %d", conn.cgiData.cgi_stdout_fd);
 
@@ -237,12 +237,12 @@ int run(std::string configFile) {
               if (bytes_written < 0) {
                 perror("Failed to write to CGI stdin");
                 debug("Failed to write to CGI stdin");
-                conn.state = CONN_CGI_FINISHED;
+                conn.state = CONN_CGI_INCOMING_FINISHED;
               } else if (bytes_written == 0) {
                 // Should not happen with blocking write unless size was 0
                 debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)", conn.cgiData.buffer.size());
                 debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
-                conn.state = CONN_CGI_FINISHED;
+                conn.state = CONN_CGI_INCOMING_FINISHED;
               } else if (static_cast<size_t>(bytes_written) < conn.cgiData.buffer.size()) {
                 // Partial write: Remove written data and wait for next POLLOUT
                 debug("Partial write: Wrote %ld bytes to CGI stdin (buffer size: %zu)", bytes_written, conn.cgiData.buffer.size());
@@ -285,7 +285,7 @@ int run(std::string configFile) {
                   ::recv(conn.client_fd, buffer, BUFFER_SIZE, 0);
               if (bytes_read < 0) {
                 perror("Failed to read from client");
-                conn.state = CONN_CGI_FINISHED;
+                conn.state = CONN_CGI_INCOMING_FINISHED;
                 break;
               } else if (bytes_read == 0) {
                 debug("Client closed connection - giving EOF to CGI stdin");
@@ -311,7 +311,7 @@ int run(std::string configFile) {
 
                 if (bytes_written < 0) {
                   perror("Failed to write to CGI stdin");
-                  conn.state = CONN_CGI_FINISHED;
+                  conn.state = CONN_CGI_INCOMING_FINISHED;
                   break;
                 } else if (bytes_written <
                            BUFFER_SIZE - conn.data.headers_end) {
@@ -344,7 +344,7 @@ int run(std::string configFile) {
                 } else if (bytes_written == 0) {
                   // No data was written, this should not happen
                   debuglog(RED, "No data written to CGI stdin");
-                  conn.state = CONN_CGI_FINISHED;
+                  conn.state = CONN_CGI_INCOMING_FINISHED;
                   break;
                 }
               }
@@ -414,14 +414,15 @@ int run(std::string configFile) {
 
               break;
             }
+            // this is also possible and is equivalent to read from the pipe
+            // and get zero bytes
             if (pollfds[j].fd == conn.cgiData.cgi_stdout_fd &&
                 pollfds[j].revents & POLLHUP) {
                 debug("POLLHUP event on CGI stdout fd %d",
                     conn.cgiData.cgi_stdout_fd);
-                conn.state = CONN_CGI_FINISHED;
+                conn.state = CONN_CGI_INCOMING_FINISHED;
                 break;
-                    // throw std::runtime_error("POLLHUP event on CGI stdout");
-                } 
+            } 
           }
         }
 

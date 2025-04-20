@@ -542,7 +542,7 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
     debuglog(BLUE, "URLMatcher: Updated full path to CGI: '%s'",
              conn.urlMatcherData.full_path.c_str());
     conn.cgiData.script_name = conn.urlMatcherData.full_path;
-    conn.state = CONN_CGI;
+    conn.state = CONN_CGI_INCOMING;
     debug("CGI request detected");
     // Start CGI process for this connection
     if (CGI::prepareCGI(conn) < 0) {
