@@ -10,8 +10,8 @@ namespace CGI {
 
 // Start a CGI process for a connection
 int prepareCGI(HTTPConnxData &conn) {
-    // CLEAN UP PREVIOUS PIPES IF THEY EXIST
-    if (conn.cgiData.child_stdin_pipe[0] != -1) {
+  // CLEAN UP PREVIOUS PIPES IF THEY EXIST
+  if (conn.cgiData.child_stdin_pipe[0] != -1) {
       ::close(conn.cgiData.child_stdin_pipe[0]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[0]);
       conn.cgiData.child_stdin_pipe[0] = -1;
@@ -125,14 +125,10 @@ int prepareCGI(HTTPConnxData &conn) {
     if (conn.data.method == "GET" || (conn.data.content_length == 0)) {
       // No data to send to CGI stdin, close the write end of the pipe
       debug("GET request in cgi - closing child stdin pipe[1]");
-      conn.cgiData.is_receiving = false; // No data to send to CGI stdin
-      conn.cgiData.is_sending = true;    // Data to receive from CGI stdout
       conn.state = CONN_CGI_SENDING;
       SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
       ::close(conn.cgiData.child_stdin_pipe[1]);
     } else {
-      conn.cgiData.is_receiving = true; // Data to send to CGI stdin
-      conn.cgiData.is_sending = false;  // No data to receive from CGI stdout
       SocketUtils::add_to_poll(conn.cgiData.child_stdin_pipe[1], POLLOUT);
       SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
     }

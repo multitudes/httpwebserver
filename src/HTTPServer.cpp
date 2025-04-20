@@ -259,8 +259,6 @@ int run(std::string configFile) {
                     // If we have written all data, clear the buffer
                     conn.cgiData.buffer.clear();
                     conn.cgiData.bytes_received = 0;
-                    conn.cgiData.is_receiving = false; // No more data to send
-                    conn.cgiData.is_sending = true;    // Data to receive from CGI stdout
                     conn.state = CONN_CGI_SENDING;
                   }
               }
@@ -294,8 +292,6 @@ int run(std::string configFile) {
                 close(conn.cgiData.cgi_stdin_fd);
                 SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
                 conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-                conn.cgiData.is_receiving = false;
-                conn.cgiData.is_sending = true;
                 conn.state = CONN_CGI_SENDING;
                 break;
               } else {
@@ -325,8 +321,6 @@ int run(std::string configFile) {
                       conn.cgiData.cgi_stdin_fd);
                   close(conn.cgiData.cgi_stdin_fd);
                   conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-                  conn.cgiData.is_receiving = false;
-                  conn.cgiData.is_sending = true;
                   conn.state = CONN_CGI_SENDING;
                   conn.cgiData.buffer.clear();
                   break;
@@ -358,7 +352,7 @@ int run(std::string configFile) {
         debug("CONN_CGI_SENDING fd %d", conn.client_fd);
         // Handle data FROM CGI process (ready to write to client from cgi)
         // my client is ready to be written to
-        if (conn.cgiData.is_sending && current_fd == conn.client_fd &&
+        if (current_fd == conn.client_fd &&
             (pollfds[i].revents & POLLOUT)) {
           debug("cgiData.is_sending  and client fd %d is POLLOUT",
                 conn.client_fd);
