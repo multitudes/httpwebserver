@@ -12,22 +12,22 @@ namespace CGI {
 int prepareCGI(HTTPConnxData &conn) {
     // 1. CLEAN UP PREVIOUS PIPES IF THEY EXIST
     if (conn.cgiData.child_stdin_pipe[0] != -1) {
-      close(conn.cgiData.child_stdin_pipe[0]);
+      ::close(conn.cgiData.child_stdin_pipe[0]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[0]);
       conn.cgiData.child_stdin_pipe[0] = -1;
   }
   if (conn.cgiData.child_stdin_pipe[1] != -1) {
-      close(conn.cgiData.child_stdin_pipe[1]);
+      ::close(conn.cgiData.child_stdin_pipe[1]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
       conn.cgiData.child_stdin_pipe[1] = -1;
   }
   if (conn.cgiData.child_stdout_pipe[0] != -1) {
-      close(conn.cgiData.child_stdout_pipe[0]);
+      ::close(conn.cgiData.child_stdout_pipe[0]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
       conn.cgiData.child_stdout_pipe[0] = -1;
   }
   if (conn.cgiData.child_stdout_pipe[1] != -1) {
-      close(conn.cgiData.child_stdout_pipe[1]);
+      ::close(conn.cgiData.child_stdout_pipe[1]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[1]);
       conn.cgiData.child_stdout_pipe[1] = -1;
   }
@@ -46,7 +46,7 @@ int prepareCGI(HTTPConnxData &conn) {
   if (pipe(conn.cgiData.child_stdout_pipe) < 0) {
     perror("Failed to create pipes");
     ::close(conn.cgiData.child_stdin_pipe[0]);
-    close(conn.cgiData.child_stdin_pipe[1]);
+    ::close(conn.cgiData.child_stdin_pipe[1]);
     return -1;
   }
   debug("values in the pipes now %d", conn.cgiData.child_stdin_pipe[0]);
@@ -117,6 +117,10 @@ int prepareCGI(HTTPConnxData &conn) {
     ::close(conn.cgiData.child_stdout_pipe[1]);    // Close write end of stdout pipe
     ::close(conn.cgiData.child_stdin_pipe[0]); // Close read end of stdin pipe
 
+
+    // for clarity I will assign the fds to the connection data cgi
+    conn.cgiData.cgi_stdin_fd = conn.cgiData.child_stdin_pipe[1];
+    conn.cgiData.cgi_stdout_fd = conn.cgiData.child_stdout_pipe[0];
     // assign the fds to the connection data
     if (conn.data.method == "GET" || (conn.data.content_length == 0)) {
       // No data to send to CGI stdin, close the write end of the pipe

@@ -131,13 +131,13 @@ void HTTPConnxData::reset() {
   }
 
   //check for cgi and reset
-  if (cgiData.child_stdin_pipe[1] != -1) {
-    close(cgiData.child_stdin_pipe[1]);
-    cgiData.child_stdin_pipe[1] = -1;
+  if (cgiData.cgi_stdin_fd != -1) {
+    close(cgiData.cgi_stdin_fd);
+    cgiData.cgi_stdin_fd = -1;
   }
-  if (cgiData.child_stdout_pipe[0] != -1) {
-    close(cgiData.child_stdout_pipe[0]);
-    cgiData.child_stdout_pipe[0] = -1;
+  if (cgiData.cgi_stdout_fd != -1) {
+    close(cgiData.cgi_stdout_fd);
+    cgiData.cgi_stdout_fd = -1;
   }
   if (cgiData.child_pid != -1) {
     ::kill(cgiData.child_pid, SIGTERM);

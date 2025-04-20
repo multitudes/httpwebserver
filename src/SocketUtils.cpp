@@ -442,21 +442,21 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
     }
 
     // non fatal pollhups
-    if (currentfd.fd == conn.cgiData.child_stdin_pipe[1]) {
-      debug("POLLHUP on CGI stdin pipe %d", conn.cgiData.child_stdin_pipe[1]);
-      close(conn.cgiData.child_stdin_pipe[1]);
-      SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
-      conn.cgiData.child_stdin_pipe[1] = -1; // Mark as closed
-    } else if (currentfd.fd == conn.cgiData.child_stdout_pipe[0]) {
-      debug("POLLHUP on CGI stdout pipe %d", conn.cgiData.child_stdout_pipe[0]);
-      close(conn.cgiData.child_stdout_pipe[0]);
-      SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
-      conn.cgiData.child_stdout_pipe[0] = -1; // Mark as closed
+    if (currentfd.fd == conn.cgiData.cgi_stdin_fd) {
+      debug("POLLHUP on CGI stdin pipe %d", conn.cgiData.cgi_stdin_fd);
+      close(conn.cgiData.cgi_stdin_fd);
+      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+      conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+    } else if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
+      debug("POLLHUP on CGI stdout pipe %d", conn.cgiData.cgi_stdout_fd);
+      close(conn.cgiData.cgi_stdout_fd);
+      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+      conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
     }
 
     // Check if both pipes are closed, and reset the connection if needed
-    if (conn.cgiData.child_stdin_pipe[1] == -1 &&
-        conn.cgiData.child_stdout_pipe[0] == -1) {
+    if (conn.cgiData.cgi_stdin_fd == -1 &&
+        conn.cgiData.cgi_stdout_fd == -1) {
       debug("Both CGI pipes closed, resetting connection");
       conn.reset();
     }
@@ -476,16 +476,16 @@ bool gotPollerrShouldSkip(pollfd &currentfd) {
       if (error == EPIPE) {
         debug("Client disconnected (EPIPE) on fd %d", currentfd.fd);
         debuglog(YELLOW, "Client disconnected (EPIPE) on fd %d", currentfd.fd);
-        if (currentfd.fd == conn.cgiData.child_stdin_pipe[1]) {
+        if (currentfd.fd == conn.cgiData.cgi_stdin_fd) {
           debug("Closing CGI stdin pipe %d", currentfd.fd);
-          close(conn.cgiData.child_stdin_pipe[1]);
-          SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
-          conn.cgiData.child_stdin_pipe[1] = -1; // Mark as closed
-        } else if (currentfd.fd == conn.cgiData.child_stdout_pipe[0]) {
+          close(conn.cgiData.cgi_stdin_fd);
+          SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+          conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+        } else if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
           debug("Closing CGI stdout pipe %d", currentfd.fd);
-          close(conn.cgiData.child_stdout_pipe[0]);
-          SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
-          conn.cgiData.child_stdout_pipe[0] = -1; // Mark as closed
+          close(conn.cgiData.cgi_stdout_fd);
+          SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+          conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
         } else if (currentfd.fd == conn.client_fd) {
           debug("Closing client fd %d", currentfd.fd);
           SocketUtils::remove_from_poll(currentfd.fd);
