@@ -13,7 +13,7 @@ UNAME_S := $(shell uname -s)
 NAME 			= 	webserv
 CXX				= 	c++
 
-# CXXFLAGS 		= -Wall -Wextra -Werror 
+CXXFLAGS 		= -Wall -Wextra -Werror 
 #  CXXFLAGS        += -pedantic-errors
 CXXFLAGS		+= -std=c++98 
 CXXFLAGS 		+= -Wconversion -Wunreachable-code 

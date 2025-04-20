@@ -64,6 +64,7 @@ vector<ServerData> configs_;
  * always available calling Config::getServerData();
  */
 int run(std::string configFile) {
+   (void)configFile; // Unused variable
   configs_ = Config::getServerData();
 
   SocketUtils::initialize();
@@ -78,7 +79,7 @@ int run(std::string configFile) {
   while (true) {
 
     // when autoreload is 1 then reload the config file
-    long currentTime = Parser::getCurrentTimeMillis();
+    // long currentTime = Parser::getCurrentTimeMillis();
     // if (Constants::autoReload) {
     //   if (!reload(configFile, currentTime)) {
     //     exit(EXIT_FAILURE);
@@ -662,7 +663,7 @@ void setSendRecTimeout(int clientfd) {
  */
 bool maxConnectionsCheck(int clientfd) {
 
-  if (pollfds.size() >= Constants::maxConnections) {
+  if (pollfds.size() >= static_cast<size_t>(Constants::maxConnections)) {
     debug("Maximum connections reached, rejecting new connection");
     send_critical_error(clientfd, 503);
     close(clientfd);

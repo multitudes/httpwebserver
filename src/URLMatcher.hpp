@@ -5,8 +5,7 @@
 #include <sys/stat.h>
 
 // Forward declarations
-class HTTPConnxData;
-
+struct HTTPConnxData;
 namespace URLMatcher
 {
   bool receiveAndParseRequest(HTTPConnxData &conn);

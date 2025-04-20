@@ -691,6 +691,7 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
 template <typename T>
 bool parseNumericValue(const std::string &line, const std::string &param,
                        size_t paramLen, T &outValue) {
+  (void)param; // TODO do we need ?
   size_t valueStart = line.find_first_not_of(" \t", paramLen);
   size_t valueEnd = line.find(';', valueStart);
 

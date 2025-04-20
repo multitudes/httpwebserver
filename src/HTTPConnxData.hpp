@@ -142,9 +142,9 @@ struct HTTPConnxData {
 
 
     CGIData()
-        : buffer(""), script_name(""), child_pid(-1),
-          path_info(""), query_string(), env(), bytes_received(0), bytes_sent(0), cgi_stdin_fd(-1),
-          cgi_stdout_fd(-1) {
+        : buffer(""), script_name(""), 
+          path_info(""), query_string(), child_pid(-1), env(), cgi_stdin_fd(-1), cgi_stdout_fd(-1), 
+          bytes_received(0), bytes_sent(0){
 
       child_stdin_pipe[0] = -1;
       child_stdin_pipe[1] = -1;
