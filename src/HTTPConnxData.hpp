@@ -22,11 +22,12 @@ using std::vector;
  */
 enum ConnectionState {
   CONN_INCOMING,       // New connection, nothing processed yet
-  CONN_PARSING_HEADER, // Receiving/parsing headers
-  CONN_CGI,            // Processing CGI request
+  CONN_PARSING_HEADER, 
+  CONN_CGI,           
+  CONN_CGI_FINISHED, 
   CONN_FILE_REQUEST,   // Serving a file
   CONN_SIMPLE_RESPONSE,
-  CONN_UPLOAD, // Handling file upload
+  CONN_UPLOAD, 
   CONN_RECV_CHUNKS // Receiving chunked data
 };
 
@@ -135,11 +136,13 @@ struct HTTPConnxData {
     // CGI processing
     int child_stdin_pipe[2];
     int child_stdout_pipe[2];
-    bool cgi_finished;
+    size_t bytes_received;
+    size_t bytes_sent;
+
 
     CGIData()
         : buffer(""), script_name(""), is_sending(false), is_receiving(true), child_pid(-1),
-          path_info(""), query_string(), env() {
+          path_info(""), query_string(), env(), bytes_received(0), bytes_sent(0) {
 
       child_stdin_pipe[0] = -1;
       child_stdin_pipe[1] = -1;

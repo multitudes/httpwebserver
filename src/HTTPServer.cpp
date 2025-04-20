@@ -191,6 +191,16 @@ int run(std::string configFile) {
         uploadLoop(conn, pollfds[i]);
       }
 
+      /*    -------- CGI FINISHED -----------      */
+      if (conn.state == CONN_CGI_FINISHED) {
+        SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
+        SocketUtils::remove_from_poll(
+            conn.cgiData.child_stdout_pipe[0]);
+        lastActivityTime.erase(conn.client_fd);
+        conn.reset();
+        continue;
+      }
+
       /*    -------- CGI -----------      */
       if (conn.state == CONN_CGI) {
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
