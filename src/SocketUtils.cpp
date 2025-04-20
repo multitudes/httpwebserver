@@ -63,12 +63,13 @@ void initialize() {
 }
 
 void setSignalHandlers() {
-  // SIGINT is ctrl+c
-  // SIGQUIT is ctrl+\
-// SIGTERM is kill
-  // SIGHUP is terminal hangup
-  // SIGPIPE is write to a socket that has been closed
-  // SIGCHLD is child process terminated
+  /* SIGINT is ctrl+c
+  SIGQUIT is ctrl+\
+  SIGTERM is kill
+  SIGHUP is terminal hangup
+  SIGPIPE is write to a socket that has been closed
+  SIGCHLD is child process terminated
+  */
   signal(SIGINT, handleSignal);
   signal(SIGQUIT, handleSignal);
   signal(SIGTERM, handleSignal);
