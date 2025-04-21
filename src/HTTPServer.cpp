@@ -51,6 +51,7 @@ vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
 map<int, std::time_t> lastActivityTime;
 vector<ServerData> configs_;
+std::set<pid_t> terminatedPids;
 
 // I will keep them into a map because they are being stored only at the
 // beginning of a connection static map<int, string> remoteAddresses;

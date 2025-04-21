@@ -117,10 +117,14 @@ void handleSignal(int signal) {
 void handleChild(int signal) {
   debuglog(YELLOW, "Received SIGCHLD signal %d, reaping child ...", signal);
   int savedErrno;
+  pid_t pid;
 
   savedErrno = errno;
-  while (waitpid(-1, NULL, WNOHANG) > 0)
+  while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) {
+    HTTPServer::terminatedPids.insert(pid);
+    debuglog(YELLOW, "Child process %d terminated", pid);
     continue;
+  }
   errno = savedErrno;
 }
 

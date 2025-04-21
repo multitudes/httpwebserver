@@ -49,6 +49,7 @@ extern std::vector<int> serverSockets;
 extern std::map<int, HTTPConnxData> connections;
 extern std::map<int, std::time_t> lastActivityTime;
 extern vector<ServerData> configs_;
+extern std::set<pid_t> terminatedPids;
 
 int run(std::string configFile);
 void createServerSockets(const vector<ServerData> &configs,
