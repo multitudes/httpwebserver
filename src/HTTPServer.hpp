@@ -75,5 +75,6 @@ bool sendNewDataFromFileToClient(HTTPConnxData &conn);
 void checkCompletionConditions(HTTPConnxData &conn);
 void uploadLoop(HTTPConnxData &conn, pollfd currentfd);
 void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd);
+void read_from_client_into_buffer(HTTPConnxData &conn, int current_fd); 
 
 } // namespace HTTPServer

@@ -234,22 +234,7 @@ int run(std::string configFile) {
                     conn.cgiData.cgi_stdin_fd);
 
               // read from client
-              conn.cgiData.buffer.resize(BUFFER_SIZE);
-              ssize_t bytes_read =
-                  ::recv(conn.client_fd, &conn.cgiData.buffer[0], BUFFER_SIZE, 0);
-              if (bytes_read < 0) {
-                perror("Failed to read from client");
-                conn.state = CONN_CGI_FINISHED;
-                break;
-              } else if (bytes_read == 0) {
-                debug("Client closed connection - giving EOF to CGI stdin");
-                close(conn.cgiData.cgi_stdin_fd);
-                SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-                conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-                conn.state = CONN_CGI_SENDING;
-                break;
-              } 
-              debug("Received %ld bytes from client", bytes_read);
+              read_from_client_into_buffer(conn, current_fd);
               break;  
               
             }
@@ -271,6 +256,7 @@ int run(std::string configFile) {
                     // the fd we were looking for
             } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
           } // end for loop
+          
           // TODO -cgi timeout - if the loop doesnt find the fd after a while
           // i should break the loop and close the connection
         } 
@@ -395,7 +381,22 @@ int run(std::string configFile) {
   return 0;
 }
 
-
+void read_from_client_into_buffer(HTTPConnxData &conn, int current_fd) {
+  conn.cgiData.buffer.resize(BUFFER_SIZE);
+  ssize_t bytes_read =
+      ::recv(conn.client_fd, &conn.cgiData.buffer[0], BUFFER_SIZE, 0);
+  if (bytes_read < 0) {
+    perror("Failed to read from client");
+    conn.state = CONN_CGI_FINISHED;
+  } else if (bytes_read == 0) {
+    debug("Client closed connection - giving EOF to CGI stdin");
+    close(conn.cgiData.cgi_stdin_fd);
+    SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+    conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+    conn.state = CONN_CGI_SENDING;
+  } 
+  debug("Received %ld bytes from client", bytes_read);
+}
 
 void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd) {
   ssize_t bytes_written = ::write(conn.cgiData.cgi_stdin_fd,
