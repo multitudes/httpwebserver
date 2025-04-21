@@ -218,34 +218,12 @@ int run(std::string configFile) {
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
         debug("CONN_CGI_INCOMING; - current fd %d and is %s", current_fd,
               (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
-
         debug("poll_result %d", poll_result);
         debug("CONN_CGI_INCOMING; fd %d", conn.client_fd);
         debug("CGI fd in %d", conn.cgiData.cgi_stdin_fd);
         debug("CGI fd out %d", conn.cgiData.cgi_stdout_fd);
 
-        // check if the child process is pollout ready to be written to  
-        // and i have data in buffer from the preparecgi function
-        if (!conn.cgiData.buffer.empty()) {
-          debug("cgiData is receiving");
-          for (size_t j = 0; j < pollfds.size(); j++) {
-            if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
-                (pollfds[j].revents & POLLOUT)) {
-              debug("POLLOUT event on CGI stdin fd %d",
-                    conn.cgiData.cgi_stdin_fd);
-
-              // write to cgi the buffer if any remaining from the
-              // initialisation
-              write_to_child_stdin(conn, current_fd, pollfds[j].fd);
-              break; // whatever happens to the state we break the for loop because we found 
-                    // the fd we were looking for
-            } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
-          } // end for loop
-          // TODO -cgi timeout - if the loop doesnt find the fd after a while
-          // i should break the loop and close the connection
-
-          // client wants to send data and the buffer is empty - otherwise i would be above
-        } else if (current_fd == conn.client_fd &&
+       if (current_fd == conn.client_fd &&
                    (pollfds[i].revents & POLLIN) && conn.cgiData.buffer.empty())  {
           // first read from the client
           debug("POLLIN event on client fd %d", conn.client_fd);
@@ -272,16 +250,30 @@ int run(std::string configFile) {
                 break;
               } 
               debug("Received %ld bytes from client", bytes_read);
-              debug("writing to cgi stdin %d",
-                    conn.cgiData.cgi_stdin_fd);
-
-              // now write the buffer contents to the cgi
-              write_to_child_stdin(conn, current_fd, pollfds[j].fd);
-              break; 
+              break;  
               
             }
           }
         }
+
+         // check if the child process is pollout ready to be written to  
+        // and i have data in buffer from the preparecgi function
+        if (!conn.cgiData.buffer.empty()) {
+          debug("cgiData is receiving");
+          for (size_t j = 0; j < pollfds.size(); j++) {
+            if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
+                (pollfds[j].revents & POLLOUT)) {
+              debug("POLLOUT event on CGI stdin fd %d",
+                    conn.cgiData.cgi_stdin_fd);
+              // write to cgi the buffer if not empty
+              write_to_child_stdin(conn, current_fd, pollfds[j].fd);
+              break; // whatever happens to the state we break the for loop because we found 
+                    // the fd we were looking for
+            } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
+          } // end for loop
+          // TODO -cgi timeout - if the loop doesnt find the fd after a while
+          // i should break the loop and close the connection
+        } 
       }
 
       /*    -------- CGI SENDING -----------      */
