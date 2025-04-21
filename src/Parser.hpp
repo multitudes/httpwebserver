@@ -21,8 +21,10 @@ void parse(std::string filename, std::vector<ServerData> &servers,
            std::map<uint16_t, ServerData *> &port_map_);
 std::string OpenReadConfigFile(std::string filename);
 std::string abstratHttpContent(std::string content);
+std::string trimLine(const std::string &line);
 void parsePortToServer(std::vector<ServerData> &servers,
     std::map<uint16_t, ServerData *> &port_map_);
+std::string extractGlobalConfig(const std::string &httpContent);
 void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig);
 void parseMaxBodySize(std::string &trimmedLine, BaseConf &baseConfig);
 void parseAutoIndex(std::string &trimmedLine, BaseConf &baseConfig);

@@ -8,43 +8,6 @@ namespace Parser {
 long starttime = 0;
  // namespace Parser
 
-// std::string abstractGlobalContent(const std::string &httpContent){
-
-// }
-
-std::string extractGlobalConfig(const std::string &httpContent) {
-  std::istringstream iss(httpContent);
-  std::string line;
-  std::string globalConfig;
-  
-  while (std::getline(iss, line)) {
-      // Skip empty lines and trim whitespace
-      size_t start = line.find_first_not_of(" \t\n\r");
-      if (start == std::string::npos)
-          continue; // Skip empty lines
-          
-      // Find last non-whitespace character
-      size_t end = line.find_last_not_of(" \t\n\r");
-      std::string trimmedLine = line.substr(start, end - start + 1);
-      
-      // Skip comments
-      if (trimmedLine.empty() || trimmedLine[0] == '#')
-          continue;
-          
-      // Check if we've found the first server block
-      if (trimmedLine.find("server") != std::string::npos && 
-          trimmedLine.find("{") != std::string::npos) {
-          debuglog(GREEN, "Found first server block, ended global config extraction");
-          break; // Stop extraction when server block is found
-      }
-      
-      // Add line to global config
-      globalConfig += line + "\n";
-  }
-  
-  return globalConfig;
-}
-
 void parse(std::string filename, std::vector<ServerData> &servers,
            std::map<uint16_t, ServerData *> &port_map_) {
 
@@ -100,6 +63,28 @@ std::string abstratHttpContent(std::string content)
       return httpContent; 
 }
 
+std::string extractGlobalConfig(const std::string &httpContent) {
+  std::istringstream iss(httpContent);
+  std::string line;
+  std::string globalConfig;
+  
+  while (std::getline(iss, line)) {
+      std::string trimmedLine = trimLine(line);
+      if (trimmedLine.empty() || trimmedLine[0] == '#')
+          continue;
+          
+      // Check if we've found the first server block
+      if (trimmedLine.find("server") != std::string::npos && 
+          trimmedLine.find("{") != std::string::npos) {
+          debuglog(GREEN, "Found first server block, ended global config extraction");
+          break; // Stop extraction when server block is found
+      }
+      globalConfig += line + "\n";
+  }
+
+  return globalConfig;
+}
+
 void parsePortToServer(std::vector<ServerData> &servers,
   std::map<uint16_t, ServerData *> &port_map_) {
 
@@ -110,38 +95,17 @@ void parsePortToServer(std::vector<ServerData> &servers,
     }
 }
 
-std::string abstractErrorPageBlock(std::string &trimmedLine, const std::string &httpContent, 
-    BaseConf &baseConfig){
-  size_t blockStart = trimmedLine.find("{");
-  size_t linePos = httpContent.find(trimmedLine);
-  std::string errorPageBlock; // Declare errorPageBlock here
-  if (linePos != std::string::npos) {
-    size_t blockEnd = findClosingBrace(httpContent, linePos + blockStart + 1);
-    if (blockEnd != std::string::npos) {
-      errorPageBlock = httpContent.substr(
-          linePos + blockStart + 1, blockEnd - (linePos + blockStart + 1)); 
-    }
-  }
-  return errorPageBlock;
-}
-
 void parseGlobalSettings(const std::string &globalContent, BaseConf &baseConfig) {
 
   std::istringstream iss(globalContent);
   std::string line;
 
   while (std::getline(iss, line)) {
-    size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
-        continue; // Skip empty lines
-    size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
-
+    std::string trimmedLine = trimLine(line);
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
         continue; // Skip comments
     }
 
-    // Check for global settings
     if (trimmedLine.find("maxBodySize") == 0) {
         parseMaxBodySize(trimmedLine, baseConfig);
     } 
@@ -203,6 +167,29 @@ void parseAutoIndex(std::string &trimmedLine, BaseConf &baseConfig){
   }
 }
 
+std::string abstractErrorPageBlock(std::string &trimmedLine, const std::string &httpContent, 
+  BaseConf &baseConfig){
+    size_t blockStart = trimmedLine.find("{");
+    size_t linePos = httpContent.find(trimmedLine);
+    std::string errorPageBlock; // Declare errorPageBlock here
+    if (linePos != std::string::npos) {
+        size_t blockEnd = findClosingBrace(httpContent, linePos + blockStart + 1);
+        if (blockEnd != std::string::npos) {
+            errorPageBlock = httpContent.substr(
+              linePos + blockStart + 1, blockEnd - (linePos + blockStart + 1)); 
+        }
+    }
+    return errorPageBlock;
+}
+
+std::string trimLine(const std::string &line) {
+  size_t start = line.find_first_not_of(" \t\n\r");
+  if (start == std::string::npos)
+    return "";
+    
+  size_t end = line.find_last_not_of(" \t\n\r");
+  return line.substr(start, end - start + 1);
+}
 
 void parseErrorPageBlock(const std::string &blockContent,
                          BaseConf &baseConfig) {
@@ -210,17 +197,10 @@ void parseErrorPageBlock(const std::string &blockContent,
   std::string line;
 
   while (std::getline(iss, line)) {
-    // Trim whitespace
-    size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
-      continue;
-    size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
-
+    std::string trimmedLine = trimLine(line);
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
       continue;
     }
-
     // Extract the first part as the error code (3-digit number)
     size_t spacePos = trimmedLine.find_first_of(" \t");
     if (spacePos == std::string::npos)
@@ -342,15 +322,9 @@ void parseServerBlock(const std::string &serverBlockContent,
   std::string line;
 
   while (std::getline(iss, line)) {
-    // Trim whitespace
-    size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
-      continue; // Skip empty lines
-    size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
-
+    std::string trimmedLine = trimLine(line);
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
-      continue; // Skip comments
+      continue; 
     }
 
     if (trimmedLine.find("serverListenAddress") == 0) {
@@ -525,12 +499,7 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
   location.error_pages = ServerData.error_pages;
 
   while (std::getline(iss, line)) {
-    size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
-      continue; // Skip empty lines
-    size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
-
+    std::string trimmedLine = trimLine(line);
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
       continue; // Skip comments
     }
@@ -659,12 +628,7 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
   std::string line;
 
   while (std::getline(iss, line)) {
-    size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
-      continue; // Skip empty lines
-    size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
-
+    std::string trimmedLine = trimLine(line);
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
       continue; // Skip comments
     }
