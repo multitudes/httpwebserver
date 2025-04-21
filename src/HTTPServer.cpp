@@ -275,42 +275,8 @@ int run(std::string configFile) {
 
           // before to read from child i check if i have a buffer leftover
 
-        if (!conn.cgiData.buffer.empty()) {
-          debug("leftover buffer from cgiData");
-          // write to cgi the buffer if any remaining from the
-          // initialisation
-          ssize_t bytes_written = ::write(current_fd,
-                                          conn.cgiData.buffer.c_str(),
-                                          conn.cgiData.buffer.size());
-          debug("Wrote %ld bytes to client", bytes_written);
+          write_to_client_from_cgi(conn, current_fd);
 
-          if (bytes_written < 0) {
-            perror("Failed to write to client");
-            debug("Failed to write to client");
-            conn.state = CONN_CGI_FINISHED;
-          } else if (bytes_written == 0) {
-            // Should not happen with blocking write unless size was 0
-            debuglog(YELLOW, "Wrote 0 bytes to client (buffer size: %zu)", conn.cgiData.buffer.size());
-            debuglog(RED, "Wrote 0 bytes to client unexpectedly.");
-            conn.state = CONN_CGI_FINISHED;
-          } else if (static_cast<size_t>(bytes_written) < conn.cgiData.buffer.size()) {
-            // Partial write: Remove written data and wait for next POLLOUT
-            debug("Partial write: Wrote %ld bytes to client (buffer size: %zu)", bytes_written, conn.cgiData.buffer.size());
-            conn.cgiData.buffer.erase(0, static_cast<std::string::size_type>(bytes_written));
-            // stay in the same state, poll will trigger again
-          } else {
-            // Full write (bytes_written == conn.cgiData.buffer.size())
-            debugcolor(MAGENTA, "wrote request buffer to client: %s", conn.cgiData.buffer.c_str()); // Log data before clearing
-            // TODO check the bytes received
-            conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
-            if (conn.cgiData.bytes_received >= conn.data.content_length) {
-                debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
-                // If we have written all data, clear the buffer
-                conn.cgiData.buffer.clear();
-              }
-              
-          }
-        }
 
           // after writing the excess buffer i need to read from the cgi
           for (size_t j = 0; j < pollfds.size(); j++) {
@@ -381,6 +347,56 @@ int run(std::string configFile) {
   return 0;
 }
 
+/**
+ * @brief Write the buffer to the client from CGI
+ *
+ * @param conn The connection data
+ * @param current_fd The current file descriptor
+ */
+void write_to_client_from_cgi(HTTPConnxData &conn, int current_fd) {
+  if (!conn.cgiData.buffer.empty()) {
+    debug("leftover buffer from cgiData");
+    // write to cgi the buffer if any remaining from the
+    // initialisation
+    ssize_t bytes_written = ::write(current_fd,
+                                    conn.cgiData.buffer.c_str(),
+                                    conn.cgiData.buffer.size());
+    debug("Wrote %ld bytes to client", bytes_written);
+
+    if (bytes_written < 0) {
+      perror("Failed to write to client");
+      debug("Failed to write to client");
+      conn.state = CONN_CGI_FINISHED;
+    } else if (bytes_written == 0) {
+      // Should not happen with blocking write unless size was 0
+      debuglog(YELLOW, "Wrote 0 bytes to client (buffer size: %zu)", conn.cgiData.buffer.size());
+      debuglog(RED, "Wrote 0 bytes to client unexpectedly.");
+      conn.state = CONN_CGI_FINISHED;
+    } else if (static_cast<size_t>(bytes_written) < conn.cgiData.buffer.size()) {
+      // Partial write: Remove written data and wait for next POLLOUT
+      debug("Partial write: Wrote %ld bytes to client (buffer size: %zu)", bytes_written, conn.cgiData.buffer.size());
+      conn.cgiData.buffer.erase(0, static_cast<std::string::size_type>(bytes_written));
+      // stay in the same state, poll will trigger again
+    } else {
+      // Full write (bytes_written == conn.cgiData.buffer.size())
+      debugcolor(MAGENTA, "wrote request buffer to client: %s", conn.cgiData.buffer.c_str()); // Log data before clearing
+      // TODO check the bytes received
+      conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
+      if (conn.cgiData.bytes_received >= conn.data.content_length) {
+          debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+          // If we have written all data, clear the buffer
+          conn.cgiData.buffer.clear();
+        }
+    }
+  }
+}
+
+/**
+ * @brief Read data from the client into the buffer
+ * 
+ * @param conn The connection data
+ * @param current_fd The current file descriptor
+ */
 void read_from_client_into_buffer(HTTPConnxData &conn, int current_fd) {
   conn.cgiData.buffer.resize(BUFFER_SIZE);
   ssize_t bytes_read =
@@ -697,6 +713,7 @@ HTTPConnxData &getConnectionData(int fd) {
     // Still not found? Cannot happen - maybe throw an exception?
     if (conn_it == connections.end()) {
       debuglog(RED, "FD %d not found in connections", fd);
+      throw std::runtime_error("FD not found in connections");
     }
   }
 
