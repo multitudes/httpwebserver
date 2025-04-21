@@ -10,7 +10,7 @@ const char *default_config_file = "config/default.conf";
 int maxConnections = 200;
 int requestTimeout = 10;
 int responseTimeout = 10;
-int keepalive_timeout = 100;
+int keepalive_timeout = 5;
 bool autoReload = false;
 
 void initStatusMessageMap() {
@@ -38,7 +38,6 @@ void initStatusMessageMap() {
   statusMessages[306] = "Switch Proxy";
   statusMessages[307] = "Temporary Redirect";
   statusMessages[308] = "Permanent Redirect";
-  statusMessages[404] = "error on Wikimedia";
   statusMessages[400] = "Bad Request";
   statusMessages[401] = "Unauthorized";
   statusMessages[402] = "Payment Required";
@@ -59,7 +58,7 @@ void initStatusMessageMap() {
   statusMessages[417] = "Expectation Failed";
   statusMessages[418] = "I'm a teapot";
   statusMessages[421] = "Misdirected Request";
-  statusMessages[422] = "Unprocessable Content";
+  statusMessages[422] = "Unprocessable Entity";
   statusMessages[423] = "Locked";
   statusMessages[424] = "Failed Dependency";
   statusMessages[425] = "Too Early";

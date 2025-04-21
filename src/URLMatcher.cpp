@@ -20,6 +20,204 @@ using std::string;
 
 namespace URLMatcher {
 
+/**
+ * @brief Validates incoming request, handles file/directory serving.
+ *        Prioritizes index file check, then autoindex check, then listing.
+ * @param conn The connection data structure.
+ */
+void validateRequest(HTTPConnxData &conn) {
+  
+  if (!receiveAndParseRequest(conn))
+    return; // Request handling complete or failed
+  
+  conn.urlMatcherData.config = Config::getConfigByPort(conn.data.port);
+  debug("conf root is %s", conn.urlMatcherData.config->root.c_str());
+  debug("target is %s", conn.data.target.c_str());
+    // Handle chunked data if present
+    if (!handleChunkedData(conn))
+        return; // Still receiving chunks
+
+    // Handle cookie update requests first
+    if (handleCookieUpdateRequest(conn)) {
+        return;
+    }
+
+    // Get server configuration and construct the standard target path
+    if (!getConfigSetURLMatcherData(conn))
+        return; // Request handling complete or failed
+
+    // check if target contains CGI alias
+    if (findCGIPathAlias(conn))
+        return;
+
+    updateWithLocationBlockConfig(conn);
+    if (conn.urlMatcherData.return_directive)
+        return;
+
+    // Debug log to verify location blocks are being checked
+    debuglog(
+        MAGENTA,
+        "URLMatcher: After location check - path_for_stat: '%s', autoindex: %s",
+        conn.urlMatcherData.path_for_stat.c_str(),
+        conn.urlMatcherData.autoindex ? "true" : "false");
+
+    // check if the request method is accepted (GET POST etc)
+    if (std::find(conn.urlMatcherData.acceptedMethods.begin(),
+                  conn.urlMatcherData.acceptedMethods.end(),
+                  std::string(conn.data.method)) ==
+        conn.urlMatcherData.acceptedMethods.end()) {
+      debuglog(RED, "URLMatcher: Method '%s' not allowed in location '%s'",
+               conn.data.method.c_str(), conn.urlMatcherData.full_path.c_str());
+      Responses::htmlErrorResponse(conn, 405); // Method Not Allowed
+       
+      return;
+    }
+    debug("accepted method found: %s", conn.data.method.c_str());
+
+    // handle DELETE request
+    if (conn.data.method == "DELETE") {
+      debuglog(YELLOW, "URLMatcher: DELETE request detected for path '%s'",
+               conn.urlMatcherData.full_path.c_str());
+
+      // Check if file upload is enabled for this location
+      if (conn.urlMatcherData.file_upload) {
+        debuglog(
+            GREEN,
+            "URLMatcher: File upload is enabled, attempting to delete the file");
+
+        // Delete the file directly using the full path without checking upload
+        // directory
+        int result = unlink(conn.urlMatcherData.full_path.c_str());
+        if (result == 0) {
+          debuglog(GREEN, "URLMatcher: Successfully deleted file '%s'",
+                   conn.urlMatcherData.full_path.c_str());
+          Responses::createResponse(conn, "text/plain", "File deleted", 200);
+        } else {
+          // Log the error if delete failed
+          debuglog(RED, "URLMatcher: Failed to delete file '%s': %s",
+                   conn.urlMatcherData.full_path.c_str(), strerror(errno));
+
+          // Check if file exists but can't be deleted, or doesn't exist
+          if (errno == ENOENT) {
+            Responses::htmlErrorResponse(conn, 404); // Not Found
+          } else {
+            Responses::createResponse(
+                conn, "text/plain",
+                "Failed to delete file: " + std::string(strerror(errno)), 500);
+          }
+        }
+         
+        return;
+      } else {
+        debuglog(RED, "URLMatcher: File upload is not enabled for this location");
+      }
+
+      debuglog(RED, "URLMatcher: DELETE request not allowed for path '%s'",
+               conn.urlMatcherData.full_path.c_str());
+      Responses::htmlErrorResponse(conn, 403); // Forbidden
+       
+      return;
+    }
+
+    // Check if the request is a POST request with a payload
+    if (conn.data.method == "POST" && conn.data.content_length > 0) {
+      debug("POST request detected");
+      debuglog(YELLOW, "URLMatcher: Upload request detected.");
+
+        // Add this code to check max body size
+    if (conn.data.content_length > conn.urlMatcherData.config->maxBodySize) {
+      debuglog(RED, "URLMatcher: Content length %zu exceeds maximum allowed size %zu", 
+             conn.data.content_length, conn.urlMatcherData.config->maxBodySize);
+      Responses::htmlErrorResponse(conn, 413); // Request Entity Too Large
+      return;
+  }
+  
+      // check if upload allowed
+      if (!conn.urlMatcherData.file_upload) {
+        debug("file upload not allowed");
+        debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
+                 conn.urlMatcherData.full_path.c_str());
+        Responses::htmlErrorResponse(conn, 403); // Forbidden
+         
+        return;
+      }
+      debugcolor(MAGENTA, "opening file for upload: %s",
+                 conn.urlMatcherData.full_path.c_str());
+      conn.file_fd = open(conn.urlMatcherData.full_path.c_str(),
+                          O_WRONLY | O_CREAT | O_TRUNC, 0644);
+      if (conn.file_fd < 0) {
+        perror("URLMatcher: Failed to open file for upload");
+        Responses::htmlErrorResponse(conn, 500); // Internal Server Error
+         
+        return;
+      }
+
+      std::string payload = conn.data.request.substr(conn.data.headers_end);
+      if (!payload.empty()) {
+        debug("payload found %s", payload.c_str());
+        conn.data.response = payload;
+        conn.data.bytes_sent = 0;
+      }
+      conn.state = CONN_UPLOAD;
+      debug("setting state to CONN_UPLOAD");
+      return;
+    } // end POST
+
+    if (conn.data.method == "GET") {
+      struct stat path_stat;
+      if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0) {
+        perror("URLMatcher: stat failed");
+        Responses::htmlErrorResponse(conn, 404); // Not Found
+         
+        return;
+      }
+
+      // Handle regular file
+      if (S_ISREG(path_stat.st_mode)) {
+        handleRegularFile(conn, conn.urlMatcherData.path_for_stat, path_stat);
+      }
+      // Handle directory
+      else if (S_ISDIR(path_stat.st_mode)) {
+        debuglog(YELLOW, "URLMatcher: Target is a directory '%s'",
+                 conn.urlMatcherData.full_path.c_str());
+
+        // First check for an index file
+        string index_file_path = conn.urlMatcherData.full_path;
+        if (index_file_path.empty() ||
+            index_file_path[index_file_path.length() - 1] != '/') {
+          index_file_path += '/';
+        }
+        index_file_path += conn.urlMatcherData.config->index;
+
+        struct stat index_stat;
+        debuglog(YELLOW, "URLMatcher: Checking for index file at '%s'",
+                 index_file_path.c_str());
+
+        // If index file exists, serve it
+        if (stat(index_file_path.c_str(), &index_stat) == 0 &&
+            S_ISREG(index_stat.st_mode)) {
+          handleIndexFile(conn, index_file_path, index_stat);
+        }
+        // Otherwise, try directory listing
+        else {
+          debuglog(YELLOW,
+                   "URLMatcher: Index file '%s' not found or not regular. "
+                   "Checking autoindex.",
+                   conn.urlMatcherData.config->index.c_str());
+          handleDirectoryListing(conn);
+        }
+      }
+      // Handle other file types
+      else {
+        debuglog(RED, "URLMatcher: Path '%s' is not a regular file or directory.",
+                 conn.urlMatcherData.path_for_stat.c_str());
+        Responses::htmlErrorResponse(conn, 415); // Unsupported Media Type
+         
+      }
+    } // end GET
+} // end of validateRequest
+
+
 // handles %20 -> space, %2F -> /, $3F -> ?, +  -> space etc...
 string urlDecode(const string& encoded) {
     string decoded;
@@ -91,21 +289,25 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
 
   // Remove old chunking code and just handle headers
   switch (conn.parseHeaders(conn)) {
-  case PARSE_SUCCESS:
+  case HEADERS_PARSE_SUCCESS:
     debuglog(YELLOW, "Headers parsed successfully");
     conn.data.headers_received = true;
     conn.urlMatcherData.target = urlDecode(conn.data.target);
     debuglog(YELLOW, "Decoded target path: '%s'", conn.data.target.c_str());
     break;
-  case PARSE_INCOMPLETE:
+  case HEADERS_PARSE_INCOMPLETE:
     debuglog(YELLOW, "Headers incomplete");
     conn.state = CONN_PARSING_HEADER;
     return false;
-  case PARSE_ERROR:
+  case HEADERS_PARSE_ERROR:
     debuglog(RED, "Error parsing headers");
+    debug("Error parsing headers");
     HTTPServer::send_critical_error(conn.client_fd, 400);
-    conn.state = CONN_SIMPLE_RESPONSE;
-    debuglog(RED, "Error parsing headers");
+    conn.reset();
+    SocketUtils::remove_from_poll(conn.client_fd);
+    close(conn.client_fd);
+    HTTPServer::lastActivityTime.erase(conn.client_fd);
+    HTTPServer::connections.erase(conn.client_fd);
     return false;
   }
 
@@ -121,7 +323,6 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
  * complete
  */
 bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
-  conn.urlMatcherData.config = Config::getConfigByPort(conn.data.port);
   if (!conn.urlMatcherData.config) {
     debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
     Responses::htmlErrorResponse(conn, 500); // Internal Server Error
@@ -235,7 +436,6 @@ bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat,
   conn.file_size = path_stat.st_size;
   conn.state = CONN_FILE_REQUEST;
 
-  // Use the overloaded version that doesn't need the content type parameter
   Responses::prepareFileResponse(conn, conn.file_size);
 
   debuglog(GREEN,
@@ -342,7 +542,7 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
     debuglog(BLUE, "URLMatcher: Updated full path to CGI: '%s'",
              conn.urlMatcherData.full_path.c_str());
     conn.cgiData.script_name = conn.urlMatcherData.full_path;
-    conn.state = CONN_CGI;
+    conn.state = CONN_CGI_INCOMING;
     debug("CGI request detected");
     // Start CGI process for this connection
     if (CGI::prepareCGI(conn) < 0) {
@@ -531,200 +731,6 @@ bool handleChunkedData(HTTPConnxData &conn) {
   debuglog(GREEN, "Successfully dechunked data (size: %zu)", dechunked.length());
   return true;
 }
-
-/**
- * @brief Validates incoming request, handles file/directory serving.
- *        Prioritizes index file check, then autoindex check, then listing.
- * @param conn The connection data structure.
- */
-void validateRequest(HTTPConnxData &conn) {
-    if (!receiveAndParseRequest(conn))
-        return; // Request handling complete or failed
-
-    // Handle chunked data if present
-    if (!handleChunkedData(conn))
-        return; // Still receiving chunks
-
-    // Handle cookie update requests first
-    if (handleCookieUpdateRequest(conn)) {
-        return;
-    }
-
-    // Get server configuration and construct the standard target path
-    if (!getConfigSetURLMatcherData(conn))
-        return; // Request handling complete or failed
-
-    // check if target contains CGI alias
-    if (findCGIPathAlias(conn))
-        return;
-
-    updateWithLocationBlockConfig(conn);
-    if (conn.urlMatcherData.return_directive)
-        return;
-
-    // Debug log to verify location blocks are being checked
-    debuglog(
-        MAGENTA,
-        "URLMatcher: After location check - path_for_stat: '%s', autoindex: %s",
-        conn.urlMatcherData.path_for_stat.c_str(),
-        conn.urlMatcherData.autoindex ? "true" : "false");
-
-    // check if the request method is accepted (GET POST etc)
-    if (std::find(conn.urlMatcherData.acceptedMethods.begin(),
-                  conn.urlMatcherData.acceptedMethods.end(),
-                  std::string(conn.data.method)) ==
-        conn.urlMatcherData.acceptedMethods.end()) {
-      debuglog(RED, "URLMatcher: Method '%s' not allowed in location '%s'",
-               conn.data.method.c_str(), conn.urlMatcherData.full_path.c_str());
-      Responses::htmlErrorResponse(conn, 405); // Method Not Allowed
-       
-      return;
-    }
-    debug("accepted method found: %s", conn.data.method.c_str());
-
-    // handle DELETE request
-    if (conn.data.method == "DELETE") {
-      debuglog(YELLOW, "URLMatcher: DELETE request detected for path '%s'",
-               conn.urlMatcherData.full_path.c_str());
-
-      // Check if file upload is enabled for this location
-      if (conn.urlMatcherData.file_upload) {
-        debuglog(
-            GREEN,
-            "URLMatcher: File upload is enabled, attempting to delete the file");
-
-        // Delete the file directly using the full path without checking upload
-        // directory
-        int result = unlink(conn.urlMatcherData.full_path.c_str());
-        if (result == 0) {
-          debuglog(GREEN, "URLMatcher: Successfully deleted file '%s'",
-                   conn.urlMatcherData.full_path.c_str());
-          Responses::createResponse(conn, "text/plain", "File deleted", 200);
-        } else {
-          // Log the error if delete failed
-          debuglog(RED, "URLMatcher: Failed to delete file '%s': %s",
-                   conn.urlMatcherData.full_path.c_str(), strerror(errno));
-
-          // Check if file exists but can't be deleted, or doesn't exist
-          if (errno == ENOENT) {
-            Responses::htmlErrorResponse(conn, 404); // Not Found
-          } else {
-            Responses::createResponse(
-                conn, "text/plain",
-                "Failed to delete file: " + std::string(strerror(errno)), 500);
-          }
-        }
-         
-        return;
-      } else {
-        debuglog(RED, "URLMatcher: File upload is not enabled for this location");
-      }
-
-      debuglog(RED, "URLMatcher: DELETE request not allowed for path '%s'",
-               conn.urlMatcherData.full_path.c_str());
-      Responses::htmlErrorResponse(conn, 403); // Forbidden
-       
-      return;
-    }
-
-    // Check if the request is a POST request with a payload
-    if (conn.data.method == "POST" && conn.data.content_length > 0) {
-      debug("POST request detected");
-      debuglog(YELLOW, "URLMatcher: Upload request detected.");
-
-        // Add this code to check max body size
-    if (conn.data.content_length > conn.urlMatcherData.config->maxBodySize) {
-      debuglog(RED, "URLMatcher: Content length %zu exceeds maximum allowed size %zu", 
-             conn.data.content_length, conn.urlMatcherData.config->maxBodySize);
-      Responses::htmlErrorResponse(conn, 413); // Request Entity Too Large
-      return;
-  }
-  
-      // check if upload allowed
-      if (!conn.urlMatcherData.file_upload) {
-        debug("file upload not allowed");
-        debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
-                 conn.urlMatcherData.full_path.c_str());
-        Responses::htmlErrorResponse(conn, 403); // Forbidden
-         
-        return;
-      }
-      debugcolor(MAGENTA, "opening file for upload: %s",
-                 conn.urlMatcherData.full_path.c_str());
-      conn.file_fd = open(conn.urlMatcherData.full_path.c_str(),
-                          O_WRONLY | O_CREAT | O_TRUNC, 0644);
-      if (conn.file_fd < 0) {
-        perror("URLMatcher: Failed to open file for upload");
-        Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-         
-        return;
-      }
-
-      std::string payload = conn.data.request.substr(conn.data.headers_end);
-      if (!payload.empty()) {
-        debug("payload found %s", payload.c_str());
-        conn.data.response = payload;
-        conn.data.bytes_sent = 0;
-      }
-      conn.state = CONN_UPLOAD;
-      debug("setting state to CONN_UPLOAD");
-      return;
-    } // end POST
-
-    if (conn.data.method == "GET") {
-      struct stat path_stat;
-      if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0) {
-        perror("URLMatcher: stat failed");
-        Responses::htmlErrorResponse(conn, 404); // Not Found
-         
-        return;
-      }
-
-      // Handle regular file
-      if (S_ISREG(path_stat.st_mode)) {
-        handleRegularFile(conn, conn.urlMatcherData.path_for_stat, path_stat);
-      }
-      // Handle directory
-      else if (S_ISDIR(path_stat.st_mode)) {
-        debuglog(YELLOW, "URLMatcher: Target is a directory '%s'",
-                 conn.urlMatcherData.full_path.c_str());
-
-        // First check for an index file
-        string index_file_path = conn.urlMatcherData.full_path;
-        if (index_file_path.empty() ||
-            index_file_path[index_file_path.length() - 1] != '/') {
-          index_file_path += '/';
-        }
-        index_file_path += conn.urlMatcherData.config->index;
-
-        struct stat index_stat;
-        debuglog(YELLOW, "URLMatcher: Checking for index file at '%s'",
-                 index_file_path.c_str());
-
-        // If index file exists, serve it
-        if (stat(index_file_path.c_str(), &index_stat) == 0 &&
-            S_ISREG(index_stat.st_mode)) {
-          handleIndexFile(conn, index_file_path, index_stat);
-        }
-        // Otherwise, try directory listing
-        else {
-          debuglog(YELLOW,
-                   "URLMatcher: Index file '%s' not found or not regular. "
-                   "Checking autoindex.",
-                   conn.urlMatcherData.config->index.c_str());
-          handleDirectoryListing(conn);
-        }
-      }
-      // Handle other file types
-      else {
-        debuglog(RED, "URLMatcher: Path '%s' is not a regular file or directory.",
-                 conn.urlMatcherData.path_for_stat.c_str());
-        Responses::htmlErrorResponse(conn, 415); // Unsupported Media Type
-         
-      }
-    } // end GET
-} // end of validateRequest
-
 
 
 } // end of namespace URLMatcher

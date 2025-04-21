@@ -79,7 +79,7 @@ Your web server implements a classic state machine pattern through the `Connecti
 enum ConnectionState {
   CONN_INCOMING,       // New connection, nothing processed yet
   CONN_PARSING_HEADER, // Receiving/parsing headers
-  CONN_CGI,            // Processing CGI request
+  CONN_CGI_INCOMING,            // Processing CGI request
   CONN_FILE_REQUEST,   // Serving a file
   CONN_SIMPLE_RESPONSE,
   CONN_UPLOAD,         // Handling file upload
@@ -97,7 +97,7 @@ The state machine works like this:
 1. **Initial State**: Every new connection starts in `CONN_INCOMING`
 2. **First Transition**: After receiving data, it moves to `CONN_PARSING_HEADER`
 3. **Branching**: After headers are parsed, it transitions to:
-   - `CONN_CGI` for dynamic content
+   - `CONN_CGI_INCOMING` for dynamic content
    - `CONN_FILE_REQUEST` for static files
    - `CONN_SIMPLE_RESPONSE` for basic responses
    - `CONN_UPLOAD` for file uploads
@@ -206,7 +206,7 @@ struct ConnectionData {
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_set(false), sending_response(false), response_sent(false),
-          parse_status(PARSE_INCOMPLETE), 
+          parse_status(HEADERS_PARSE_INCOMPLETE), 
           session_id(""), has_session(false), 
           session_created(0), session_last_accessed(0), session_data() {
         memset(client_ip, 0, sizeof(client_ip)); 

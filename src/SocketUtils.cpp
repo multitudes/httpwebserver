@@ -63,12 +63,13 @@ void initialize() {
 }
 
 void setSignalHandlers() {
-  // SIGINT is ctrl+c
-  // SIGQUIT is ctrl+\
-// SIGTERM is kill
-  // SIGHUP is terminal hangup
-  // SIGPIPE is write to a socket that has been closed
-  // SIGCHLD is child process terminated
+  /* SIGINT is ctrl+c
+  SIGQUIT is ctrl+\
+  SIGTERM is kill
+  SIGHUP is terminal hangup
+  SIGPIPE is write to a socket that has been closed
+  SIGCHLD is child process terminated
+  */
   signal(SIGINT, handleSignal);
   signal(SIGQUIT, handleSignal);
   signal(SIGTERM, handleSignal);
@@ -396,5 +397,111 @@ return dst;
 errno = EAFNOSUPPORT;
 return NULL;
 }
+
+/**
+ * @brief Print the local address of the client
+ *
+ * @param clientfd The client socket file descriptor
+ * @return bool True if the address was printed successfully, false otherwise
+ *
+ * The local address refers to the IP address and port number assigned to the
+ * server's socket on the local machine. This is the address that the server
+ * uses to listen for incoming connections from clients.
+ */
+bool printLocalAddress(int clientfd) {
+  struct sockaddr_in local_addr;
+  socklen_t addr_len = sizeof(local_addr);
+  if (::getsockname(clientfd, (struct sockaddr *)&local_addr, &addr_len) ==
+      -1) {
+    debug("[Server] getsockname error: %s\n", strerror(errno));
+    return false;
+  }
+  uint16_t local_port = ntohs(local_addr.sin_port);
+  debug("[Server] Accepted new connection on client socket %d, port %d",
+        clientfd, local_port);
+  return true;
+}
+
+
+bool gotPollhupShouldSkip(pollfd &currentfd) {
+    // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
+  // requested
+  if (currentfd.revents & POLLHUP) {
+    debuglog(RED, "Connection closed on fd %d ", currentfd.fd);
+    debug("Connection closed on fd %d ", currentfd.fd);
+    // Now safely get reference
+    HTTPConnxData &conn = HTTPServer::getConnectionData(currentfd.fd);
+
+    if (currentfd.fd == conn.client_fd) {
+      debug("POLLHUP on client fd %d", currentfd.fd);
+      SocketUtils::remove_from_poll(currentfd.fd);
+      close(currentfd.fd);
+      HTTPServer::lastActivityTime.erase(currentfd.fd);
+      debug("Closing and erasing the connection %d from the map", currentfd.fd);
+      HTTPServer::connections.erase(conn.client_fd);
+      return true;
+    }
+
+    // non fatal pollhups
+    if (currentfd.fd == conn.cgiData.cgi_stdin_fd) {
+      debug("POLLHUP on CGI stdin pipe %d", conn.cgiData.cgi_stdin_fd);
+      close(conn.cgiData.cgi_stdin_fd);
+      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+      conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+    } else if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
+      debug("POLLHUP on CGI stdout pipe %d", conn.cgiData.cgi_stdout_fd);
+      close(conn.cgiData.cgi_stdout_fd);
+      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+      conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
+    }
+
+    // Check if both pipes are closed, and reset the connection if needed
+    if (conn.cgiData.cgi_stdin_fd == -1 &&
+        conn.cgiData.cgi_stdout_fd == -1) {
+      debug("Both CGI pipes closed, resetting connection");
+      conn.reset();
+    }
+  }
+  return false;
+}
+
+bool gotPollerrShouldSkip(pollfd &currentfd) {
+  if (currentfd.revents & (POLLERR | POLLNVAL)) {
+    debuglog(RED, "Error condition on fd %d", currentfd.fd);
+    int error = 0;
+    socklen_t len = sizeof(error);
+    HTTPConnxData &conn = HTTPServer::getConnectionData(currentfd.fd);
+    if (::getsockopt(currentfd.fd, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
+      debug("Socket error on fd %d: %s", currentfd.fd, strerror(error));
+      // handle EPIPE (Broken pipe)
+      if (error == EPIPE) {
+        debug("Client disconnected (EPIPE) on fd %d", currentfd.fd);
+        debuglog(YELLOW, "Client disconnected (EPIPE) on fd %d", currentfd.fd);
+        if (currentfd.fd == conn.cgiData.cgi_stdin_fd) {
+          debug("Closing CGI stdin pipe %d", currentfd.fd);
+          close(conn.cgiData.cgi_stdin_fd);
+          SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+          conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+        } else if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
+          debug("Closing CGI stdout pipe %d", currentfd.fd);
+          close(conn.cgiData.cgi_stdout_fd);
+          SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+          conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
+        } else if (currentfd.fd == conn.client_fd) {
+          debug("Closing client fd %d", currentfd.fd);
+          SocketUtils::remove_from_poll(currentfd.fd);
+          close(currentfd.fd);
+          HTTPServer::lastActivityTime.erase(currentfd.fd);
+
+          debug("Erasing the connection %d from the map", currentfd.fd);
+          HTTPServer::connections.erase(conn.client_fd);
+        }
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 
 } // namespace SocketUtils
