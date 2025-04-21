@@ -50,7 +50,16 @@ bool isValidServerKeyword(const std::string &content, size_t pos);
 bool findNextServerBlock(const std::string &httpContent, size_t pos, 
     ServerBlockInfo &blockInfo);
 void parseServerBlock(const std::string &serverBlockContent,
-                      ServerData &ServerData, std::set<int> &Portset);
+                      ServerData &serverData, std::set<int> &portset);
+void parseServerListenAddress(const std::string &trimmedLine, ServerData &serverData);
+void parseServerRoot(std::string trimmedLine, ServerData &serverData);
+void parseServerPort(std::string trimmedLine, ServerData &serverData, std::set<int> &portset);
+void parseServerName(std::string &trimmedLine, ServerData &serverData);
+void parseServerIndax(std::string &trimmedLine, ServerData &serverData);
+void parseAccceptedMethods(std::string &trimmedLine, ServerData &serverData);
+void parseLocationBlocks(const std::string &serverBlockContent, const std::string &trimmedLine, ServerData &serverData);
+std::string extractLocationPath(const std::string &trimmedLine);
+std::string extractLocationContent(const std::string &serverBlockContent, const std::string &trimmedLine);
 void parseLocationBlock(const std::string &locationContent, Location &location,
                         ServerData &ServerData);
 void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig);

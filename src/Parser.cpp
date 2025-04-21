@@ -406,65 +406,61 @@ void addServerIfValid(std::vector<ServerData> &servers, ServerData &serverData, 
 //   }
 // }
 
-void parseServerBlock(const std::string &serverBlockContent,
-                      ServerData &ServerData, std::set<int> &Portset) {
-  std::istringstream iss(serverBlockContent);
-  std::string line;
+void parseServerListenAddress(const std::string &trimmedLine, ServerData &serverData){
+  size_t valueStart = trimmedLine.find_first_not_of(" \t", 19);
+  size_t valueEnd = trimmedLine.find(';', valueStart);
 
-  while (std::getline(iss, line)) {
-    std::string trimmedLine = trimLine(line);
-    if (trimmedLine.empty() || trimmedLine[0] == '#') {
-      continue; 
+  if (valueEnd != std::string::npos) {
+    std::string value = trimmedLine.substr(valueStart, valueEnd - valueStart);
+    serverData.serverListenAddress = value;
+  }
+}
+
+void parseServerRoot(std::string trimmedLine, ServerData &serverData){
+
+  serverData.parsedroot = true;
+  size_t valueStart = trimmedLine.find_first_not_of(" \t", 4);
+  size_t valueEnd = trimmedLine.find(';', valueStart);
+
+  if (valueEnd != std::string::npos) {
+    std::string value =
+        trimmedLine.substr(valueStart, valueEnd - valueStart);
+    serverData.root = value;
+    if (serverData.root[serverData.root.length() - 1] != '/') {
+      serverData.root += '/';
     }
+    serverData.upload_dir = serverData.root + "upload/";
+    debuglog(GREEN, "Server root: %s", serverData.root.c_str());
+    debuglog(GREEN, "Server upload_dir: %s", serverData.upload_dir.c_str());
+  }
+}
+    
+void parseServerPort(std::string trimmedLine, ServerData &serverData, std::set<int> &portset){
+  size_t portStart = trimmedLine.find_first_not_of(" \t", 6);
+  size_t portEnd = trimmedLine.find(';', portStart);
+  if (portEnd != std::string::npos) {
+    std::string portStr =
+        trimmedLine.substr(portStart, portEnd - portStart);
+    uint16_t port = static_cast<uint16_t>(atoi(portStr.c_str()));
 
-    if (trimmedLine.find("serverListenAddress") == 0) {
-      size_t valueStart = trimmedLine.find_first_not_of(" \t", 19);
-      size_t valueEnd = trimmedLine.find(';', valueStart);
-
-      if (valueEnd != std::string::npos) {
-        std::string value =
-            trimmedLine.substr(valueStart, valueEnd - valueStart);
-        ServerData.serverListenAddress = value;
+    if (port > 0 && port <= 65535) {
+      if (portset.find(port) != portset.end()) {
+        debuglog(RED, "Port %u is already in use", port);
+      } else {
+        portset.insert(port);
+        serverData.ports.push_back(port);
+        debuglog(GREEN, "Server listening on port: %u", port);
       }
-    } else if (trimmedLine.find("root") == 0 && !ServerData.parsedroot) {
-      ServerData.parsedroot = true;
-      size_t valueStart = trimmedLine.find_first_not_of(" \t", 4);
-      size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
-            trimmedLine.substr(valueStart, valueEnd - valueStart);
-        ServerData.root = value;
-        if (ServerData.root[ServerData.root.length() - 1] != '/') {
-          ServerData.root += '/';
-        }
-        ServerData.upload_dir = ServerData.root + "upload/";
-        debuglog(GREEN, "Server root: %s", ServerData.root.c_str());
-        debuglog(GREEN, "Server upload_dir: %s", ServerData.upload_dir.c_str());
-      }
-    } else if (trimmedLine.find("listen") == 0) {
-      size_t portStart = trimmedLine.find_first_not_of(" \t", 6);
-      size_t portEnd = trimmedLine.find(';', portStart);
-      if (portEnd != std::string::npos) {
-        std::string portStr =
-            trimmedLine.substr(portStart, portEnd - portStart);
-        uint16_t port = static_cast<uint16_t>(atoi(portStr.c_str()));
+    } 
+    else {
+      debuglog(RED, "Invalid port number: %s", portStr.c_str());
+    }
+  }
+}
 
-        if (port > 0 && port <= 65535) {
-          if (Portset.find(port) != Portset.end()) {
-            debuglog(RED, "Port %u is already in use", port);
-          } else {
-            Portset.insert(port);
-            ServerData.ports.push_back(port);
-            debuglog(GREEN, "Server listening on port: %u", port);
-          }
-
-        } else {
-          debuglog(RED, "Invalid port number: %s", portStr.c_str());
-        }
-      }
-    } else if (trimmedLine.find("server_name") == 0) {
-      size_t nameStart = trimmedLine.find_first_not_of(" \t", 11);
+void parseServerName(std::string &trimmedLine, ServerData &serverData){
+  size_t nameStart = trimmedLine.find_first_not_of(" \t", 11);
       size_t nameEnd = trimmedLine.find(';', nameStart);
 
       if (nameEnd != std::string::npos) {
@@ -476,24 +472,28 @@ void parseServerBlock(const std::string &serverBlockContent,
 
         // Read each name separated by whitespace
         while (nameStream >> name) {
-          ServerData.server_names.push_back(name);
+          serverData.server_names.push_back(name);
           debuglog(GREEN, "Server name: %s", name.c_str());
         }
       }
-    } else if (trimmedLine.find("index") == 0) {
-      size_t valueStart = trimmedLine.find_first_not_of(" \t", 5);
+}
+
+void parseServerIndax(std::string &trimmedLine, ServerData &serverData){
+  size_t valueStart = trimmedLine.find_first_not_of(" \t", 5);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
       if (valueEnd != std::string::npos) {
         std::string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         if (value == "on") {
-          ServerData.autoindex = true;
+          serverData.autoindex = true;
           debuglog(GREEN, "Server autoindex: on");
         }
       }
-    } else if (trimmedLine.find("acceptedMethods") == 0) {
-      size_t methodsStart = trimmedLine.find_first_not_of(" \t", 12);
+}
+
+void parseAccceptedMethods(std::string &trimmedLine, ServerData &serverData){
+  size_t methodsStart = trimmedLine.find_first_not_of(" \t", 12);
       size_t openBrace = trimmedLine.find("{");
       size_t semiColon = trimmedLine.find(";");
 
@@ -505,7 +505,7 @@ void parseServerBlock(const std::string &serverBlockContent,
 
         while (methodStream >> method) {
           if (method != "{") {
-            ServerData.acceptedMethods.push_back(method);
+            serverData.acceptedMethods.push_back(method);
             debuglog(GREEN, "Server accepted method: %s", method.c_str());
           }
         }
@@ -519,63 +519,174 @@ void parseServerBlock(const std::string &serverBlockContent,
         std::string method;
 
         while (methodStream >> method) {
-          ServerData.acceptedMethods.push_back(method);
+          serverData.acceptedMethods.push_back(method);
           debuglog(GREEN, "Server accepted method: %s", method.c_str());
         }
       }
-    } else if (trimmedLine.find("location") == 0) {
-      ServerData.has_locations = true;
-      size_t pathStart = trimmedLine.find_first_not_of(" \t", 8);
-      if (pathStart != std::string::npos) {
-        size_t pathEnd;
-        size_t openBrace = trimmedLine.find("{");
+}
 
-        if (openBrace != std::string::npos) {
-          pathEnd = trimmedLine.find_last_not_of(" \t", openBrace - 1);
+void parseLocationBlocks(const std::string &serverBlockContent, const std::string &trimmedLine, ServerData &serverData) {
+  // Mark that this server has location blocks
+  serverData.has_locations = true;
+  
+  // Extract the location path
+  std::string path = extractLocationPath(trimmedLine);
+  if (path.empty()) {
+    debuglog(RED, "Failed to extract valid location path");
+    return;
+  }
+  
+  debuglog(GREEN, "Found location block for path: %s", path.c_str());
+  
+  // Extract the location block content
+  std::string locationContent = extractLocationContent(serverBlockContent, trimmedLine);
+  if (locationContent.empty()) {
+    debuglog(RED, "Failed to extract location content for path: %s", path.c_str());
+    return;
+  }
+  
+  // Parse the location content and store in the server data
+  Location location;
+  parseLocationBlock(locationContent, location, serverData);
+  serverData.location_blocks[path] = location;
+}
 
-          std::string path =
-              trimmedLine.substr(pathStart, pathEnd - pathStart + 1);
-          debuglog(GREEN, "Found location block for path: %s", path.c_str());
+/**
+ * Extract the path from a location directive line
+ */
+std::string extractLocationPath(const std::string &trimmedLine) {
+  // Find the start of the path (after "location ")
+  size_t pathStart = trimmedLine.find_first_not_of(" \t", 8);
+  if (pathStart == std::string::npos) {
+    return "";
+  }
+  
+  // Find the end of the path (before the opening brace)
+  size_t openBrace = trimmedLine.find("{");
+  if (openBrace == std::string::npos) {
+    return "";
+  }
+  
+  // Find the last character of the path
+  size_t pathEnd = trimmedLine.find_last_not_of(" \t", openBrace - 1);
+  if (pathEnd == std::string::npos || pathEnd < pathStart) {
+    return "";
+  }
+  
+  // Extract and return the path
+  return trimmedLine.substr(pathStart, pathEnd - pathStart + 1);
+}
 
-          // Find location block content in the serverBlockContent
-          size_t locationPos = serverBlockContent.find(trimmedLine);
 
-          if (locationPos != std::string::npos) {
-            size_t blockStart = serverBlockContent.find("{", locationPos) + 1;
-            size_t blockEnd = findClosingBrace(serverBlockContent, blockStart);
+std::string extractLocationContent(const std::string &serverBlockContent, const std::string &trimmedLine) {
+  // Find the location line in the server content
+  size_t locationPos = serverBlockContent.find(trimmedLine);
+  if (locationPos == std::string::npos) {
+    return "";
+  }
+  
+  // Find the opening brace and calculate the content start position
+  size_t blockStart = serverBlockContent.find("{", locationPos);
+  if (blockStart == std::string::npos) {
+    return "";
+  }
+  blockStart++; // Skip the opening brace
+  
+  // Find the matching closing brace
+  size_t blockEnd = findClosingBrace(serverBlockContent, blockStart);
+  if (blockEnd == std::string::npos) {
+    return "";
+  }
+  
+  // Extract and return the content between braces
+  return serverBlockContent.substr(blockStart, blockEnd - blockStart);
+}
 
-            if (blockEnd != std::string::npos) {
-              std::string locationContent =
-                  serverBlockContent.substr(blockStart, blockEnd - blockStart);
+// void parseLocationBlocks(const std::string &serverBlockContent, std::string &trimmedLine, ServerData &serverData){
+  
+//   serverData.has_locations = true;
+//       size_t pathStart = trimmedLine.find_first_not_of(" \t", 8);
+//       if (pathStart != std::string::npos) {
+//         size_t pathEnd;
+//         size_t openBrace = trimmedLine.find("{");
 
-              Location location;
-              parseLocationBlock(locationContent, location, ServerData);
-              ServerData.location_blocks[path] = location;
-            }
-          }
-        }
-      }
-    } else if (trimmedLine.find("cgi") == 0) {
-      size_t openBrace = trimmedLine.find("{");
-      ServerData.cgi_exists = true;
+//         if (openBrace != std::string::npos) {
+//           pathEnd = trimmedLine.find_last_not_of(" \t", openBrace - 1);
 
-      if (openBrace != std::string::npos) {
-        size_t locationPos = serverBlockContent.find(trimmedLine);
+//           std::string path =
+//               trimmedLine.substr(pathStart, pathEnd - pathStart + 1);
+//           debuglog(GREEN, "Found location block for path: %s", path.c_str());
 
-        if (locationPos != std::string::npos) {
-          size_t blockStart = serverBlockContent.find("{", locationPos) + 1;
-          size_t blockEnd = findClosingBrace(serverBlockContent, blockStart);
+//           // Find location block content in the serverBlockContent
+//           size_t locationPos = serverBlockContent.find(trimmedLine);
 
-          if (blockEnd != std::string::npos) {
-            std::string cgiContent =
-                serverBlockContent.substr(blockStart, blockEnd - blockStart);
-            parseCgiBlock(cgiContent, ServerData.cgiData);
-          }
-        }
+//           if (locationPos != std::string::npos) {
+//             size_t blockStart = serverBlockContent.find("{", locationPos) + 1;
+//             size_t blockEnd = findClosingBrace(serverBlockContent, blockStart);
+
+//             if (blockEnd != std::string::npos) {
+//               std::string locationContent =
+//                   serverBlockContent.substr(blockStart, blockEnd - blockStart);
+
+//               Location location;
+//               parseLocationBlock(locationContent, location, serverData);
+//               serverData.location_blocks[path] = location;
+//             }
+//           }
+//         }
+//       }
+// }
+
+void parseCgiConfig(std::string &trimmedLine, const std::string &serverBlockContent, ServerData &serverData){
+  size_t openBrace = trimmedLine.find("{");
+  serverData.cgi_exists = true;
+
+  if (openBrace != std::string::npos) {
+    size_t locationPos = serverBlockContent.find(trimmedLine);
+
+    if (locationPos != std::string::npos) {
+      size_t blockStart = serverBlockContent.find("{", locationPos) + 1;
+      size_t blockEnd = findClosingBrace(serverBlockContent, blockStart);
+
+      if (blockEnd != std::string::npos) {
+        std::string cgiContent =
+            serverBlockContent.substr(blockStart, blockEnd - blockStart);
+        parseCgiBlock(cgiContent, serverData.cgiData);
       }
     }
   }
 }
+
+void parseServerBlock(const std::string &serverBlockContent,
+                      ServerData &serverData, std::set<int> &portset) {
+  std::istringstream iss(serverBlockContent);
+  std::string line;
+
+  while (std::getline(iss, line)) {
+    std::string trimmedLine = trimLine(line);
+    if (trimmedLine.empty() || trimmedLine[0] == '#') {
+      continue; 
+    }
+
+    if (trimmedLine.find("serverListenAddress") == 0) 
+        parseServerListenAddress(trimmedLine, serverData);
+    else if (trimmedLine.find("root") == 0 && !serverData.parsedroot) 
+        parseServerRoot(trimmedLine, serverData);
+    else if (trimmedLine.find("listen") == 0)
+      parseServerPort(trimmedLine, serverData, portset);
+    else if (trimmedLine.find("server_name") == 0)
+      parseServerName(trimmedLine, serverData);
+    else if (trimmedLine.find("index") == 0)
+      parseServerIndax(trimmedLine, serverData);
+    else if (trimmedLine.find("acceptedMethods") == 0)
+      parseAccceptedMethods(trimmedLine, serverData);
+    else if (trimmedLine.find("location") == 0)
+      parseLocationBlocks(serverBlockContent, trimmedLine, serverData);
+    else if (trimmedLine.find("cgi") == 0)
+      parseCgiConfig(trimmedLine, serverBlockContent, serverData);
+      }
+}
+
 
 void parseLocationBlock(const std::string &locationContent, Location &location,
                         ServerData &ServerData) {
