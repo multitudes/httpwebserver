@@ -197,6 +197,11 @@ int run(std::string configFile) {
 
       /*    -------- CGI FINISHED -----------      */
       if (conn.state == CONN_CGI_FINISHED) {
+        // sam=nity check
+        if (!conn.cgiData.buffer.empty()) {
+          throw std::runtime_error(
+              "[DEVELOPMENT] CGI finished but buffer is not empty. This should not happen.");
+        }
         if (conn.cgiData.cgi_stdin_fd != -1) {
           SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
         }
@@ -245,25 +250,29 @@ int run(std::string configFile) {
                 debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)", conn.cgiData.buffer.size());
                 debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
                 conn.state = CONN_CGI_FINISHED;
-              } else if (static_cast<size_t>(bytes_written) < conn.cgiData.buffer.size()) {
+              } else if (bytes_written < conn.cgiData.buffer.size()) {
                 // Partial write: Remove written data and wait for next POLLOUT
                 debug("Partial write: Wrote %ld bytes to CGI stdin (buffer size: %zu)", bytes_written, conn.cgiData.buffer.size());
                 conn.cgiData.buffer.erase(0, static_cast<std::string::size_type>(bytes_written));
                 conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
                 // stay in the same state, poll will trigger again
-              } else {
+              } else if (bytes_written == conn.cgiData.buffer.size()){
                 // Full write (bytes_written == conn.cgiData.buffer.size())
                 debugcolor(MAGENTA, "wrote request buffer to CGI: %s", conn.cgiData.buffer.c_str()); // Log data before clearing
-                // TODO check the bytes received
                 conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
-                if (conn.cgiData.bytes_received >= conn.data.content_length) {
-                    debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
-                    // If we have written all data, clear the buffer
-                    conn.cgiData.buffer.clear();
-                    conn.cgiData.bytes_received = 0;
-                    conn.state = CONN_CGI_SENDING;
-                  }
               }
+              if (conn.cgiData.bytes_received >= conn.data.content_length) {
+                  debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+                  // If we have written all data, clear the buffer
+                  conn.cgiData.buffer.clear();
+                  conn.cgiData.bytes_received = 0;
+                  // close the write end of the pipe to signal EOF to the CGI
+                  debuglog(YELLOW, "Closing write end of pipe");
+                  SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+                  close(conn.cgiData.cgi_stdin_fd);
+                  conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+                  conn.state = CONN_CGI_SENDING;
+                }
               break; // whatever happens to the state we break the for loop because we found 
                     // the fd we were looking for
               
