@@ -30,6 +30,7 @@ void parseMaxBodySize(std::string &trimmedLine, BaseConf &baseConfig);
 void parseAutoIndex(std::string &trimmedLine, BaseConf &baseConfig);
 std::string abstractErrorPageBlock(std::string &trimmedLine, const std::string &httpContent, BaseConf &baseConfig);
 void parseErrorPageBlock(const std::string &blockContent, BaseConf &baseConfig);
+std::string extractPathFromLine(const std::string &line, size_t spacePos);
 size_t findClosingBrace(const std::string &content, size_t start);
 template <typename T>
 bool parseNumericValue(const std::string &line, const std::string &param,

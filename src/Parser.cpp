@@ -5,7 +5,7 @@
 
 namespace Parser {
 
-long starttime = 0;
+  long starttime = 0;
  // namespace Parser
 
 void parse(std::string filename, std::vector<ServerData> &servers,
@@ -215,26 +215,27 @@ void parseErrorPageBlock(const std::string &blockContent,
     }
 
     int errorCode = atoi(errorCodeStr.c_str());
-
-    // Extract the path (everything after the space until semicolon)
-    size_t pathStart = trimmedLine.find_first_not_of(" \t", spacePos);
-    size_t pathEnd = trimmedLine.find(';', pathStart);
-    if (pathStart == std::string::npos)
-      continue;
-
-    std::string path;
-    if (pathEnd != std::string::npos) {
-      path = trimmedLine.substr(pathStart, pathEnd - pathStart);
-    } else {
-      path = trimmedLine.substr(pathStart);
-    }
-
-    // Remove any trailing whitespace from path
-    path = path.substr(0, path.find_last_not_of(" \t") + 1);
+    std::string path = extractPathFromLine(trimmedLine, spacePos);
 
     baseConfig.error_pages[errorCode] = path;
     debuglog(GREEN, "error page %d: %s", errorCode, path.c_str());
   }
+}
+
+std::string extractPathFromLine(const std::string &trimmedLine, size_t spacePos) {
+  // Find the start of the path
+  size_t pathStart = trimmedLine.find_first_not_of(" \t", spacePos);
+  size_t pathEnd = trimmedLine.find(';', pathStart);
+  if (pathStart == std::string::npos)
+    return ""; // No path found
+
+  std::string path;
+  if (pathEnd != std::string::npos) {
+    path = trimmedLine.substr(pathStart, pathEnd - pathStart);
+  } else {
+    path = trimmedLine.substr(pathStart);
+  }
+  return path;
 }
 
 void parseServerBlocks(const std::string &httpContent,
