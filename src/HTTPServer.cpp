@@ -131,7 +131,7 @@ int run(std::string configFile) {
 
       // Update activity time ONLY when I/O actually happens
       if (pollfds[i].revents & (POLLIN | POLLOUT)) {
-        lastActivityTime[current_fd] = std::time(NULL);
+        lastActivityTime[conn.client_fd] = std::time(NULL);
       }
 
       /* -------------  CONN_INCOMING  ---------------- */
@@ -720,12 +720,9 @@ HTTPConnxData &getConnectionData(int fd) {
         break;
       }
     }
-    // Still not found?
+    // Still not found? Cannot happen - maybe throw an exception?
     if (conn_it == connections.end()) {
       debuglog(RED, "FD %d not found in connections", fd);
-      close(fd);
-      SocketUtils::remove_from_poll(fd);
-      lastActivityTime.erase(fd);
     }
   }
 

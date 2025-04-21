@@ -357,13 +357,14 @@ void checkForIdleConnections() {
   std::time_t now = std::time(NULL);
   std::map<int, std::time_t>::iterator it =
       HTTPServer::lastActivityTime.begin();
-
+  // only clientfds have to be in the lastActivityTime map
+  // so we can safely? erase them
   while (it != HTTPServer::lastActivityTime.end()) {
     if (now - it->second > Constants::keepalive_timeout) {
       int fd = it->first;
       debuglog(YELLOW, "Closing idle connection (fd %d)", fd);
-
-      HTTPServer::connections.erase(fd);
+      HTTPServer::getConnectionData(fd).reset();
+      // HTTPServer::connections.erase(fd);
       remove_from_poll(fd);
       close(fd);
       HTTPServer::lastActivityTime.erase(it++);
