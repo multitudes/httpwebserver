@@ -6,13 +6,69 @@
 namespace Parser {
 
 long starttime = 0;
+ // namespace Parser
+
+// std::string abstractGlobalContent(const std::string &httpContent){
+
+// }
+
+std::string extractGlobalConfig(const std::string &httpContent) {
+  std::istringstream iss(httpContent);
+  std::string line;
+  std::string globalConfig;
+  
+  while (std::getline(iss, line)) {
+      // Skip empty lines and trim whitespace
+      size_t start = line.find_first_not_of(" \t\n\r");
+      if (start == std::string::npos)
+          continue; // Skip empty lines
+          
+      // Find last non-whitespace character
+      size_t end = line.find_last_not_of(" \t\n\r");
+      std::string trimmedLine = line.substr(start, end - start + 1);
+      
+      // Skip comments
+      if (trimmedLine.empty() || trimmedLine[0] == '#')
+          continue;
+          
+      // Check if we've found the first server block
+      if (trimmedLine.find("server") != std::string::npos && 
+          trimmedLine.find("{") != std::string::npos) {
+          debuglog(GREEN, "Found first server block, ended global config extraction");
+          break; // Stop extraction when server block is found
+      }
+      
+      // Add line to global config
+      globalConfig += line + "\n";
+  }
+  
+  return globalConfig;
+}
 
 void parse(std::string filename, std::vector<ServerData> &servers,
            std::map<uint16_t, ServerData *> &port_map_) {
+
   servers.clear();
   port_map_.clear();
+
   long starttime = getCurrentTimeMillis();
   debuglog(GREEN, "Parsing configuration file at time: %ld", starttime);
+
+  std::string content = OpenReadConfigFile(filename);
+  std::string httpContent = abstratHttpContent(content);
+  std::string globalContent = extractGlobalConfig(httpContent);
+  BaseConf baseConfig;
+
+  parseGlobalSettings(globalContent, baseConfig);
+  parseServerBlocks(httpContent, servers, baseConfig);
+  parsePortToServer(servers, port_map_);
+
+  debugprintConfigs(servers, port_map_);
+  return;
+}
+
+std::string OpenReadConfigFile(std::string filename)
+{
   std::ifstream configFile(filename.c_str());
   if (!configFile.is_open()) {
     throw std::runtime_error("Failed to open config file: " + filename);
@@ -23,9 +79,11 @@ void parse(std::string filename, std::vector<ServerData> &servers,
   buffer << configFile.rdbuf();
   std::string content = buffer.str();
   configFile.close();
+  return content;
+}
 
-  BaseConf baseConfig;
-
+std::string abstratHttpContent(std::string content)
+{
   size_t httpStart = content.find("http {");
   if (httpStart == std::string::npos) {
     throw std::runtime_error("No http block found in configuration");
@@ -39,37 +97,68 @@ void parse(std::string filename, std::vector<ServerData> &servers,
   // Extract HTTP block content
   std::string httpContent =
       content.substr(httpStart + 6, httpEnd - (httpStart + 6));
-
-  parseGlobalSettings(httpContent, baseConfig);
-  parseServerBlocks(httpContent, servers, baseConfig);
-
-  for (size_t i = 0; i < servers.size(); ++i) {
-    for (size_t j = 0; j < servers[i].ports.size(); ++j) {
-      port_map_[servers[i].ports[j]] = &servers[i];
-    }
-  }
-  debugprintConfigs(servers, port_map_);
-  return;
+      return httpContent; 
 }
 
-void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig) {
-  std::istringstream iss(httpContent);
+void parsePortToServer(std::vector<ServerData> &servers,
+  std::map<uint16_t, ServerData *> &port_map_) {
+
+    for (size_t i = 0; i < servers.size(); ++i) {
+        for (size_t j = 0; j < servers[i].ports.size(); ++j) {
+              port_map_[servers[i].ports[j]] = &servers[i];
+        }
+    }
+}
+
+std::string abstractErrorPageBlock(std::string &trimmedLine, const std::string &httpContent, 
+    BaseConf &baseConfig){
+  size_t blockStart = trimmedLine.find("{");
+  size_t linePos = httpContent.find(trimmedLine);
+  std::string errorPageBlock; // Declare errorPageBlock here
+  if (linePos != std::string::npos) {
+    size_t blockEnd = findClosingBrace(httpContent, linePos + blockStart + 1);
+    if (blockEnd != std::string::npos) {
+      errorPageBlock = httpContent.substr(
+          linePos + blockStart + 1, blockEnd - (linePos + blockStart + 1)); 
+    }
+  }
+  return errorPageBlock;
+}
+
+void parseGlobalSettings(const std::string &globalContent, BaseConf &baseConfig) {
+
+  std::istringstream iss(globalContent);
   std::string line;
 
   while (std::getline(iss, line)) {
     size_t start = line.find_first_not_of(" \t\n\r");
     if (start == std::string::npos)
-      continue; // Skip empty lines
+        continue; // Skip empty lines
     size_t end = line.find_last_not_of(" \t\n\r");
     std::string trimmedLine = line.substr(start, end - start + 1);
 
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
-      continue; // Skip comments
+        continue; // Skip comments
     }
 
     // Check for global settings
     if (trimmedLine.find("maxBodySize") == 0) {
-      size_t maxBodySize;
+        parseMaxBodySize(trimmedLine, baseConfig);
+    } 
+    else if (trimmedLine.find("autoindex") == 0) {
+        parseAutoIndex(trimmedLine, baseConfig);
+    }
+    else if(trimmedLine.find("error_pages") == 0 && trimmedLine.find("{") != std::string::npos) {
+          std::string errorPageBlock = abstractErrorPageBlock(trimmedLine, globalContent, baseConfig);
+          parseErrorPageBlock(errorPageBlock, baseConfig);
+        }
+      }
+      debug(GREEN, "Parsed global settings");
+  }
+
+void parseMaxBodySize(std::string &trimmedLine, BaseConf &baseConfig)
+{
+  size_t maxBodySize;
       if (parseNumericValue(trimmedLine, "maxBodySize", 11, maxBodySize)) {
         if (maxBodySize <= 0) {
           debuglog(YELLOW,
@@ -81,60 +170,39 @@ void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig) {
           debuglog(GREEN, "maxBodySize: %lu", baseConfig.maxBodySize);
         }
       }
-    } else if (trimmedLine.find("autoindex") == 0 && !baseConfig.parsedindex) {
-      baseConfig.parsedindex = true;
-      size_t valueStart =
-          trimmedLine.find_first_not_of(" \t", 9); // Skip "autoindex"
-      size_t valueEnd = trimmedLine.find(';', valueStart);
-
-      int counts = 0;
-      debuglog(GREEN, "autoindex: %s , time: %d", trimmedLine.c_str(),
-               ++counts);
-
-      std::string autoindexValue;
-      if (valueEnd != std::string::npos) {
-        autoindexValue = trimmedLine.substr(valueStart, valueEnd - valueStart);
-      } else {
-        autoindexValue = trimmedLine.substr(valueStart);
-      }
-
-      // Trim trailing whitespace
-      autoindexValue =
-          autoindexValue.substr(0, autoindexValue.find_last_not_of(" \t") + 1);
-
-      if (autoindexValue == "on") {
-        baseConfig.autoindex = true;
-        debuglog(GREEN, "autoindex: on");
-      } else if (autoindexValue == "off") {
-        baseConfig.autoindex = false;
-        debuglog(GREEN, "autoindex: off");
-      } else {
-        debuglog(YELLOW, "Warning: Invalid autoindex value: %s",
-                 autoindexValue.c_str());
-      }
-    }
-
-    else if (trimmedLine.find("error_pages") == 0 &&
-             trimmedLine.find("{") != std::string::npos) {
-      // Handle error_page block
-      size_t blockStart = trimmedLine.find("{");
-      // Find the position of this line in the content
-      size_t linePos = httpContent.find(trimmedLine);
-      if (linePos != std::string::npos) {
-        // Find the closing brace using proper brace counting
-        size_t blockEnd =
-            findClosingBrace(httpContent, linePos + blockStart + 1);
-
-        if (blockEnd != std::string::npos) {
-          std::string errorPageBlock = httpContent.substr(
-              linePos + blockStart + 1, blockEnd - (linePos + blockStart + 1));
-          parseErrorPageBlock(errorPageBlock, baseConfig);
-        }
-      }
-    }
-  }
-  debuglog(GREEN, "Parsed global settings\n\n");
 }
+
+void parseAutoIndex(std::string &trimmedLine, BaseConf &baseConfig){
+  
+  size_t valueStart = trimmedLine.find_first_not_of(" \t", 9); // Skip "autoindex"
+  size_t valueEnd = trimmedLine.find(';', valueStart);
+
+  int counts = 0;
+  debuglog(GREEN, "autoindex: %s , time: %d", trimmedLine.c_str(),
+           ++counts);
+
+  std::string autoindexValue;
+  if (valueEnd != std::string::npos) {
+    autoindexValue = trimmedLine.substr(valueStart, valueEnd - valueStart);
+  } 
+  else {
+    autoindexValue = trimmedLine.substr(valueStart);
+  }
+
+  autoindexValue = autoindexValue.substr(0, autoindexValue.find_last_not_of(" \t") + 1);
+
+  if (autoindexValue == "on") {
+    baseConfig.autoindex = true;
+    debuglog(GREEN, "autoindex: on");
+  } else if (autoindexValue == "off") {
+    baseConfig.autoindex = false;
+    debuglog(GREEN, "autoindex: off");
+  } else {
+    debuglog(YELLOW, "Warning: Invalid autoindex value: %s",
+             autoindexValue.c_str());
+  }
+}
+
 
 void parseErrorPageBlock(const std::string &blockContent,
                          BaseConf &baseConfig) {

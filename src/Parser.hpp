@@ -19,7 +19,14 @@ extern long starttime;
 
 void parse(std::string filename, std::vector<ServerData> &servers,
            std::map<uint16_t, ServerData *> &port_map_);
+std::string OpenReadConfigFile(std::string filename);
+std::string abstratHttpContent(std::string content);
+void parsePortToServer(std::vector<ServerData> &servers,
+    std::map<uint16_t, ServerData *> &port_map_);
 void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig);
+void parseMaxBodySize(std::string &trimmedLine, BaseConf &baseConfig);
+void parseAutoIndex(std::string &trimmedLine, BaseConf &baseConfig);
+std::string abstractErrorPageBlock(std::string &trimmedLine, const std::string &httpContent, BaseConf &baseConfig);
 void parseErrorPageBlock(const std::string &blockContent, BaseConf &baseConfig);
 size_t findClosingBrace(const std::string &content, size_t start);
 template <typename T>

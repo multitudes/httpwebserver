@@ -45,7 +45,6 @@ struct BaseConf {
   size_t maxBodySize;
   std::map<std::string, std::string> defaultheaders;
   bool autoindex;
-  bool parsedindex;
   bool file_server;
   std::vector<std::string> acceptedMethods;
   std::map<int, std::string> error_pages;
@@ -53,7 +52,6 @@ struct BaseConf {
 
   BaseConf()
       : maxBodySize(10000000), autoindex(false), 
-      parsedindex(false), 
       file_server(true),
        upload_dir("./html/www1/upload") {
     defaultheaders["Content-Type"] = "text/html";
