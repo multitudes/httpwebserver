@@ -275,11 +275,12 @@ int run(std::string configFile) {
                 }
               break; // whatever happens to the state we break the for loop because we found 
                     // the fd we were looking for
-              
             } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
-
           } // end for loop
+          // TODO -cgi timeout - if the loop doesnt find the fd after a while
+          // i should break the loop and close the connection
 
+          // client wants to send data and the buffer is empty - otherwise i would be above
         } else if (current_fd == conn.client_fd &&
                    (pollfds[i].revents & POLLIN) && conn.cgiData.buffer.empty())  {
           // first read from the client
@@ -306,18 +307,20 @@ int run(std::string configFile) {
                 conn.state = CONN_CGI_SENDING;
                 break;
               } else {
-
                 debug("Received %ld bytes from client", bytes_read);
                 debug("writing to cgi stdin %d",
                       conn.cgiData.cgi_stdin_fd);
-
                 // now write the buffer contents to the cgi
                 ssize_t bytes_written =
-                    ::write(conn.cgiData.cgi_stdin_fd, conn.cgiData.buffer.c_str(),
-                            static_cast<size_t>(bytes_read));
+                    ::write(conn.cgiData.cgi_stdin_fd, conn.cgiData.buffer.c_str(), bytes_read);
 
                 if (bytes_written < 0) {
                   perror("Failed to write to CGI stdin");
+                  conn.state = CONN_CGI_FINISHED;
+                  break;
+                } else if (bytes_written == 0) {
+                  // No data was written, this should not happen
+                  debuglog(RED, "No data written to CGI stdin");
                   conn.state = CONN_CGI_FINISHED;
                   break;
                 } else if (bytes_written <
@@ -358,6 +361,8 @@ int run(std::string configFile) {
           }
         }
       }
+
+      /*    -------- CGI SENDING -----------      */
       if (conn.state == CONN_CGI_SENDING) {
         debuglog(YELLOW, "Connection fd %d in state CGI SENDING", conn.client_fd);
         debug("CONN_CGI_SENDING fd %d", conn.client_fd);
