@@ -449,31 +449,28 @@ void parseAccceptedMethods(std::string &trimmedLine, ServerData &serverData){
       size_t openBrace = trimmedLine.find("{");
       size_t semiColon = trimmedLine.find(";");
 
-      if (methodsStart != std::string::npos && openBrace != std::string::npos) {
-        std::string methods =
-            trimmedLine.substr(methodsStart, openBrace - methodsStart);
-        std::istringstream methodStream(methods);
-        std::string method;
+    if (methodsStart != std::string::npos && openBrace != std::string::npos) {
+      std::string methods =
+          trimmedLine.substr(methodsStart, openBrace - methodsStart);
+      std::istringstream methodStream(methods);
+      std::string method;
 
-        while (methodStream >> method) {
-          if (method != "{") {
-            serverData.acceptedMethods.push_back(method);
-            debuglog(GREEN, "Server accepted method: %s", method.c_str());
-          }
-        }
-      }
-      else if (methodsStart != std::string::npos &&
-               semiColon != std::string::npos) {
-        std::string methods =
-            trimmedLine.substr(methodsStart, semiColon - methodsStart);
-        std::istringstream methodStream(methods);
-        std::string method;
-
-        while (methodStream >> method) {
+      while ((methodStream >> method) && (method != "{")){
           serverData.acceptedMethods.push_back(method);
           debuglog(GREEN, "Server accepted method: %s", method.c_str());
-        }
       }
+    }
+    else if (methodsStart != std::string::npos && semiColon != std::string::npos) {
+      std::string methods =
+          trimmedLine.substr(methodsStart, semiColon - methodsStart);
+      std::istringstream methodStream(methods);
+      std::string method;
+
+      while (methodStream >> method) {
+        serverData.acceptedMethods.push_back(method);
+        debuglog(GREEN, "Server accepted method: %s", method.c_str());
+      }
+    }
 }
 
 void parseLocationBlocks(const std::string &serverBlockContent, const std::string &trimmedLine, 
@@ -744,8 +741,19 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
       continue; // Skip comments
     }
 
-    if (trimmedLine.find("cgi_path_alias") == 0) {
-      size_t valueStart = trimmedLine.find_first_not_of(" \t", 14);
+    if (trimmedLine.find("cgi_path_alias") == 0)
+      parseCgiPathAlias(trimmedLine, cgiConfig);
+    else if (trimmedLine.find("upload_dir") == 0)
+      parseCgiUploadDir(trimmedLine, cgiConfig);
+    else if (trimmedLine.find("file_extension") == 0)
+      parseCgiFileExtension(trimmedLine, cgiConfig);
+    else if (trimmedLine.find("acceptedMethods") == 0)
+      parseCGIAcceptedMethods(trimmedLine, cgiConfig);
+  }
+}
+
+void parseCgiPathAlias(std::string &trimmedLine, CGIData &cgiConfig){
+  size_t valueStart = trimmedLine.find_first_not_of(" \t", 14);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
       std::string value;
@@ -765,8 +773,10 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
 
       cgiConfig.cgi_path_alias = std::make_pair(path, alias);
       debuglog(GREEN, "CGI path alias: %s -> %s", path.c_str(), alias.c_str());
-    } else if (trimmedLine.find("upload_dir") == 0) {
-      size_t valueStart = trimmedLine.find_first_not_of(" \t", 10);
+}
+
+void parseCgiUploadDir(std::string &trimmedLine, CGIData &cgiConfig){
+  size_t valueStart = trimmedLine.find_first_not_of(" \t", 10);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
       std::string value;
@@ -778,56 +788,55 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
 
       cgiConfig.upload_dir = value;
       debuglog(GREEN, "CGI upload_dir: %s", value.c_str());
-    } else if (trimmedLine.find("file_extension") == 0) {
-      size_t valueStart = trimmedLine.find_first_not_of(" \t", 14);
-      size_t valueEnd = trimmedLine.find(';', valueStart);
+}
 
-      std::string value;
-      if (valueEnd != std::string::npos) {
-        value = trimmedLine.substr(valueStart, valueEnd - valueStart);
-      } else {
-        value = trimmedLine.substr(valueStart);
-      }
+void parseCgiFileExtension(std::string &trimmedLine, CGIData &cgiConfig){
+  size_t valueStart = trimmedLine.find_first_not_of(" \t", 14);
+  size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      std::istringstream extStream(value);
-      std::string ext;
+  std::string value;
+  if (valueEnd != std::string::npos) {
+    value = trimmedLine.substr(valueStart, valueEnd - valueStart);
+  } else {
+    value = trimmedLine.substr(valueStart);
+  }
 
-      while (extStream >> ext) {
-        cgiConfig.cgi_extensions.push_back(ext);
-        debuglog(GREEN, "CGI file extension: %s", ext.c_str());
-      }
-    } else if (trimmedLine.find("acceptedMethods") == 0) {
-      size_t methodsStart = trimmedLine.find_first_not_of(" \t", 15);
+  std::istringstream extStream(value);
+  std::string ext;
+
+  while (extStream >> ext) {
+    cgiConfig.cgi_extensions.push_back(ext);
+    debuglog(GREEN, "CGI file extension: %s", ext.c_str());
+  }
+}
+
+void parseCGIAcceptedMethods(std::string &trimmedLine,CGIData &cgiConfig){
+  size_t methodsStart = trimmedLine.find_first_not_of(" \t", 15);
       size_t openBrace = trimmedLine.find("{");
 
-      if (methodsStart != std::string::npos) {
-        std::string methodsStr;
-        if (openBrace != std::string::npos) {
-          methodsStr =
-              trimmedLine.substr(methodsStart, openBrace - methodsStart);
-        } else {
-          methodsStr = trimmedLine.substr(methodsStart);
-        }
-
-        size_t lastNonSpace = methodsStr.find_last_not_of(" \t\n\r");
-        if (lastNonSpace != std::string::npos) {
-          methodsStr = methodsStr.substr(0, lastNonSpace + 1);
-        }
-
-        std::istringstream methodStream(methodsStr);
-        std::string method;
-
-        if (cgiConfig.acceptedMethods.size() > 0)
-          cgiConfig.acceptedMethods.clear();
-
-        while (methodStream >> method) {
-          if (method != "{" && method != "}") {
-            cgiConfig.acceptedMethods.push_back(method);
-            debuglog(GREEN, "CGI acceptedMethods method: %s", method.c_str());
-          }
-        }
+    if (methodsStart != std::string::npos) {
+      std::string methodsStr;
+      if (openBrace != std::string::npos) {
+        methodsStr = trimmedLine.substr(methodsStart, openBrace - methodsStart);
+      } else {
+        methodsStr = trimmedLine.substr(methodsStart);
       }
-    }
+
+      size_t lastNonSpace = methodsStr.find_last_not_of(" \t\n\r");
+      if (lastNonSpace != std::string::npos) {
+        methodsStr = methodsStr.substr(0, lastNonSpace + 1);
+      }
+
+      std::istringstream methodStream(methodsStr);
+      std::string method;
+
+      if (cgiConfig.acceptedMethods.size() > 0)
+        cgiConfig.acceptedMethods.clear();
+
+      while ((methodStream >> method) && (method != "{" && method != "}")){
+          cgiConfig.acceptedMethods.push_back(method);
+          debuglog(GREEN, "CGI acceptedMethods method: %s", method.c_str());
+      }
   }
 }
 

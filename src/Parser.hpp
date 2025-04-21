@@ -68,6 +68,10 @@ void parseLocationAccceptedMethods(std::string &trimmedLine, Location &location)
 void parseCgiConfig(const std::string &trimmedLine, const std::string &serverBlockContent, ServerData &serverData);
 std::string extractCgiBlockContent(const std::string &line, const std::string &serverContent);
 void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig);
+void parseCgiPathAlias(std::string &trimmedLine, CGIData &cgiConfig);
+void parseCgiUploadDir(std::string &trimmedLine, CGIData &cgiConfig);
+void parseCgiFileExtension(std::string &trimmedLine, CGIData &cgiConfig);
+void parseCGIAcceptedMethods(std::string &trimmedLine,CGIData &cgiConfig);
 long getCurrentTimeMillis();
 void debugprintConfigs(std::vector<ServerData> &servers,
                        std::map<uint16_t, ServerData *> port_map_);
