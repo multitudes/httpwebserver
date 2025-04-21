@@ -443,29 +443,20 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
       close(currentfd.fd);
       HTTPServer::lastActivityTime.erase(currentfd.fd);
       debug("Closing and erasing the connection %d from the map", currentfd.fd);
-      HTTPServer::connections.erase(conn.client_fd);
+      conn.reset();
       return true;
     }
 
     // non fatal pollhups
-    if (currentfd.fd == conn.cgiData.cgi_stdin_fd) {
-      debug("POLLHUP on CGI stdin pipe %d", conn.cgiData.cgi_stdin_fd);
-      close(conn.cgiData.cgi_stdin_fd);
-      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-      conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-    } else if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
+   if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
       debug("POLLHUP on CGI stdout pipe %d", conn.cgiData.cgi_stdout_fd);
       close(conn.cgiData.cgi_stdout_fd);
       SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+      conn.cgiData.cgi_stdout_closed = true;
       conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
     }
 
-    // Check if both pipes are closed, and reset the connection if needed
-    if (conn.cgiData.cgi_stdin_fd == -1 &&
-        conn.cgiData.cgi_stdout_fd == -1) {
-      debug("Both CGI pipes closed, resetting connection");
-      conn.reset();
-    }
+
   }
   return false;
 }
@@ -476,33 +467,26 @@ bool gotPollerrShouldSkip(pollfd &currentfd) {
     int error = 0;
     socklen_t len = sizeof(error);
     HTTPConnxData &conn = HTTPServer::getConnectionData(currentfd.fd);
-    if (::getsockopt(currentfd.fd, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
-      debug("Socket error on fd %d: %s", currentfd.fd, strerror(error));
-      // handle EPIPE (Broken pipe)
-      if (error == EPIPE) {
-        debug("Client disconnected (EPIPE) on fd %d", currentfd.fd);
-        debuglog(YELLOW, "Client disconnected (EPIPE) on fd %d", currentfd.fd);
-        if (currentfd.fd == conn.cgiData.cgi_stdin_fd) {
-          debug("Closing CGI stdin pipe %d", currentfd.fd);
-          close(conn.cgiData.cgi_stdin_fd);
-          SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-          conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-        } else if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
-          debug("Closing CGI stdout pipe %d", currentfd.fd);
-          close(conn.cgiData.cgi_stdout_fd);
-          SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
-          conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
-        } else if (currentfd.fd == conn.client_fd) {
-          debug("Closing client fd %d", currentfd.fd);
-          SocketUtils::remove_from_poll(currentfd.fd);
-          close(currentfd.fd);
-          HTTPServer::lastActivityTime.erase(currentfd.fd);
-
-          debug("Erasing the connection %d from the map", currentfd.fd);
-          HTTPServer::connections.erase(conn.client_fd);
-        }
-      }
+    if (currentfd.fd == conn.client_fd) {
+      // unusable connection
+      debug("Closing client fd %d", currentfd.fd);
+      SocketUtils::remove_from_poll(currentfd.fd);
+      close(currentfd.fd);
+      conn.reset();
+      HTTPServer::lastActivityTime.erase(currentfd.fd);
     }
+    if (currentfd.fd == conn.cgiData.cgi_stdin_fd) {
+      debug("Closing CGI stdin pipe %d", currentfd.fd);
+      close(conn.cgiData.cgi_stdin_fd);
+      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+      conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+    } else if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
+      debug("Closing CGI stdout pipe %d", currentfd.fd);
+      close(conn.cgiData.cgi_stdout_fd);
+      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+      conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
+    } 
+    
     return true;
   }
   return false;

@@ -137,6 +137,7 @@ struct HTTPConnxData {
     int child_stdout_pipe[2];
     int cgi_stdin_fd;
     int cgi_stdout_fd;
+    bool cgi_stdout_closed;
     size_t bytes_received;
     size_t bytes_sent;
 
@@ -144,7 +145,7 @@ struct HTTPConnxData {
     CGIData()
         : buffer(""), script_name(""), 
           path_info(""), query_string(), child_pid(-1), env(), cgi_stdin_fd(-1), cgi_stdout_fd(-1), 
-          bytes_received(0), bytes_sent(0){
+          cgi_stdout_closed(false), bytes_received(0), bytes_sent(0){
 
       child_stdin_pipe[0] = -1;
       child_stdin_pipe[1] = -1;

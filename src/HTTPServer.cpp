@@ -250,6 +250,7 @@ int run(std::string configFile) {
                 debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)", conn.cgiData.buffer.size());
                 debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
                 conn.state = CONN_CGI_FINISHED;
+                conn.cgiData.buffer.clear();
               } else if (bytes_written < conn.cgiData.buffer.size()) {
                 // Partial write: Remove written data and wait for next POLLOUT
                 debug("Partial write: Wrote %ld bytes to CGI stdin (buffer size: %zu)", bytes_written, conn.cgiData.buffer.size());
@@ -260,6 +261,8 @@ int run(std::string configFile) {
                 // Full write (bytes_written == conn.cgiData.buffer.size())
                 debugcolor(MAGENTA, "wrote request buffer to CGI: %s", conn.cgiData.buffer.c_str()); // Log data before clearing
                 conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
+                conn.cgiData.buffer.clear();
+                debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
               }
               if (conn.cgiData.bytes_received >= conn.data.content_length) {
                   debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
@@ -306,13 +309,14 @@ int run(std::string configFile) {
                 conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
                 conn.state = CONN_CGI_SENDING;
                 break;
-              } else {
+              } 
+
                 debug("Received %ld bytes from client", bytes_read);
                 debug("writing to cgi stdin %d",
                       conn.cgiData.cgi_stdin_fd);
                 // now write the buffer contents to the cgi
                 ssize_t bytes_written =
-                    ::write(conn.cgiData.cgi_stdin_fd, conn.cgiData.buffer.c_str(), bytes_read);
+                    ::write(conn.cgiData.cgi_stdin_fd, conn.cgiData.buffer.c_str(), static_cast<size_t>(bytes_read));
 
                 if (bytes_written < 0) {
                   perror("Failed to write to CGI stdin");
@@ -323,8 +327,8 @@ int run(std::string configFile) {
                   debuglog(RED, "No data written to CGI stdin");
                   conn.state = CONN_CGI_FINISHED;
                   break;
-                } else if (bytes_written <
-                           BUFFER_SIZE) {
+                } 
+                else if (bytes_written < BUFFER_SIZE) {
                   debug("Wrote %ld bytes to CGI stdin", bytes_written);
                   debugcolor(MAGENTA, "request to CGI: %s",
                              conn.cgiData.buffer.c_str());
@@ -338,8 +342,8 @@ int run(std::string configFile) {
                   conn.state = CONN_CGI_SENDING;
                   conn.cgiData.buffer.clear();
                   break;
-                } else if (bytes_written <
-                           static_cast<ssize_t>(conn.cgiData.buffer.size())) {
+                } 
+                else if (bytes_written < bytes_read) {
                   // Not all data was written, handle partial write
                   debuglog(YELLOW, "Partial write to CGI stdin");
                   conn.cgiData.buffer.erase(
@@ -350,13 +354,8 @@ int run(std::string configFile) {
                   // All data was written, clear the buffer
                   conn.cgiData.buffer.clear();
                   break;
-                } else if (bytes_written == 0) {
-                  // No data was written, this should not happen
-                  debuglog(RED, "No data written to CGI stdin");
-                  conn.state = CONN_CGI_FINISHED;
-                  break;
-                }
-              }
+                } 
+              
             }
           }
         }
