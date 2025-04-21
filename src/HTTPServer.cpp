@@ -357,11 +357,51 @@ int run(std::string configFile) {
             (pollfds[i].revents & POLLOUT)) {
           debug("cgiData is sending  and client fd %d is POLLOUT",
                 conn.client_fd);
+
+          // before to read from child i check if i have a buffer leftover
+
+        if (!conn.cgiData.buffer.empty()) {
+          debug("leftover buffer from cgiData");
+          // write to cgi the buffer if any remaining from the
+          // initialisation
+          ssize_t bytes_written = ::write(current_fd,
+                                          conn.cgiData.buffer.c_str(),
+                                          conn.cgiData.buffer.size());
+          debug("Wrote %ld bytes to client", bytes_written);
+
+          if (bytes_written < 0) {
+            perror("Failed to write to client");
+            debug("Failed to write to client");
+            conn.state = CONN_CGI_FINISHED;
+          } else if (bytes_written == 0) {
+            // Should not happen with blocking write unless size was 0
+            debuglog(YELLOW, "Wrote 0 bytes to client (buffer size: %zu)", conn.cgiData.buffer.size());
+            debuglog(RED, "Wrote 0 bytes to client unexpectedly.");
+            conn.state = CONN_CGI_FINISHED;
+          } else if (static_cast<size_t>(bytes_written) < conn.cgiData.buffer.size()) {
+            // Partial write: Remove written data and wait for next POLLOUT
+            debug("Partial write: Wrote %ld bytes to client (buffer size: %zu)", bytes_written, conn.cgiData.buffer.size());
+            conn.cgiData.buffer.erase(0, static_cast<std::string::size_type>(bytes_written));
+            // stay in the same state, poll will trigger again
+          } else {
+            // Full write (bytes_written == conn.cgiData.buffer.size())
+            debugcolor(MAGENTA, "wrote request buffer to client: %s", conn.cgiData.buffer.c_str()); // Log data before clearing
+            // TODO check the bytes received
+            conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
+            if (conn.cgiData.bytes_received >= conn.data.content_length) {
+                debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+                // If we have written all data, clear the buffer
+                conn.cgiData.buffer.clear();
+              }
+              
+          }
+        }
+
+          // after writing the excess buffer i need to read from the cgi
           for (size_t j = 0; j < pollfds.size(); j++) {
             // and the cgi process is ready to be read from
             if (pollfds[j].fd == conn.cgiData.cgi_stdout_fd &&
                 (pollfds[j].revents & POLLIN)) {
-
               debug("POLLIN event on CGI stdout fd %d",
                     conn.cgiData.cgi_stdout_fd);
               // write to client from cgi
@@ -388,7 +428,6 @@ int run(std::string configFile) {
 
                 // break;
               }
-
               // Send data to client
               ssize_t bytes_written = ::send(
                   conn.client_fd, buffer, static_cast<size_t>(bytes_read), 0);
@@ -410,17 +449,8 @@ int run(std::string configFile) {
                 lastActivityTime.erase(conn.client_fd);
                 conn.reset();
               }
-
               break;
             }
-            // this
-            if (pollfds[j].fd == conn.cgiData.cgi_stdout_fd &&
-                pollfds[j].revents & POLLHUP) {
-                debug("POLLHUP event on CGI stdout fd %d",
-                    conn.cgiData.cgi_stdout_fd);
-                conn.state = CONN_CGI_FINISHED;
-                break;
-            } 
           }
         }
 
