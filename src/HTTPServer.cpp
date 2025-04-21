@@ -310,51 +310,48 @@ int run(std::string configFile) {
                 conn.state = CONN_CGI_SENDING;
                 break;
               } 
+              debug("Received %ld bytes from client", bytes_read);
+              debug("writing to cgi stdin %d",
+                    conn.cgiData.cgi_stdin_fd);
+              // now write the buffer contents to the cgi
+              ssize_t bytes_written =
+                  ::write(conn.cgiData.cgi_stdin_fd, conn.cgiData.buffer.c_str(), static_cast<size_t>(bytes_read));
 
-                debug("Received %ld bytes from client", bytes_read);
-                debug("writing to cgi stdin %d",
-                      conn.cgiData.cgi_stdin_fd);
-                // now write the buffer contents to the cgi
-                ssize_t bytes_written =
-                    ::write(conn.cgiData.cgi_stdin_fd, conn.cgiData.buffer.c_str(), static_cast<size_t>(bytes_read));
-
-                if (bytes_written < 0) {
-                  perror("Failed to write to CGI stdin");
-                  conn.state = CONN_CGI_FINISHED;
-                  break;
-                } else if (bytes_written == 0) {
-                  // No data was written, this should not happen
-                  debuglog(RED, "No data written to CGI stdin");
-                  conn.state = CONN_CGI_FINISHED;
-                  break;
-                } 
-                else if (bytes_written < BUFFER_SIZE) {
-                  debug("Wrote %ld bytes to CGI stdin", bytes_written);
-                  debugcolor(MAGENTA, "request to CGI: %s",
-                             conn.cgiData.buffer.c_str());
-                  // i finished sending the data to the cgi
-                  // close the write end of the pipe to signal EOF to the CGI
-                  debuglog(YELLOW, "Closing write end of pipe");
-                  SocketUtils::remove_from_poll(
-                      conn.cgiData.cgi_stdin_fd);
-                  close(conn.cgiData.cgi_stdin_fd);
-                  conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-                  conn.state = CONN_CGI_SENDING;
-                  conn.cgiData.buffer.clear();
-                  break;
-                } 
-                else if (bytes_written < bytes_read) {
-                  // Not all data was written, handle partial write
-                  debuglog(YELLOW, "Partial write to CGI stdin");
-                  conn.cgiData.buffer.erase(
-                      0, static_cast<std::string::size_type>(bytes_written));
-                  break;
-                } else if (bytes_written ==
-                           static_cast<ssize_t>(conn.cgiData.buffer.size())) {
-                  // All data was written, clear the buffer
-                  conn.cgiData.buffer.clear();
-                  break;
-                } 
+              if (bytes_written < 0) {
+                perror("Failed to write to CGI stdin");
+                conn.state = CONN_CGI_FINISHED;
+              } else if (bytes_written == 0) {
+                // No data was written, this should not happen
+                debuglog(RED, "No data written to CGI stdin");
+                conn.state = CONN_CGI_FINISHED;
+              } else if (bytes_written < bytes_read) {
+                // Not all data was written, handle partial write
+                debuglog(YELLOW, "Partial write to CGI stdin");
+                conn.cgiData.buffer.erase(
+                    0, static_cast<std::string::size_type>(bytes_written));
+                conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
+                // stay in the same state, poll will trigger again
+              } else if (bytes_written ==
+                          static_cast<ssize_t>(conn.cgiData.buffer.size())) {
+                // All data was written, clear the buffer
+                conn.cgiData.buffer.clear();
+                conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
+                debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+              } 
+              // final check to see if we are finished
+              if (conn.cgiData.bytes_received >= conn.data.content_length) {
+                debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+                // If we have written all data, clear the buffer
+                conn.cgiData.buffer.clear();
+                conn.cgiData.bytes_received = 0;
+                // close the write end of the pipe to signal EOF to the CGI
+                debuglog(YELLOW, "Closing write end of pipe");
+                SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+                close(conn.cgiData.cgi_stdin_fd);
+                conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+                conn.state = CONN_CGI_SENDING;
+              }
+              break; 
               
             }
           }
