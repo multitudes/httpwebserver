@@ -13,6 +13,12 @@
 #include <sys/time.h>
 #include <vector>
 
+struct ServerBlockInfo {
+    std::string content;
+    size_t startPos;
+    size_t endPos;
+  };
+  
 namespace Parser {
 
 extern long starttime;
@@ -28,15 +34,21 @@ std::string extractGlobalConfig(const std::string &httpContent);
 void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig);
 void parseMaxBodySize(std::string &trimmedLine, BaseConf &baseConfig);
 void parseAutoIndex(std::string &trimmedLine, BaseConf &baseConfig);
+int getAutoindexCode(const std::string &value);
 std::string abstractErrorPageBlock(std::string &trimmedLine, const std::string &httpContent, BaseConf &baseConfig);
 void parseErrorPageBlock(const std::string &blockContent, BaseConf &baseConfig);
 std::string extractPathFromLine(const std::string &line, size_t spacePos);
 size_t findClosingBrace(const std::string &content, size_t start);
+void addServerIfValid(std::vector<ServerData> &servers, ServerData &serverData, int serverBlockCount);
 template <typename T>
 bool parseNumericValue(const std::string &line, const std::string &param,
                        size_t paramLen, T &outValue);
 void parseServerBlocks(const std::string &httpContent,
                        std::vector<ServerData> &servers, BaseConf &baseConfig);
+bool isOnlyWhitespace(const std::string &str);
+bool isValidServerKeyword(const std::string &content, size_t pos);
+bool findNextServerBlock(const std::string &httpContent, size_t pos, 
+    ServerBlockInfo &blockInfo);
 void parseServerBlock(const std::string &serverBlockContent,
                       ServerData &ServerData, std::set<int> &Portset);
 void parseLocationBlock(const std::string &locationContent, Location &location,

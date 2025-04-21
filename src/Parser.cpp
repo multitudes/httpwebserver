@@ -117,7 +117,7 @@ void parseGlobalSettings(const std::string &globalContent, BaseConf &baseConfig)
           parseErrorPageBlock(errorPageBlock, baseConfig);
         }
       }
-      debug(GREEN, "Parsed global settings");
+      debuglog(GREEN, "Parsed global settings");
   }
 
 void parseMaxBodySize(std::string &trimmedLine, BaseConf &baseConfig)
@@ -138,12 +138,8 @@ void parseMaxBodySize(std::string &trimmedLine, BaseConf &baseConfig)
 
 void parseAutoIndex(std::string &trimmedLine, BaseConf &baseConfig){
   
-  size_t valueStart = trimmedLine.find_first_not_of(" \t", 9); // Skip "autoindex"
+  size_t valueStart = trimmedLine.find_first_not_of(" \t", 9);
   size_t valueEnd = trimmedLine.find(';', valueStart);
-
-  int counts = 0;
-  debuglog(GREEN, "autoindex: %s , time: %d", trimmedLine.c_str(),
-           ++counts);
 
   std::string autoindexValue;
   if (valueEnd != std::string::npos) {
@@ -152,19 +148,30 @@ void parseAutoIndex(std::string &trimmedLine, BaseConf &baseConfig){
   else {
     autoindexValue = trimmedLine.substr(valueStart);
   }
-
   autoindexValue = autoindexValue.substr(0, autoindexValue.find_last_not_of(" \t") + 1);
 
-  if (autoindexValue == "on") {
-    baseConfig.autoindex = true;
-    debuglog(GREEN, "autoindex: on");
-  } else if (autoindexValue == "off") {
-    baseConfig.autoindex = false;
-    debuglog(GREEN, "autoindex: off");
-  } else {
-    debuglog(YELLOW, "Warning: Invalid autoindex value: %s",
-             autoindexValue.c_str());
+  switch (getAutoindexCode(autoindexValue)) {
+    case 1: // "on"
+        baseConfig.autoindex = true;
+        debuglog(GREEN, "autoindex: on");
+        break;
+        
+    case 0: // "off" 
+        baseConfig.autoindex = false;
+        debuglog(GREEN, "autoindex: off");
+        break;
+        
+    default:
+        debuglog(YELLOW, "Warning: Invalid autoindex value: %s",
+                 autoindexValue.c_str());
+        break;
   }
+}
+
+int getAutoindexCode(const std::string &value) {
+  if (value == "on") return 1;
+  if (value == "off") return 0;
+  return -1; // invalid value
 }
 
 std::string abstractErrorPageBlock(std::string &trimmedLine, const std::string &httpContent, 
@@ -239,83 +246,165 @@ std::string extractPathFromLine(const std::string &trimmedLine, size_t spacePos)
 }
 
 void parseServerBlocks(const std::string &httpContent,
-                       std::vector<ServerData> &servers, BaseConf &baseConfig) {
-  // Look for server blocks in the content
+  std::vector<ServerData> &servers, BaseConf &baseConfig) {
   size_t pos = 0;
   int serverBlockCount = 0;
   std::set<int> PortSet;
 
   while (true) {
-    // Find the next server block
-    pos = httpContent.find("server", pos);
-    if (pos == std::string::npos) {
-      if (serverBlockCount == 0) {
-        throw std::runtime_error("No server blocks found in configuration");
+    // Find and extract next server block
+    ServerBlockInfo blockInfo;
+    if (!findNextServerBlock(httpContent, pos, blockInfo)) {
+        if (serverBlockCount == 0) {
+            throw std::runtime_error("No server blocks found in configuration");
       }
-      break; // Exit the loop when no more server blocks are found
-    }
-
-    size_t lineStart = httpContent.rfind('\n', pos);
-    if (lineStart == std::string::npos)
-      lineStart = 0;
-
-    std::string beforeServer = httpContent.substr(lineStart, pos - lineStart);
-    if (beforeServer.find_first_not_of(" \t\n\r") != std::string::npos) {
-      // This "server" is part of something else, continue searching
-      pos += 6; // Skip "server"
-      continue;
-    }
-
-    // Find opening brace
-    size_t openBrace = httpContent.find("{", pos);
-    if (openBrace == std::string::npos)
-      break;
-
-    // Check if there's only whitespace between "server" and "{"
-    std::string between = httpContent.substr(pos + 6, openBrace - (pos + 6));
-    if (between.find_first_not_of(" \t\n\r") != std::string::npos) {
-      // Not a valid server block, continue searching
-      pos = pos + 6;
-      continue;
-    }
-
-    // Find the end of this server block using brace counting
-    size_t blockStart = openBrace + 1;
-    size_t blockEnd = findClosingBrace(httpContent, blockStart);
-
-    if (blockEnd == std::string::npos) {
-      throw std::runtime_error("Unclosed server block");
       break;
     }
 
-    // Extract the server block content
-    std::string serverBlockContent =
-        httpContent.substr(blockStart, blockEnd - blockStart);
+    ServerData serverData;
+    static_cast<BaseConf &>(serverData) = baseConfig;
+    serverData.acceptedMethods = baseConfig.acceptedMethods;
 
-    // Parse this server block (create a new ServerData)
-    ServerData ServerData;
+    parseServerBlock(blockInfo.content, serverData, PortSet);
+    addServerIfValid(servers, serverData, serverBlockCount);
 
-    // Copy base settings first
-    static_cast<BaseConf &>(ServerData) = baseConfig;
-    ServerData.acceptedMethods = baseConfig.acceptedMethods;
-
-    parseServerBlock(serverBlockContent, ServerData, PortSet);
-
-    // Add the parsed server to the config
-    if (ServerData.ports.empty()) {
-      debuglog(RED, "No ports found in server block %d", serverBlockCount);
-    } else {
-      // Valid server with at least one port
-      servers.push_back(ServerData);
-      debuglog(GREEN, "Added server with %zu ports", ServerData.ports.size());
-    }
-
-    // Move past this server block for the next iteration
-    pos = blockEnd + 1;
+// Move past this server block
+    pos = blockInfo.endPos + 1;
     ++serverBlockCount;
     debuglog(GREEN, "Parsed server block %d\n\n", serverBlockCount);
   }
 }
+
+bool isValidServerKeyword(const std::string &content, size_t pos) {
+  size_t lineStart = content.rfind('\n', pos);
+  if (lineStart == std::string::npos)
+    lineStart = 0;
+    
+  std::string beforeServer = content.substr(lineStart, pos - lineStart);
+  return beforeServer.find_first_not_of(" \t\n\r") == std::string::npos;
+}
+
+bool isOnlyWhitespace(const std::string &str) {
+  return str.find_first_not_of(" \t\n\r") == std::string::npos;
+}
+
+bool findNextServerBlock(const std::string &httpContent, size_t pos, 
+  ServerBlockInfo &blockInfo) {
+    // Find the next server block
+    pos = httpContent.find("server", pos);
+    if (pos == std::string::npos)
+      return false;
+
+    // Verify server keyword is at start of line
+    if (!isValidServerKeyword(httpContent, pos))
+        return findNextServerBlock(httpContent, pos + 6, blockInfo);
+
+    // Find and verify opening brace
+    size_t openBrace = httpContent.find("{", pos);
+    if (openBrace == std::string::npos || !isOnlyWhitespace(httpContent.substr(pos + 6, openBrace - (pos + 6))))
+        return findNextServerBlock(httpContent, pos + 6, blockInfo);
+
+    // Find closing brace
+    size_t blockStart = openBrace + 1;
+    size_t blockEnd = findClosingBrace(httpContent, blockStart);
+
+    if (blockEnd == std::string::npos)
+        throw std::runtime_error("Unclosed server block");
+
+    blockInfo.content = httpContent.substr(blockStart, blockEnd - blockStart);
+    blockInfo.startPos = blockStart;
+    blockInfo.endPos = blockEnd;
+    return true;
+}
+
+void addServerIfValid(std::vector<ServerData> &servers, ServerData &serverData, int serverBlockCount) {
+  if (serverData.ports.empty()) {
+    debuglog(RED, "No ports found in server block %d", serverBlockCount);
+  } else {
+    // Valid server with at least one port
+    servers.push_back(serverData);
+    debuglog(GREEN, "Added server with %zu ports", serverData.ports.size());
+  }
+}
+
+// void parseServerBlocks(const std::string &httpContent,
+//                        std::vector<ServerData> &servers, BaseConf &baseConfig) {
+//   // Look for server blocks in the content
+//   size_t pos = 0;
+//   int serverBlockCount = 0;
+//   std::set<int> PortSet;
+
+//   while (true) {
+//     // Find the next server block
+//     pos = httpContent.find("server", pos);
+//     if (pos == std::string::npos) {
+//       if (serverBlockCount == 0) {
+//         throw std::runtime_error("No server blocks found in configuration");
+//       }
+//       break; // Exit the loop when no more server blocks are found
+//     }
+
+//     size_t lineStart = httpContent.rfind('\n', pos);
+//     if (lineStart == std::string::npos)
+//       lineStart = 0;
+
+//     std::string beforeServer = httpContent.substr(lineStart, pos - lineStart);
+//     if (beforeServer.find_first_not_of(" \t\n\r") != std::string::npos) {
+//       // This "server" is part of something else, continue searching
+//       pos += 6; // Skip "server"
+//       continue;
+//     }
+
+//     // Find opening brace
+//     size_t openBrace = httpContent.find("{", pos);
+//     if (openBrace == std::string::npos)
+//       break;
+
+//     // Check if there's only whitespace between "server" and "{"
+//     std::string between = httpContent.substr(pos + 6, openBrace - (pos + 6));
+//     if (between.find_first_not_of(" \t\n\r") != std::string::npos) {
+//       // Not a valid server block, continue searching
+//       pos = pos + 6;
+//       continue;
+//     }
+
+//     // Find the end of this server block using brace counting
+//     size_t blockStart = openBrace + 1;
+//     size_t blockEnd = findClosingBrace(httpContent, blockStart);
+
+//     if (blockEnd == std::string::npos) {
+//       throw std::runtime_error("Unclosed server block");
+//       break;
+//     }
+
+//     // Extract the server block content
+//     std::string serverBlockContent =
+//         httpContent.substr(blockStart, blockEnd - blockStart);
+
+//     // Parse this server block (create a new ServerData)
+//     ServerData ServerData;
+
+//     // Copy base settings first
+//     static_cast<BaseConf &>(ServerData) = baseConfig;
+//     ServerData.acceptedMethods = baseConfig.acceptedMethods;
+
+//     parseServerBlock(serverBlockContent, ServerData, PortSet);
+
+//     // Add the parsed server to the config
+//     if (ServerData.ports.empty()) {
+//       debuglog(RED, "No ports found in server block %d", serverBlockCount);
+//     } else {
+//       // Valid server with at least one port
+//       servers.push_back(ServerData);
+//       debuglog(GREEN, "Added server with %zu ports", ServerData.ports.size());
+//     }
+
+//     // Move past this server block for the next iteration
+//     pos = blockEnd + 1;
+//     ++serverBlockCount;
+//     debuglog(GREEN, "Parsed server block %d\n\n", serverBlockCount);
+//   }
+// }
 
 void parseServerBlock(const std::string &serverBlockContent,
                       ServerData &ServerData, std::set<int> &Portset) {
