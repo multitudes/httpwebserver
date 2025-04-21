@@ -6,7 +6,6 @@
 namespace Parser {
 
   long starttime = 0;
- // namespace Parser
 
 void parse(std::string filename, std::vector<ServerData> &servers,
            std::map<uint16_t, ServerData *> &port_map_) {
