@@ -391,17 +391,9 @@ int run(std::string configFile) {
               break;
             }
           }
-          if (conn.cgiData.child_timeout == 0) {
-            conn.cgiData.child_timeout = std::time(NULL);
-          } else {
-            // check if the timeout is reached
-            if (std::time(NULL) - conn.cgiData.child_timeout >
-                Constants::cgi_child_timeout) {
-              debug("CGI timeout reached");
-              send_critical_error(conn.client_fd, 504);
-              conn.state = CONN_CGI_FINISHED;
-              break;
-            }
+
+          if (check_for_child_timeout(conn)) {
+            break;
           }
         }
 
@@ -415,6 +407,22 @@ int run(std::string configFile) {
   // Cleanup
   // TODO
   return 0;
+}
+
+bool check_for_child_timeout(HTTPConnxData& conn) {
+  if (conn.cgiData.child_timeout == 0) {
+    conn.cgiData.child_timeout = std::time(NULL);
+    return false;
+  } else {
+    // check if the timeout is reached
+    if (std::time(NULL) - conn.cgiData.child_timeout >
+        Constants::cgi_child_timeout) {
+      debug("CGI timeout reached");
+      send_critical_error(conn.client_fd, 504);
+      conn.state = CONN_CGI_FINISHED;
+      return true;
+    }
+  }
 }
 
 /**
@@ -455,7 +463,6 @@ void check_for_client_timeout(HTTPConnxData &conn) {
     }
   }
 }
-
 
 /**
  * @brief Write the buffer to the client from CGI
