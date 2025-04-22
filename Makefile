@@ -14,7 +14,7 @@ NAME 			= 	webserv
 CXX				= 	c++
 
 # CXXFLAGS 		= -Wall -Wextra -Werror 
-# CXXFLAGS        += -pedantic-errors
+#  CXXFLAGS        += -pedantic-errors
 CXXFLAGS		+= -std=c++98 
 CXXFLAGS 		+= -Wconversion -Wunreachable-code 
 ifeq ($(CXX), clang++)
@@ -24,12 +24,8 @@ endif
 CXXFLAGS		+= -g
 CXXFLAGS 		+= -O0
 
-
-CFLAGS 			+= -Iinclude
-CFLAGS			+= -Isrc 
-
-CFLAGS 			+=  -g3 
-# CFLAGS 			+=  -DNDEBUG
+# CXXFLAGS 			+=  -g3 
+# CXXFLAGS 			+=  -DNDEBUG
 
 # directories
 OBJ_DIR			= 	obj/
@@ -37,7 +33,9 @@ SRC_DIR			= 	src/
 INCLUDE_DIR		= 	include/
 
 
-INCLUDES		=  	-I$(INCLUDE_DIR) 
+CPPFLAGS        += -I$(INCLUDE_DIR)
+CPPFLAGS        += -I$(SRC_DIR) # Add src include path here
+
 
 SRCS 			= $(addprefix $(SRC_DIR), main.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), SocketUtils.cpp)
@@ -67,12 +65,12 @@ all: $(NAME) test
 # endif
 
 $(NAME): $(OBJS) $(HDRS)
-	$(CXX) $(CXXFLAGS)  $(INCLUDES) $(OBJS) $(LDFLAGS) -o $(NAME) 
+	$(CXX) $(CXXFLAGS)  $(CPPFLAGS) $(OBJS) $(LDFLAGS) -o $(NAME) 
 
 # Static pattern rule for compilation - adding the .o files in the obj folder
 $(OBJ_DIR)%.o: $(SRC_DIR)%.cpp
 	mkdir -p $(@D)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJS)

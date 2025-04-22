@@ -15,7 +15,7 @@
 
 namespace Parser {
 
-extern long long starttime;
+extern long starttime;
 
 void parse(std::string filename, std::vector<ServerData> &servers,
            std::map<uint16_t, ServerData *> &port_map_);
@@ -32,7 +32,7 @@ void parseServerBlock(const std::string &serverBlockContent,
 void parseLocationBlock(const std::string &locationContent, Location &location,
                         ServerData &ServerData);
 void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig);
-long long getCurrentTimeMillis();
+long getCurrentTimeMillis();
 void debugprintConfigs(std::vector<ServerData> &servers,
                        std::map<uint16_t, ServerData *> port_map_);
 

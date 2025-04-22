@@ -5,14 +5,14 @@
 
 namespace Parser {
 
-long long starttime = 0;
+long starttime = 0;
 
 void parse(std::string filename, std::vector<ServerData> &servers,
            std::map<uint16_t, ServerData *> &port_map_) {
   servers.clear();
   port_map_.clear();
-  long long starttime = getCurrentTimeMillis();
-  debuglog(GREEN, "Parsing configuration file at time: %lld", starttime);
+  long starttime = getCurrentTimeMillis();
+  debuglog(GREEN, "Parsing configuration file at time: %ld", starttime);
   std::ifstream configFile(filename.c_str());
   if (!configFile.is_open()) {
     throw std::runtime_error("Failed to open config file: " + filename);
@@ -691,6 +691,7 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
 template <typename T>
 bool parseNumericValue(const std::string &line, const std::string &param,
                        size_t paramLen, T &outValue) {
+  (void)param; // TODO do we need ?
   size_t valueStart = line.find_first_not_of(" \t", paramLen);
   size_t valueEnd = line.find(';', valueStart);
 
@@ -717,10 +718,10 @@ size_t findClosingBrace(const std::string &content, size_t start) {
   return std::string::npos;
 }
 
-long long getCurrentTimeMillis() {
+long getCurrentTimeMillis() {
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  return (long long)(tv.tv_sec) * 1000 + (long long)(tv.tv_usec) / 1000;
+  return (long)(tv.tv_sec) * 1000 + (long)(tv.tv_usec) / 1000;
 }
 
 void debugprintConfigs(std::vector<ServerData> &servers,

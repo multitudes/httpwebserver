@@ -1,4 +1,5 @@
 #include "CGI.hpp"
+#include "Config.hpp"
 #include "HTTPConnxData.hpp"
 #include "HTTPServer.hpp"
 #include "URLMatcher.hpp"
@@ -9,64 +10,32 @@ namespace CGI {
 
 // Start a CGI process for a connection
 int prepareCGI(HTTPConnxData &conn) {
-    // 1. CLEAN UP PREVIOUS PIPES IF THEY EXIST
-    if (conn.cgiData.child_stdin_pipe[0] != -1) {
-      close(conn.cgiData.child_stdin_pipe[0]);
+  // CLEAN UP PREVIOUS PIPES IF THEY EXIST
+  if (conn.cgiData.child_stdin_pipe[0] != -1) {
+      ::close(conn.cgiData.child_stdin_pipe[0]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[0]);
       conn.cgiData.child_stdin_pipe[0] = -1;
   }
   if (conn.cgiData.child_stdin_pipe[1] != -1) {
-      close(conn.cgiData.child_stdin_pipe[1]);
+      ::close(conn.cgiData.child_stdin_pipe[1]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
       conn.cgiData.child_stdin_pipe[1] = -1;
   }
   if (conn.cgiData.child_stdout_pipe[0] != -1) {
-      close(conn.cgiData.child_stdout_pipe[0]);
+      ::close(conn.cgiData.child_stdout_pipe[0]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
       conn.cgiData.child_stdout_pipe[0] = -1;
   }
   if (conn.cgiData.child_stdout_pipe[1] != -1) {
-      close(conn.cgiData.child_stdout_pipe[1]);
+      ::close(conn.cgiData.child_stdout_pipe[1]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[1]);
       conn.cgiData.child_stdout_pipe[1] = -1;
   }
 
   setCGIEnv(conn);
 
+  // Just get the request body - chunking already handled in URLMatcher
   conn.cgiData.buffer = conn.data.request.substr(conn.data.headers_end);
-  // check for chunking
-  if (conn.data.chunked == true) {
-    // handle chunked data first
-    // collect them in the one place and
-    //  write in the end when getting the end
-    debug("Chunked transfer encoding detected\n");
-    debug("Buffer: %s", conn.cgiData.buffer.c_str());
- 
-    // check if the buffer contains the end of chunking
-    if (conn.cgiData.buffer.find("0\r\n\r\n", 0) != string::npos) {
-      debug("End of chunking - Request complete");
-      // dechunk the data
-      conn.dechunkDataCGI();
-      conn.data.chunked = false;
-      debug("Dechunked data: %s", conn.cgiData.buffer.c_str());
-      // set the environment variable
-      conn.cgiData.env["CONTENT_LENGTH"] = Utils::to_string(conn.cgiData.buffer.size());
-      debug("Set content length to %s",
-            conn.cgiData.env["CONTENT_LENGTH"].c_str());
-      conn.data.headers["Content-Length"] =
-          Utils::to_string(conn.cgiData.buffer.length());
-          conn.data.content_length = conn.cgiData.buffer.length();
-      conn.data.headers.erase("Transfer-Encoding"); // Remove chunked header
-    } else {
-      debug("Still reading chunked data");
-      conn.state = CONN_INCOMING;
-      
-      return 0; // Still reading chunked data
-    }
-  }
-
-
-
 
   // Create pipes
   debug("create pipes");
@@ -77,7 +46,7 @@ int prepareCGI(HTTPConnxData &conn) {
   if (pipe(conn.cgiData.child_stdout_pipe) < 0) {
     perror("Failed to create pipes");
     ::close(conn.cgiData.child_stdin_pipe[0]);
-    close(conn.cgiData.child_stdin_pipe[1]);
+    ::close(conn.cgiData.child_stdin_pipe[1]);
     return -1;
   }
   debug("values in the pipes now %d", conn.cgiData.child_stdin_pipe[0]);
@@ -95,7 +64,7 @@ int prepareCGI(HTTPConnxData &conn) {
     // Child process
 
     // Close unused pipe ends
-    ::close(conn.cgiData.child_stdin_pipe[1]);  // Close write end of stdin pipe
+    ::close(conn.cgiData.child_stdin_pipe[1]); // Close write end of stdin pipe
     ::close(conn.cgiData.child_stdout_pipe[0]); // Close read end of stdout pipe
 
     // Redirect stdin and stdout
@@ -145,21 +114,21 @@ int prepareCGI(HTTPConnxData &conn) {
   } else {
     // Parent process
     // Close unused pipe ends
-    ::close(
-        conn.cgiData.child_stdout_pipe[1]);    // Close write end of stdout pipe
+    ::close(conn.cgiData.child_stdout_pipe[1]);    // Close write end of stdout pipe
     ::close(conn.cgiData.child_stdin_pipe[0]); // Close read end of stdin pipe
 
+
+    // for clarity I will assign the fds to the connection data cgi
+    conn.cgiData.cgi_stdin_fd = conn.cgiData.child_stdin_pipe[1];
+    conn.cgiData.cgi_stdout_fd = conn.cgiData.child_stdout_pipe[0];
     // assign the fds to the connection data
     if (conn.data.method == "GET" || (conn.data.content_length == 0)) {
       // No data to send to CGI stdin, close the write end of the pipe
       debug("GET request in cgi - closing child stdin pipe[1]");
-      conn.cgiData.is_receiving = false; // No data to send to CGI stdin
-      conn.cgiData.is_sending = true;    // Data to receive from CGI stdout
+      conn.state = CONN_CGI_SENDING;
       SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
       ::close(conn.cgiData.child_stdin_pipe[1]);
     } else {
-      conn.cgiData.is_receiving = true; // Data to send to CGI stdin
-      conn.cgiData.is_sending = false;  // No data to receive from CGI stdout
       SocketUtils::add_to_poll(conn.cgiData.child_stdin_pipe[1], POLLOUT);
       SocketUtils::add_to_poll(conn.cgiData.child_stdout_pipe[0], POLLIN);
     }
@@ -177,9 +146,20 @@ int prepareCGI(HTTPConnxData &conn) {
 }
 
 void setCGIEnv(HTTPConnxData &conn) {
+  // get the config for the connection
+  const ServerData *conf = Config::getConfigByPort(conn.data.port);
+  if (conf == NULL) {
+    debug("No config found for port %d", conn.data.port);
+    throw std::runtime_error(
+        "No config found for port " + Utils::to_string(conn.data.port));
+    return;
+  }
+
   conn.cgiData.env.clear();
   // Set environment variables for CGI - some are already init to defaults
   // int he struct constructor - ex REMOTE_USER which we dont use
+  conn.cgiData.env["UPLOAD_DIR"] = conf->cgiData.upload_dir;
+  debug("set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
   conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
   debug("set remote host to %s", conn.cgiData.env["REMOTE_HOST"].c_str());
   // for the body of the request if chunked
@@ -234,11 +214,6 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set remote user to %s", conn.cgiData.env["REMOTE_USER"].c_str());
   conn.cgiData.env["AUTH_TYPE"] = "N/A";
   debug("set auth type to %s", conn.cgiData.env["AUTH_TYPE"].c_str());
-  // this is extra
-  // conn.cgiData.env["UPLOAD_DIR"] =
-  // conn.urlMatcherData.config->cgiData.upload_dir;
-  conn.cgiData.env["UPLOAD_DIR"] = "html/www1/upload";
-  debug("set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
 }
 
 std::string ensureTrailinSlash(std::string path) {

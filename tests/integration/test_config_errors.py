@@ -125,3 +125,13 @@ def test_empty_config4_startup():
     # Assert that the exit code is non-zero (indicating an error)
     assert result.returncode != 0, f"Server started with empty config: {result.stdout.decode()}\n{result.stderr.decode()}"
 
+# test fo invalid syntax
+def test_empty_config5_startup():
+    """Test that the server fails to start with an empty config"""
+    result = subprocess.run(
+        ["./webserv", "tests/config/empty5.conf"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    # Assert that the exit code is non-zero (indicating an error)
+    assert result.returncode != 0, f"Server started with empty config: {result.stdout.decode()}\n{result.stderr.decode()}"
