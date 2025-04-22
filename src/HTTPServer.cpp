@@ -339,15 +339,12 @@ int run(std::string configFile) {
                 // todo send the error to the client
                 break;
               }
-              buffer[bytes_read] = '\0'; // Null-terminate the buffer
               debug("Received %ld bytes from CGI stdout", bytes_read);
               debugcolor(MAGENTA, "response from CGI: %s", buffer);
-              if (bytes_read == 0 || bytes_read < BUFFER_SIZE) {
+              if (bytes_read == 0) {
                 debug("CGI process finished");
-                // SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
-                // conn.reset();
-
-                // break;
+                conn.state = CONN_CGI_FINISHED;
+                break;
               }
               // Send data to client
               ssize_t bytes_written = ::send(
