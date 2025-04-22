@@ -154,7 +154,8 @@ int run(std::string configFile) {
       debug("conn fd %d state %d", conn.client_fd , conn.state);
       debug("------ current fd %d and is %s", current_fd,
         (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
-
+      debug("poll size %ld", pollfds.size());
+      debug("number of connections %ld", HTTPServer::connections.size());
       // Update activity time ONLY when I/O actually happens
       if (pollfds[i].revents & (POLLIN | POLLOUT)) {
         conn.data.lastActivityTime = std::time(NULL);
@@ -264,18 +265,17 @@ int run(std::string configFile) {
               conn.cgiData.child_timeout = 0;
               // read from client
               read_from_client_into_buffer(conn, current_fd);
-              break;  
-              
+              break;
             }
           }
           // set the timeout because not found
+          //  conn.cgiData.child_timeout = 0;
           if (conn.cgiData.child_timeout == 0) {
             conn.cgiData.child_timeout = std::time(NULL);
           } else {
             // check if the timeout is reached
             if (std::time(NULL) - conn.cgiData.child_timeout > Constants::cgi_child_timeout) {
               debug("CGI timeout reached");
-
               conn.state = CONN_CGI_FINISHED;
               break;
             }
@@ -291,12 +291,25 @@ int run(std::string configFile) {
                 (pollfds[j].revents & POLLOUT)) {
               debug("POLLOUT event on CGI stdin fd %d",
                     conn.cgiData.cgi_stdin_fd);
+              conn.cgiData.child_timeout = 0;
               // write to cgi the buffer if not empty
               write_to_child_stdin(conn, current_fd, pollfds[j].fd);
               break; // whatever happens to the state we break the for loop because we found 
                     // the fd we were looking for
             } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
           } // end for loop
+            // set the timeout because not found
+          //  conn.cgiData.child_timeout = 0;
+          if (conn.cgiData.child_timeout == 0) {
+            conn.cgiData.child_timeout = std::time(NULL);
+          } else {
+            // check if the timeout is reached
+            if (std::time(NULL) - conn.cgiData.child_timeout > Constants::cgi_child_timeout) {
+              debug("CGI timeout reached");
+              conn.state = CONN_CGI_FINISHED;
+              break;
+            }
+          }
           
           // TODO -cgi timeout - if the loop doesnt find the fd after a while
           // i should break the loop and close the connection
@@ -435,6 +448,7 @@ void write_to_client_from_cgi(HTTPConnxData &conn, int current_fd) {
  */
 void read_from_client_into_buffer(HTTPConnxData &conn, int current_fd) {
   conn.cgiData.buffer.resize(BUFFER_SIZE);
+  conn.cgiData.buffer.clear();
   ssize_t bytes_read =
       ::recv(conn.client_fd, &conn.cgiData.buffer[0], BUFFER_SIZE, 0);
   if (bytes_read < 0) {
@@ -450,6 +464,9 @@ void read_from_client_into_buffer(HTTPConnxData &conn, int current_fd) {
   debug("Received %ld bytes from client", bytes_read);
 }
 
+/**
+ * @brief Write data to the child process stdin
+ */
 void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd) {
   ssize_t bytes_written = ::write(conn.cgiData.cgi_stdin_fd,
     conn.cgiData.buffer.c_str(),
@@ -459,13 +476,14 @@ void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd) {
   if (bytes_written < 0) {
   perror("Failed to write to CGI stdin");
   debug("Failed to write to CGI stdin");
+  conn.cgiData.buffer.clear();
   conn.state = CONN_CGI_FINISHED;
   } else if (bytes_written == 0) {
   // Should not happen with blocking write unless size was 0
   debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)", conn.cgiData.buffer.size());
   debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
-  conn.state = CONN_CGI_FINISHED;
   conn.cgiData.buffer.clear();
+  conn.state = CONN_CGI_FINISHED;
   } else if (bytes_written < conn.cgiData.buffer.size()) {
   // Partial write: Remove written data and wait for next POLLOUT
   debug("Partial write: Wrote %ld bytes to CGI stdin (buffer size: %zu)", bytes_written, conn.cgiData.buffer.size());

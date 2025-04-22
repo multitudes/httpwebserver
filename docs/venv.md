@@ -37,7 +37,6 @@ pip install -r requirements.txt
 venv/bin/pip install requests
 ```
 
-
 ## in the makefile
 
 we do not use `source venv/bin activate` because make runs each command in a separate shell, so source wouldn’t persist.
