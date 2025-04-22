@@ -315,9 +315,7 @@ int run(std::string configFile) {
                 conn.client_fd);
 
           // before to read from child i check if i have a buffer leftover
-
           write_to_client_from_cgi(conn, current_fd);
-
 
           // after writing the excess buffer i need to read from the cgi
           for (size_t j = 0; j < pollfds.size(); j++) {
@@ -326,21 +324,18 @@ int run(std::string configFile) {
                 (pollfds[j].revents & POLLIN)) {
               debug("POLLIN event on CGI stdout fd %d",
                     conn.cgiData.cgi_stdout_fd);
-              // write to client from cgi
-              char buffer[BUFFER_SIZE + 1];
+              // read-write to client from cgi
+              conn.cgiData.buffer.resize(BUFFER_SIZE);
               ssize_t bytes_read = ::read(conn.cgiData.cgi_stdout_fd,
-                                          buffer, BUFFER_SIZE);
+                &conn.cgiData.buffer[0], conn.cgiData.buffer.size());
               if (bytes_read < 0) {
                 perror("Failed to read from CGI stdout");
-                SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-                SocketUtils::remove_from_poll(
-                    conn.cgiData.cgi_stdout_fd);
-                conn.reset();
-                // todo send the error to the client
+                conn.state = CONN_CGI_FINISHED;
+                // todo send the error to the client?
                 break;
               }
               debug("Received %ld bytes from CGI stdout", bytes_read);
-              debugcolor(MAGENTA, "response from CGI: %s", buffer);
+              debugcolor(MAGENTA, "response from CGI: %s", conn.cgiData.buffer.c_str());
               if (bytes_read == 0) {
                 debug("CGI process finished");
                 conn.state = CONN_CGI_FINISHED;
@@ -348,15 +343,20 @@ int run(std::string configFile) {
               }
               // Send data to client
               ssize_t bytes_written = ::send(
-                  conn.client_fd, buffer, static_cast<size_t>(bytes_read), 0);
+                  conn.client_fd, conn.cgiData.buffer.c_str(), static_cast<size_t>(bytes_read), 0);
               if (bytes_written < 0) {
                 perror("Failed to send data to client");
-                close(conn.cgiData.cgi_stdout_fd);
-                conn.reset();
+                conn.state = CONN_CGI_FINISHED;
+                conn.cgiData.buffer.clear();
                 continue;
+              } else if (bytes_written == 0) {
+                debuglog(YELLOW, "Wrote 0 bytes to client");
+                conn.state = CONN_CGI_FINISHED;
+                conn.cgiData.buffer.clear();
+                break;
               }
               debug("Sent %ld bytes to client", bytes_written);
-              if (bytes_written < BUFFER_SIZE || bytes_written == 0) {
+              if (bytes_written < BUFFER_SIZE) {
                 // i finished sending the data to the client
                 // close the read end of the pipe to signal EOF to the CGI
                 debuglog(YELLOW, "Closing read end of pipe");
