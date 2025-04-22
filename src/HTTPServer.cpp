@@ -64,7 +64,7 @@ std::set<pid_t> terminatedPids;
  * always available calling Config::getServerData();
  */
 int run(std::string configFile) {
-   (void)configFile; // Unused variable
+  (void)configFile; // Unused variable
   configs_ = Config::getServerData();
 
   SocketUtils::initialize();
@@ -125,14 +125,16 @@ int run(std::string configFile) {
 
       // Now safely get reference - the connection data is in a map
       // and it has been added in accept. the fd could be an fd cgi and
-      // it will return the parent connection data - 
+      // it will return the parent connection data -
       debug("getting connection data for fd %d", current_fd);
       // Now safely get reference to the connection data
       bool found = false;
-      std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(current_fd);
+      std::map<int, HTTPConnxData>::iterator conn_it =
+          HTTPServer::connections.find(current_fd);
       if (conn_it == HTTPServer::connections.end()) {
-        for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
-            it != HTTPServer::connections.end(); ++it) {
+        for (std::map<int, HTTPConnxData>::iterator it =
+                 HTTPServer::connections.begin();
+             it != HTTPServer::connections.end(); ++it) {
           if (it->second.cgiData.cgi_stdin_fd == current_fd ||
               it->second.cgiData.cgi_stdout_fd == current_fd) {
             conn_it = it;
@@ -141,7 +143,7 @@ int run(std::string configFile) {
           }
         }
         if (!found) {
-          // Still not found? should not happen 
+          // Still not found? should not happen
           debug("FD %d not found in connections - removing", current_fd);
           SocketUtils::remove_from_poll(current_fd);
           close(current_fd);
@@ -151,9 +153,9 @@ int run(std::string configFile) {
       }
       debug("found connection data for fd %d", current_fd);
       HTTPConnxData &conn = conn_it->second;
-      debug("conn fd %d state %d", conn.client_fd , conn.state);
+      debug("conn fd %d state %d", conn.client_fd, conn.state);
       debug("------ current fd %d and is %s", current_fd,
-        (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
+            (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
       debug("poll size %ld", pollfds.size());
       debug("number of connections %ld", HTTPServer::connections.size());
       // Update activity time ONLY when I/O actually happens
@@ -167,7 +169,7 @@ int run(std::string configFile) {
         conn.data.client_timeout = 0;
         URLMatcher::validateRequest(conn);
         continue;
-      } 
+      }
 
       /* ----------- KEEP PARSING_HEADER --------------- */
       if (pollfds[i].revents & POLLIN && conn.state == CONN_PARSING_HEADER) {
@@ -235,7 +237,7 @@ int run(std::string configFile) {
         if (conn.cgiData.cgi_stdout_fd != -1) {
           SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
         }
-        conn.reset(); //todo check if pid not reset
+        conn.reset(); // todo check if pid not reset
         // SocketUtils::remove_from_poll(conn.client_fd);
         // connections.erase(conn.client_fd);
         // debug("CGI finished and connection fd %d removed", conn.client_fd);
@@ -252,8 +254,8 @@ int run(std::string configFile) {
         debug("CGI fd in %d", conn.cgiData.cgi_stdin_fd);
         debug("CGI fd out %d", conn.cgiData.cgi_stdout_fd);
 
-       if (current_fd == conn.client_fd &&
-                   (pollfds[i].revents & POLLIN) && conn.cgiData.buffer.empty())  {
+        if (current_fd == conn.client_fd && (pollfds[i].revents & POLLIN) &&
+            conn.cgiData.buffer.empty()) {
           // first read from the client
           debug("POLLIN event on client fd %d", conn.client_fd);
           for (size_t j = 0; j < pollfds.size(); j++) {
@@ -265,8 +267,7 @@ int run(std::string configFile) {
               conn.cgiData.child_timeout = 0;
               // read from client
               read_from_client_into_buffer(conn, current_fd);
-              break;  
-              
+              break;
             }
           }
           // set the timeout because not found
@@ -275,7 +276,8 @@ int run(std::string configFile) {
             conn.cgiData.child_timeout = std::time(NULL);
           } else {
             // check if the timeout is reached
-            if (std::time(NULL) - conn.cgiData.child_timeout > Constants::cgi_child_timeout) {
+            if (std::time(NULL) - conn.cgiData.child_timeout >
+                Constants::cgi_child_timeout) {
               debug("CGI timeout reached");
               conn.state = CONN_CGI_FINISHED;
               break;
@@ -283,7 +285,7 @@ int run(std::string configFile) {
           }
         }
 
-         // check if the child process is pollout ready to be written to  
+        // check if the child process is pollout ready to be written to
         // and i have data in buffer from the preparecgi function
         if (!conn.cgiData.buffer.empty()) {
           debug("cgiData is receiving");
@@ -295,53 +297,55 @@ int run(std::string configFile) {
               conn.cgiData.child_timeout = 0;
               // write to cgi the buffer if not empty
               write_to_child_stdin(conn, current_fd, pollfds[j].fd);
-              break; // whatever happens to the state we break the for loop because we found 
-                    // the fd we were looking for
+              break; // whatever happens to the state we break the for loop
+                     // because we found the fd we were looking for
             } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
-                      // set the timeout because not found
-          if (conn.cgiData.child_timeout == 0) {
-            conn.cgiData.child_timeout = std::time(NULL);
-          } else {
-            // check if the timeout is reached
-            if (std::time(NULL) - conn.cgiData.child_timeout > Constants::cgi_child_timeout) {
-              debug("CGI timeout reached");
+              // set the timeout because not found
+            if (conn.cgiData.child_timeout == 0) {
+              conn.cgiData.child_timeout = std::time(NULL);
+            } else {
+              // check if the timeout is reached
+              if (std::time(NULL) - conn.cgiData.child_timeout >
+                  Constants::cgi_child_timeout) {
+                debug("CGI timeout reached");
               conn.state = CONN_CGI_FINISHED;
-              break;
+                break;
+              }
             }
-          }
           } // end for loop
-          
+
           // TODO -cgi timeout - if the loop doesnt find the fd after a while
           // i should break the loop and close the connection
-        } 
+        }
       }
 
       /*    -------- CGI SENDING -----------      */
       if (conn.state == CONN_CGI_SENDING) {
-        debuglog(YELLOW, "Connection fd %d in state CGI SENDING", conn.client_fd);
+        debuglog(YELLOW, "Connection fd %d in state CGI SENDING",
+                 conn.client_fd);
         debug("CONN_CGI_SENDING fd %d", conn.client_fd);
         // Handle data FROM CGI process (ready to write to client from cgi)
         // my client is ready to be written to
-        if (current_fd == conn.client_fd &&
-            (pollfds[i].revents & POLLOUT)) {
+        if (current_fd == conn.client_fd && (pollfds[i].revents & POLLOUT)) {
           debug("cgiData is sending  and client fd %d is POLLOUT",
                 conn.client_fd);
-                // before to read from child i check if i have a buffer leftover
-                write_to_client_from_cgi(conn, current_fd);
-                
-                // after writing the excess buffer i need to read from the cgi
-                for (size_t j = 0; j < pollfds.size(); j++) {
-                  // and the cgi process is ready to be read from
-                  if (pollfds[j].fd == conn.cgiData.cgi_stdout_fd &&
-                    (pollfds[j].revents & POLLIN)) {
-                    debug("POLLIN event on CGI stdout fd %d",
-                        conn.cgiData.cgi_stdout_fd);
-                    // reset timeout
-                    conn.cgiData.child_timeout = 0;
+          // before to read from child i check if i have a buffer leftover
+          write_to_client_from_cgi(conn, current_fd);
+
+          // after writing the excess buffer i need to read from the cgi
+          for (size_t j = 0; j < pollfds.size(); j++) {
+            // and the cgi process is ready to be read from
+            if (pollfds[j].fd == conn.cgiData.cgi_stdout_fd &&
+                (pollfds[j].revents & POLLIN)) {
+              debug("POLLIN event on CGI stdout fd %d",
+                    conn.cgiData.cgi_stdout_fd);
+              // reset timeout
+              conn.cgiData.child_timeout = 0;
               // read-write to client from cgi
               conn.cgiData.buffer.resize(BUFFER_SIZE);
-              ssize_t bytes_read = ::read(conn.cgiData.cgi_stdout_fd,
-                &conn.cgiData.buffer[0], conn.cgiData.buffer.size());
+              ssize_t bytes_read =
+                  ::read(conn.cgiData.cgi_stdout_fd, &conn.cgiData.buffer[0],
+                         conn.cgiData.buffer.size());
               if (bytes_read < 0) {
                 perror("Failed to read from CGI stdout");
                 conn.state = CONN_CGI_FINISHED;
@@ -349,7 +353,8 @@ int run(std::string configFile) {
                 break;
               }
               debug("Received %ld bytes from CGI stdout", bytes_read);
-              debugcolor(MAGENTA, "response from CGI: %s", conn.cgiData.buffer.c_str());
+              debugcolor(MAGENTA, "response from CGI: %s",
+                         conn.cgiData.buffer.c_str());
               if (bytes_read == 0) {
                 debug("CGI process finished");
                 conn.cgiData.buffer.clear();
@@ -358,8 +363,9 @@ int run(std::string configFile) {
                 break;
               }
               // Send data to client
-              ssize_t bytes_written = ::send(
-                  conn.client_fd, conn.cgiData.buffer.c_str(), static_cast<size_t>(bytes_read), 0);
+              ssize_t bytes_written =
+                  ::send(conn.client_fd, conn.cgiData.buffer.c_str(),
+                         static_cast<size_t>(bytes_read), 0);
               if (bytes_written < 0) {
                 perror("Failed to send data to client");
                 conn.state = CONN_CGI_FINISHED;
@@ -377,9 +383,8 @@ int run(std::string configFile) {
                 // close the read end of the pipe to signal EOF to the CGI
                 debuglog(YELLOW, "Closing read end of pipe");
                 SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-                SocketUtils::remove_from_poll(
-                    conn.cgiData.cgi_stdout_fd);
-                
+                SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+
                 conn.state = CONN_CGI_FINISHED;
               }
               break;
@@ -389,7 +394,8 @@ int run(std::string configFile) {
             conn.cgiData.child_timeout = std::time(NULL);
           } else {
             // check if the timeout is reached
-            if (std::time(NULL) - conn.cgiData.child_timeout > Constants::cgi_child_timeout) {
+            if (std::time(NULL) - conn.cgiData.child_timeout >
+                Constants::cgi_child_timeout) {
               debug("CGI timeout reached");
               conn.state = CONN_CGI_FINISHED;
               break;
@@ -397,15 +403,14 @@ int run(std::string configFile) {
           }
         }
 
-
-
       } // end of the state cgi check
 
       if (conn.data.client_timeout == 0) {
         conn.data.client_timeout = std::time(NULL);
       } else {
         // check if the timeout is reached
-        if (std::time(NULL) - conn.data.client_timeout > Constants::cgi_child_timeout) {
+        if (std::time(NULL) - conn.data.client_timeout >
+            Constants::cgi_child_timeout) {
           debug("Client timeout reached");
           // conn.reset();
 
@@ -450,8 +455,7 @@ void write_to_client_from_cgi(HTTPConnxData &conn, int current_fd) {
     debug("leftover buffer from cgiData");
     // write to cgi the buffer if any remaining from the
     // initialisation
-    ssize_t bytes_written = ::write(current_fd,
-                                    conn.cgiData.buffer.c_str(),
+    ssize_t bytes_written = ::write(current_fd, conn.cgiData.buffer.c_str(),
                                     conn.cgiData.buffer.size());
     debug("Wrote %ld bytes to client", bytes_written);
 
@@ -461,31 +465,35 @@ void write_to_client_from_cgi(HTTPConnxData &conn, int current_fd) {
       conn.state = CONN_CGI_FINISHED;
     } else if (bytes_written == 0) {
       // Should not happen with blocking write unless size was 0
-      debuglog(YELLOW, "Wrote 0 bytes to client (buffer size: %zu)", conn.cgiData.buffer.size());
+      debuglog(YELLOW, "Wrote 0 bytes to client (buffer size: %zu)",
+               conn.cgiData.buffer.size());
       debuglog(RED, "Wrote 0 bytes to client unexpectedly.");
       conn.state = CONN_CGI_FINISHED;
     } else if (static_cast<size_t>(bytes_written) < conn.cgiData.buffer.size()) {
       // Partial write: Remove written data and wait for next POLLOUT
-      debug("Partial write: Wrote %ld bytes to client (buffer size: %zu)", bytes_written, conn.cgiData.buffer.size());
-      conn.cgiData.buffer.erase(0, static_cast<std::string::size_type>(bytes_written));
+      debug("Partial write: Wrote %ld bytes to client (buffer size: %zu)",
+            bytes_written, conn.cgiData.buffer.size());
+      conn.cgiData.buffer.erase(
+          0, static_cast<std::string::size_type>(bytes_written));
       // stay in the same state, poll will trigger again
     } else {
       // Full write (bytes_written == conn.cgiData.buffer.size())
-      debugcolor(MAGENTA, "wrote request buffer to client: %s", conn.cgiData.buffer.c_str()); // Log data before clearing
+      debugcolor(MAGENTA, "wrote request buffer to client: %s",
+                 conn.cgiData.buffer.c_str()); // Log data before clearing
       // TODO check the bytes received
       conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
       if (conn.cgiData.bytes_received >= conn.data.content_length) {
-          debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
-          // If we have written all data, clear the buffer
-          conn.cgiData.buffer.clear();
-        }
+        debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+        // If we have written all data, clear the buffer
+        conn.cgiData.buffer.clear();
+      }
     }
-  } 
+  }
 }
 
 /**
  * @brief Read data from the client into the buffer
- * 
+ *
  * @param conn The connection data
  * @param current_fd The current file descriptor
  */
@@ -502,7 +510,7 @@ void read_from_client_into_buffer(HTTPConnxData &conn, int current_fd) {
     SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
     conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
     conn.state = CONN_CGI_SENDING;
-  } 
+  }
   debug("Received %ld bytes from client", bytes_read);
 }
 
@@ -510,46 +518,50 @@ void read_from_client_into_buffer(HTTPConnxData &conn, int current_fd) {
  * @brief Write data to the child process stdin
  */
 void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd) {
-  ssize_t bytes_written = ::write(conn.cgiData.cgi_stdin_fd,
-    conn.cgiData.buffer.c_str(),
-    conn.cgiData.buffer.size());
+  ssize_t bytes_written =
+      ::write(conn.cgiData.cgi_stdin_fd, conn.cgiData.buffer.c_str(),
+              conn.cgiData.buffer.size());
   debug("Wrote %ld bytes to CGI stdin", bytes_written);
 
   if (bytes_written < 0) {
-  perror("Failed to write to CGI stdin");
-  debug("Failed to write to CGI stdin");
+    perror("Failed to write to CGI stdin");
+    debug("Failed to write to CGI stdin");
   conn.state = CONN_CGI_FINISHED;
   } else if (bytes_written == 0) {
-  // Should not happen with blocking write unless size was 0
-  debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)", conn.cgiData.buffer.size());
-  debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
+    // Should not happen with blocking write unless size was 0
+    debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)",
+             conn.cgiData.buffer.size());
+    debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
   conn.state = CONN_CGI_FINISHED;
-  conn.cgiData.buffer.clear();
+    conn.cgiData.buffer.clear();
   } else if (bytes_written < conn.cgiData.buffer.size()) {
-  // Partial write: Remove written data and wait for next POLLOUT
-  debug("Partial write: Wrote %ld bytes to CGI stdin (buffer size: %zu)", bytes_written, conn.cgiData.buffer.size());
-  conn.cgiData.buffer.erase(0, static_cast<std::string::size_type>(bytes_written));
-  conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
-  // stay in the same state, poll will trigger again
-  } else if (bytes_written == conn.cgiData.buffer.size()){
-  // Full write (bytes_written == conn.cgiData.buffer.size())
-  debugcolor(MAGENTA, "wrote request buffer to CGI: %s", conn.cgiData.buffer.c_str()); // Log data before clearing
-  conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
-  conn.cgiData.buffer.clear();
-  debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+    // Partial write: Remove written data and wait for next POLLOUT
+    debug("Partial write: Wrote %ld bytes to CGI stdin (buffer size: %zu)",
+          bytes_written, conn.cgiData.buffer.size());
+    conn.cgiData.buffer.erase(
+        0, static_cast<std::string::size_type>(bytes_written));
+    conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
+    // stay in the same state, poll will trigger again
+  } else if (bytes_written == conn.cgiData.buffer.size()) {
+    // Full write (bytes_written == conn.cgiData.buffer.size())
+    debugcolor(MAGENTA, "wrote request buffer to CGI: %s",
+               conn.cgiData.buffer.c_str()); // Log data before clearing
+    conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
+    conn.cgiData.buffer.clear();
+    debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
   }
   if (conn.cgiData.bytes_received >= conn.data.content_length) {
-  debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
-  // If we have written all data, clear the buffer
-  conn.cgiData.buffer.clear();
-  conn.cgiData.bytes_received = 0;
-  // close the write end of the pipe to signal EOF to the CGI
-  debuglog(YELLOW, "Closing write end of pipe");
-  SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-  close(conn.cgiData.cgi_stdin_fd);
-  conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-  conn.state = CONN_CGI_SENDING;
-  } 
+    debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+    // If we have written all data, clear the buffer
+    conn.cgiData.buffer.clear();
+    conn.cgiData.bytes_received = 0;
+    // close the write end of the pipe to signal EOF to the CGI
+    debuglog(YELLOW, "Closing write end of pipe");
+    SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+    close(conn.cgiData.cgi_stdin_fd);
+    conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+    conn.state = CONN_CGI_SENDING;
+  }
 }
 
 /**
@@ -603,8 +615,8 @@ void createServerSockets(const vector<ServerData> &configs,
 
 /**
  * @brief Reload the configuration file called by reload
- * 
- * It is a throwable function 
+ *
+ * It is a throwable function
  */
 void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
                       vector<ServerData> &configs_) {
@@ -626,7 +638,7 @@ void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
 
 /**
  * @brief Reload the configuration file if needed
- * 
+ *
  * Used when we set the autoreload option in the config file
  */
 bool reload(string configFile, long currentTime) {
@@ -653,7 +665,7 @@ bool checkPollErrors(pollfd currentfd) {
   if (!(currentfd.revents & (POLLIN | POLLOUT))) {
     return true; // No events on this fd
   }
-  if (SocketUtils::gotPollhupShouldSkip(currentfd) || \
+  if (SocketUtils::gotPollhupShouldSkip(currentfd) ||
       SocketUtils::gotPollerrShouldSkip(currentfd)) {
     return true;
   }
@@ -1025,8 +1037,7 @@ void checkCompletionConditions(HTTPConnxData &conn) {
 void uploadLoop(HTTPConnxData &conn, pollfd currentfd) {
   if (currentfd.revents & POLLIN) {
     debug("POLLIN event on upload connection %d", conn.client_fd);
-    debuglog(YELLOW, "Handling upload event for connection %d",
-             conn.client_fd);
+    debuglog(YELLOW, "Handling upload event for connection %d", conn.client_fd);
 
     if (!readFromClientForUpload(conn) || !writeUploadToFile(conn)) {
       return;
