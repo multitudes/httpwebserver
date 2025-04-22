@@ -93,6 +93,7 @@ struct HTTPConnxData {
     map<string, string> session_data;
 
     time_t lastActivityTime;
+    time_t client_timeout;
 
     ConnectionData()
         : method(""), target(""), version(""), host(""), port(4244),
@@ -105,7 +106,8 @@ struct HTTPConnxData {
           has_session(false), // for session management
           session_created(0), session_last_accessed(0),
           session_data(), // for session management
-          lastActivityTime(std::time(NULL)) 
+          lastActivityTime(std::time(NULL)),
+          client_timeout(0)  
     {}
   };
 

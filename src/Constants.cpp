@@ -13,6 +13,7 @@ int responseTimeout = 10;
 int keepalive_timeout = 15;
 bool autoReload = false;
 time_t cgi_child_timeout = 2;
+time_t client_timeout = 3;
 
 void initStatusMessageMap() {
   debuglog(YELLOW, "Initializing status code to status text mapping");

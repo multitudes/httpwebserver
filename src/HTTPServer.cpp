@@ -164,6 +164,7 @@ int run(std::string configFile) {
       /* -------------  CONN_INCOMING  ---------------- */
       if (pollfds[i].revents & POLLIN && conn.state == CONN_INCOMING) {
         debug("got CONN_INCOMING fd %d", conn.client_fd);
+        conn.data.client_timeout = 0;
         URLMatcher::validateRequest(conn);
         continue;
       } 
@@ -226,8 +227,7 @@ int run(std::string configFile) {
       if (conn.state == CONN_CGI_FINISHED) {
         // sanity check
         if (!conn.cgiData.buffer.empty()) {
-          throw std::runtime_error(
-              "[DEVELOPMENT] CGI finished but buffer is not empty. This should not happen.");
+          debug("Buffer not empty! Size: %zu", conn.cgiData.buffer.size());
         }
         if (conn.cgiData.cgi_stdin_fd != -1) {
           SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
@@ -299,7 +299,6 @@ int run(std::string configFile) {
                     // the fd we were looking for
             } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
                       // set the timeout because not found
-          //              conn.cgiData.child_timeout = 0;
           if (conn.cgiData.child_timeout == 0) {
             conn.cgiData.child_timeout = std::time(NULL);
           } else {
@@ -353,6 +352,8 @@ int run(std::string configFile) {
               debugcolor(MAGENTA, "response from CGI: %s", conn.cgiData.buffer.c_str());
               if (bytes_read == 0) {
                 debug("CGI process finished");
+                conn.cgiData.buffer.clear();
+                conn.cgiData.buffer.resize(0);
                 conn.state = CONN_CGI_FINISHED;
                 break;
               }
@@ -378,7 +379,7 @@ int run(std::string configFile) {
                 SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.cgi_stdout_fd);
-                conn.reset();
+                
                 conn.state = CONN_CGI_FINISHED;
               }
               break;
@@ -400,6 +401,30 @@ int run(std::string configFile) {
 
       } // end of the state cgi check
 
+      if (conn.data.client_timeout == 0) {
+        conn.data.client_timeout = std::time(NULL);
+      } else {
+        // check if the timeout is reached
+        if (std::time(NULL) - conn.data.client_timeout > Constants::cgi_child_timeout) {
+          debug("Client timeout reached");
+          // conn.reset();
+
+          if (conn.cgiData.cgi_stdin_fd != -1) {
+            SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+            close(conn.cgiData.cgi_stdin_fd);
+            conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+          }
+          if (conn.cgiData.cgi_stdout_fd != -1) {
+            SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+            close(conn.cgiData.cgi_stdout_fd);
+            conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
+          }
+          close(conn.client_fd);
+          SocketUtils::remove_from_poll(conn.client_fd);
+          HTTPServer::connections.erase(conn.client_fd);
+          break;
+        }
+      }
     } // end of the main for loop in pollfds
   }
 
@@ -449,7 +474,7 @@ void write_to_client_from_cgi(HTTPConnxData &conn, int current_fd) {
           conn.cgiData.buffer.clear();
         }
     }
-  }
+  } 
 }
 
 /**
