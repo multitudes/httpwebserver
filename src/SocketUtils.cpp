@@ -212,7 +212,6 @@ void shutdownServer() {
   HTTPServer::pollfds.clear();
   HTTPServer::serverSockets.clear();
   HTTPServer::connections.clear();
-  HTTPServer::lastActivityTime.clear();
 }
 
 /**
@@ -354,22 +353,24 @@ bool setSendRecTimeout(int clientfd) {
  * TODO send a 408 Request Timeout response to the client before closing
  */
 void checkForIdleConnections() {
-  std::time_t now = std::time(NULL);
-  std::map<int, std::time_t>::iterator it =
-      HTTPServer::lastActivityTime.begin();
+  std::time_t now = std::time(NULL); // seconds since epoch!
+  std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
   // only clientfds have to be in the lastActivityTime map
   // so we can safely? erase them
-  while (it != HTTPServer::lastActivityTime.end()) {
-    if (now - it->second > Constants::keepalive_timeout) {
-      int fd = it->first;
-      debuglog(YELLOW, "Closing idle connection (fd %d)", fd);
-      HTTPServer::getConnectionData(fd).reset();
-      // HTTPServer::connections.erase(fd);
-      remove_from_poll(fd);
-      close(fd);
-      HTTPServer::lastActivityTime.erase(it++);
+  while (it != HTTPServer::connections.end()) {
+    HTTPConnxData& conn = it->second;
+    int client_fd = conn.client_fd; // Store fd before potential erase
+
+    // Check idle time
+    if (now - conn.data.lastActivityTime > Constants::keepalive_timeout) {
+        debuglog(YELLOW, "Closing idle connection (fd %d)", client_fd);
+        debug("Closing idle connection (fd %d)", client_fd);
+        // conn.reset();
+        SocketUtils::remove_from_poll(client_fd);
+        close(client_fd);
+        HTTPServer::connections.erase(it++); // Erase and move to next
     } else {
-      ++it;
+        ++it; // Move to next connection
     }
   }
 }
@@ -432,18 +433,40 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
     // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
   // requested
   if (currentfd.revents & POLLHUP) {
-    debuglog(RED, "Connection closed on fd %d ", currentfd.fd);
-    debug("Connection closed on fd %d ", currentfd.fd);
-    // Now safely get reference
-    HTTPConnxData &conn = HTTPServer::getConnectionData(currentfd.fd);
+    debuglog(RED, "POLLHUP Connection on fd %d ", currentfd.fd);
+    debug("POLLHUP Connection on fd %d ", currentfd.fd);
+    // Now safely get reference to the connection data
+    std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(currentfd.fd);
 
-    if (currentfd.fd == conn.client_fd) {
-      debug("POLLHUP on client fd %d", currentfd.fd);
+    if (conn_it == HTTPServer::connections.end()) {
+      for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+           it != HTTPServer::connections.end(); ++it) {
+        if (it->second.cgiData.cgi_stdin_fd == currentfd.fd ||
+            it->second.cgiData.cgi_stdout_fd == currentfd.fd) {
+          conn_it = it;
+          break;
+        }
+      }
+      // Still not found? Cannot happen
+      debug("FD %d not found in connections - removing", currentfd.fd);
       SocketUtils::remove_from_poll(currentfd.fd);
       close(currentfd.fd);
-      HTTPServer::lastActivityTime.erase(currentfd.fd);
-      debug("Closing and erasing the connection %d from the map", currentfd.fd);
-      conn.reset();
+      HTTPServer::connections.erase(currentfd.fd);
+      return true;
+    }
+
+    HTTPConnxData &conn = conn_it->second;
+
+    if (currentfd.fd == conn.client_fd) {
+      debug("POLLHUP on client fd %d - total number of connx %ld", currentfd.fd, HTTPServer::connections.size()); 
+      // conn.reset();
+      SocketUtils::remove_from_poll(currentfd.fd);
+      // close(currentfd.fd);
+      // debug("Closing and erasing the connection %d from the map", currentfd.fd);
+      HTTPServer::connections.erase(currentfd.fd);
+      debug("POLLHUP on client fd %d - total number of connx %ld - size of pollfds %ld ", currentfd.fd, HTTPServer::connections.size(), 
+        HTTPServer::pollfds.size()); 
+      
       return true;
     }
 
@@ -453,10 +476,8 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
       close(conn.cgiData.cgi_stdout_fd);
       SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
       conn.cgiData.cgi_stdout_closed = true;
-      conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
+      // conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
     }
-
-
   }
   return false;
 }
@@ -466,14 +487,38 @@ bool gotPollerrShouldSkip(pollfd &currentfd) {
     debuglog(RED, "Error condition on fd %d", currentfd.fd);
     int error = 0;
     socklen_t len = sizeof(error);
-    HTTPConnxData &conn = HTTPServer::getConnectionData(currentfd.fd);
+
+    // Now safely get reference to the connection data
+    std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(currentfd.fd);
+
+    if (conn_it == HTTPServer::connections.end()) {
+      for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+           it != HTTPServer::connections.end(); ++it) {
+        if (it->second.cgiData.cgi_stdin_fd == currentfd.fd ||
+            it->second.cgiData.cgi_stdout_fd == currentfd.fd) {
+          conn_it = it;
+          break;
+        }
+      }
+      // Still not found? Cannot happen - maybe throw an exception?
+            // Still not found? Cannot happen
+      debug("FD %d not found in connections - removing", currentfd.fd);
+      SocketUtils::remove_from_poll(currentfd.fd);
+      close(currentfd.fd);
+      // HTTPServer::connections.erase(currentfd.fd);
+      // throw std::runtime_error("FD not found in connections");
+      return true;
+    }
+
+    HTTPConnxData &conn = conn_it->second;
+    
     if (currentfd.fd == conn.client_fd) {
       // unusable connection
       debug("Closing client fd %d", currentfd.fd);
       SocketUtils::remove_from_poll(currentfd.fd);
       close(currentfd.fd);
-      conn.reset();
-      HTTPServer::lastActivityTime.erase(currentfd.fd);
+      // conn.reset();
+      HTTPServer::connections.erase(currentfd.fd);
     }
     if (currentfd.fd == conn.cgiData.cgi_stdin_fd) {
       debug("Closing CGI stdin pipe %d", currentfd.fd);

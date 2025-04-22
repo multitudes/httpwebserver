@@ -49,7 +49,6 @@ typedef std::vector<struct pollfd> PollfdsVector;
 PollfdsVector pollfds;
 vector<int> serverSockets;
 map<int, HTTPConnxData> connections;
-map<int, std::time_t> lastActivityTime;
 vector<ServerData> configs_;
 std::set<pid_t> terminatedPids;
 
@@ -127,11 +126,38 @@ int run(std::string configFile) {
       // Now safely get reference - the connection data is in a map
       // and it has been added in accept. the fd could be an fd cgi and
       // it will return the parent connection data - 
-      HTTPConnxData &conn = getConnectionData(current_fd);
+      debug("getting connection data for fd %d", current_fd);
+      // Now safely get reference to the connection data
+      bool found = false;
+      std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(current_fd);
+      if (conn_it == HTTPServer::connections.end()) {
+        for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+            it != HTTPServer::connections.end(); ++it) {
+          if (it->second.cgiData.cgi_stdin_fd == current_fd ||
+              it->second.cgiData.cgi_stdout_fd == current_fd) {
+            conn_it = it;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          // Still not found? should not happen 
+          debug("FD %d not found in connections - removing", current_fd);
+          SocketUtils::remove_from_poll(current_fd);
+          close(current_fd);
+          // HTTPServer::connections.erase(current_fd);
+          continue; // break to outer loop
+        }
+      }
+      debug("found connection data for fd %d", current_fd);
+      HTTPConnxData &conn = conn_it->second;
+      debug("conn fd %d state %d", conn.client_fd , conn.state);
+      debug("------ current fd %d and is %s", current_fd,
+        (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
 
       // Update activity time ONLY when I/O actually happens
       if (pollfds[i].revents & (POLLIN | POLLOUT)) {
-        lastActivityTime[conn.client_fd] = std::time(NULL);
+        conn.data.lastActivityTime = std::time(NULL);
       }
 
       /* -------------  CONN_INCOMING  ---------------- */
@@ -139,7 +165,7 @@ int run(std::string configFile) {
         debug("got CONN_INCOMING fd %d", conn.client_fd);
         URLMatcher::validateRequest(conn);
         continue;
-      }
+      } 
 
       /* ----------- KEEP PARSING_HEADER --------------- */
       if (pollfds[i].revents & POLLIN && conn.state == CONN_PARSING_HEADER) {
@@ -197,7 +223,7 @@ int run(std::string configFile) {
 
       /*    -------- CGI FINISHED -----------      */
       if (conn.state == CONN_CGI_FINISHED) {
-        // sam=nity check
+        // sanity check
         if (!conn.cgiData.buffer.empty()) {
           throw std::runtime_error(
               "[DEVELOPMENT] CGI finished but buffer is not empty. This should not happen.");
@@ -208,8 +234,10 @@ int run(std::string configFile) {
         if (conn.cgiData.cgi_stdout_fd != -1) {
           SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
         }
-        lastActivityTime.erase(conn.client_fd);
-        conn.reset();
+        conn.reset(); //todo check if pid not reset
+        // SocketUtils::remove_from_poll(conn.client_fd);
+        // connections.erase(conn.client_fd);
+        // debug("CGI finished and connection fd %d removed", conn.client_fd);
         break;
       }
 
@@ -232,11 +260,24 @@ int run(std::string configFile) {
                 (pollfds[j].revents & POLLOUT)) {
               debug("POLLOUT event on CGI stdin fd %d",
                     conn.cgiData.cgi_stdin_fd);
-
+              // found! reset the timeout
+              conn.cgiData.child_timeout = 0;
               // read from client
               read_from_client_into_buffer(conn, current_fd);
               break;  
               
+            }
+          }
+          // set the timeout because not found
+          if (conn.cgiData.child_timeout == 0) {
+            conn.cgiData.child_timeout = std::time(NULL);
+          } else {
+            // check if the timeout is reached
+            if (std::time(NULL) - conn.cgiData.child_timeout > Constants::cgi_child_timeout) {
+              debug("CGI timeout reached");
+
+              conn.state = CONN_CGI_FINISHED;
+              break;
             }
           }
         }
@@ -294,7 +335,6 @@ int run(std::string configFile) {
                 SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.cgi_stdout_fd);
-                lastActivityTime.erase(conn.client_fd);
                 conn.reset();
                 // todo send the error to the client
                 break;
@@ -315,7 +355,6 @@ int run(std::string configFile) {
               if (bytes_written < 0) {
                 perror("Failed to send data to client");
                 close(conn.cgiData.cgi_stdout_fd);
-                lastActivityTime.erase(conn.client_fd);
                 conn.reset();
                 continue;
               }
@@ -327,8 +366,8 @@ int run(std::string configFile) {
                 SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
                 SocketUtils::remove_from_poll(
                     conn.cgiData.cgi_stdout_fd);
-                lastActivityTime.erase(conn.client_fd);
                 conn.reset();
+                conn.state = CONN_CGI_FINISHED;
               }
               break;
             }
@@ -632,9 +671,6 @@ void acceptNewClient(int server_fd) {
                                   conn.client_ip, sizeof(conn.client_ip));
     uint16_t client_port = ntohs(client_addr.sin_port);
 
-    // add the timeout for the client
-    lastActivityTime[client_fd] = std::time(NULL);
-
     debuglog(YELLOW, "Incoming client connected from %s:%d", conn.client_ip,
              client_port);
     debuglog(YELLOW,
@@ -694,33 +730,6 @@ bool maxConnectionsCheck(int clientfd) {
 }
 
 /**
- *
- */
-HTTPConnxData &getConnectionData(int fd) {
-  // First try to find as normal connection
-  std::map<int, HTTPConnxData>::iterator conn_it = connections.find(fd);
-
-  // If not found, check for its CGI pipes
-  if (conn_it == connections.end()) {
-    for (std::map<int, HTTPConnxData>::iterator it = connections.begin();
-         it != connections.end(); ++it) {
-      if (it->second.cgiData.cgi_stdin_fd == fd ||
-          it->second.cgiData.cgi_stdout_fd == fd) {
-        conn_it = it;
-        break;
-      }
-    }
-    // Still not found? Cannot happen - maybe throw an exception?
-    if (conn_it == connections.end()) {
-      debuglog(RED, "FD %d not found in connections", fd);
-      throw std::runtime_error("FD not found in connections");
-    }
-  }
-
-  return conn_it->second;
-}
-
-/**
  * @brief Check if the upload is complete
  *
  * @param conn The connection data
@@ -733,7 +742,6 @@ HTTPConnxData &getConnectionData(int fd) {
 bool uploadComplete(HTTPConnxData &conn) {
   if (conn.data.bytes_sent >= conn.data.content_length) {
     debug("Upload complete");
-    lastActivityTime.erase(conn.client_fd);
     conn.reset();
     Responses::createResponse(conn, "text/plain", "File uploaded successfully.",
                               201);
@@ -762,8 +770,8 @@ bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn) {
     if (bytes_written <= 0) {
       perror(bytes_written < 0 ? "Failed to write to file"
                                : "No data written to file");
-      lastActivityTime.erase(conn.client_fd);
       conn.reset();
+      connections.erase(conn.client_fd);
       return true;
     }
     conn.data.bytes_sent += static_cast<size_t>(bytes_written);
@@ -790,8 +798,8 @@ bool readFromClientForUpload(HTTPConnxData &conn) {
     }
     debug("%s", strerror(errno));
     perror("recv failed during upload");
-    lastActivityTime.erase(conn.client_fd);
     conn.reset();
+    connections.erase(conn.client_fd);
     return false;
   }
   // Resize the buffer to the actual amount of data read
@@ -808,6 +816,7 @@ bool writeUploadToFile(HTTPConnxData &conn) {
     perror(bytes_written < 0 ? "Failed to write to file"
                              : "No data written to file");
     conn.reset();
+    connections.erase(conn.client_fd);
     return false;
   }
   conn.data.bytes_sent += static_cast<size_t>(bytes_written);
@@ -825,8 +834,8 @@ bool finishedSendingSimpleResponse(HTTPConnxData &conn) {
   if (bytes_sent < 0) {
     perror("Failed to send simple response");
     SocketUtils::remove_from_poll(conn.client_fd);
-    lastActivityTime.erase(conn.client_fd);
     conn.reset();
+    connections.erase(conn.client_fd);
   } else if (bytes_sent == 0) {
     debug("No data sent to client %d", conn.client_fd);
   } else {
@@ -843,7 +852,6 @@ bool finishedSendingSimpleResponse(HTTPConnxData &conn) {
     } else {
       debug("Finished sending response to client %d", conn.client_fd);
       conn.state = CONN_INCOMING;
-      lastActivityTime.erase(conn.client_fd);
       conn.reset();
     }
   }
@@ -862,8 +870,8 @@ bool settingHeadersIfNeeded(HTTPConnxData &conn) {
       debug("Added headers for connection %d", conn.client_fd);
     } else {
       SocketUtils::remove_from_poll(conn.client_fd);
-      lastActivityTime.erase(conn.client_fd);
       conn.reset();
+      connections.erase(conn.client_fd);
       return false;
     }
   }
@@ -883,8 +891,9 @@ bool readNewDataFromFile(HTTPConnxData &conn) {
     if (bytes_read < 0) {
       perror("Failed to read file");
       SocketUtils::remove_from_poll(conn.client_fd);
-      lastActivityTime.erase(conn.client_fd);
+      close(conn.client_fd);
       conn.reset();
+      connections.erase(conn.client_fd);
       return false;
     } else if (bytes_read == 0) {
       debug("End of file reached for connection %d", conn.client_fd);
@@ -916,8 +925,8 @@ bool sendNewDataFromFileToClient(HTTPConnxData &conn) {
       debuglog(RED, "Error during file transfer for connection %d",
                conn.client_fd);
       SocketUtils::remove_from_poll(conn.client_fd);
-      lastActivityTime.erase(conn.client_fd);
       conn.reset();
+      connections.erase(conn.client_fd);
       return false;
     } else if (bytes_sent == 0) {
       debug("No data sent to client %d", conn.client_fd);

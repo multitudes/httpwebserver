@@ -31,6 +31,11 @@ int prepareCGI(HTTPConnxData &conn) {
       SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[1]);
       conn.cgiData.child_stdout_pipe[1] = -1;
   }
+  // kill the previous child process if it exists
+  if (conn.cgiData.child_pid != -1) {
+    HTTPServer::terminatedPids.insert(conn.cgiData.child_pid);
+    conn.cgiData.child_pid = -1;
+  }
 
   setCGIEnv(conn);
 

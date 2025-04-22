@@ -15,5 +15,6 @@ extern int requestTimeout;
 extern int responseTimeout;
 extern int keepalive_timeout;
 extern bool autoReload;
+extern time_t cgi_child_timeout;
 
 } // namespace Constants

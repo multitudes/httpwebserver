@@ -92,6 +92,8 @@ struct HTTPConnxData {
     time_t session_last_accessed;
     map<string, string> session_data;
 
+    time_t lastActivityTime;
+
     ConnectionData()
         : method(""), target(""), version(""), host(""), port(4244),
           request(""), content_length(0), headers(), cookies(),
@@ -102,7 +104,8 @@ struct HTTPConnxData {
           parse_status(HEADERS_PARSE_INCOMPLETE), session_id(""),
           has_session(false), // for session management
           session_created(0), session_last_accessed(0),
-          session_data() // for session management
+          session_data(), // for session management
+          lastActivityTime(std::time(NULL)) 
     {}
   };
 
@@ -132,6 +135,7 @@ struct HTTPConnxData {
     string query_string;
     pid_t child_pid;
     std::map<std::string, std::string> env;
+
     // CGI processing
     int child_stdin_pipe[2];
     int child_stdout_pipe[2];
@@ -140,12 +144,13 @@ struct HTTPConnxData {
     bool cgi_stdout_closed;
     size_t bytes_received;
     size_t bytes_sent;
-
+    std::time_t child_timeout;
 
     CGIData()
         : buffer(""), script_name(""), 
           path_info(""), query_string(), child_pid(-1), env(), cgi_stdin_fd(-1), cgi_stdout_fd(-1), 
-          cgi_stdout_closed(false), bytes_received(0), bytes_sent(0){
+          cgi_stdout_closed(false), bytes_received(0), bytes_sent(0)
+          , child_timeout(0) {
 
       child_stdin_pipe[0] = -1;
       child_stdin_pipe[1] = -1;

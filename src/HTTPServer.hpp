@@ -47,7 +47,6 @@ typedef std::vector<struct pollfd> PollfdsVector;
 extern PollfdsVector pollfds;
 extern std::vector<int> serverSockets;
 extern std::map<int, HTTPConnxData> connections;
-extern std::map<int, std::time_t> lastActivityTime;
 extern vector<ServerData> configs_;
 extern std::set<pid_t> terminatedPids;
 
@@ -62,7 +61,6 @@ bool gotServerSocketAddNewConnx(int fd);
 void acceptNewClient(int server_fd);
 void setSendRecTimeout(int clientfd);
 bool maxConnectionsCheck(int clientfd);
-HTTPConnxData &getConnectionData(int fd);
 void send_critical_error(int fd, int code); 
 bool uploadComplete(HTTPConnxData &conn); 
 bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn);

@@ -267,7 +267,6 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
                conn.client_fd);
       SocketUtils::remove_from_poll(conn.client_fd);
       close(conn.client_fd);
-      HTTPServer::lastActivityTime.erase(conn.client_fd);
       HTTPServer::connections.erase(conn.client_fd);
       return false;
     } else {
@@ -304,10 +303,9 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     debuglog(RED, "Error parsing headers");
     debug("Error parsing headers");
     HTTPServer::send_critical_error(conn.client_fd, 400);
-    conn.reset();
+    // conn.reset();
     SocketUtils::remove_from_poll(conn.client_fd);
     close(conn.client_fd);
-    HTTPServer::lastActivityTime.erase(conn.client_fd);
     HTTPServer::connections.erase(conn.client_fd);
     return false;
   }
