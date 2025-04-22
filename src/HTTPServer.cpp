@@ -422,13 +422,13 @@ int run(std::string configFile) {
           // When detecting a client timeout
           debuglog(YELLOW, "Client timeout detected after %ld seconds", std::time(NULL) - conn.data.client_timeout );
           
-          Responses::htmlErrorResponse(conn, 408); // 408 Request Timeout
-          // send_critical_error(conn.client_fd, 408);
-          // close(conn.client_fd);
-          // SocketUtils::remove_from_poll(conn.client_fd);
-          // HTTPServer::connections.erase(conn.client_fd);
+          // Responses::htmlErrorResponse(conn, 408); // 408 Request Timeout
+          send_critical_error(conn.client_fd, 408);
+          close(conn.client_fd);
+          SocketUtils::remove_from_poll(conn.client_fd);
+          HTTPServer::connections.erase(conn.client_fd);
 
-          break;
+          // continue;
         }
       }
     } // end of the main for loop in pollfds
