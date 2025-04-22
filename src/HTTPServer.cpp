@@ -407,38 +407,8 @@ int run(std::string configFile) {
 
       } // end of the state cgi check
 
-      if (conn.data.client_timeout == 0) {
-        conn.data.client_timeout = std::time(NULL);
-      } else {
-        // check if the timeout is reached
-        if (std::time(NULL) - conn.data.client_timeout >
-            Constants::cgi_child_timeout) {
-          debug("Client timeout reached");
-          // conn.reset();
+      check_for_client_timeout(conn);
 
-          if (conn.cgiData.cgi_stdin_fd != -1) {
-            SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-            close(conn.cgiData.cgi_stdin_fd);
-            conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-          }
-          if (conn.cgiData.cgi_stdout_fd != -1) {
-            SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
-            close(conn.cgiData.cgi_stdout_fd);
-            conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
-          }
-          // When detecting a client timeout
-          debuglog(YELLOW, "Client timeout detected after %ld seconds",
-                   std::time(NULL) - conn.data.client_timeout);
-
-          // Responses::htmlErrorResponse(conn, 504); // 504 Request Timeout
-          send_critical_error(conn.client_fd, 504);
-          close(conn.client_fd);
-          SocketUtils::remove_from_poll(conn.client_fd);
-          HTTPServer::connections.erase(conn.client_fd);
-
-          // continue;
-        }
-      }
     } // end of the main for loop in pollfds
   }
 
@@ -446,6 +416,46 @@ int run(std::string configFile) {
   // TODO
   return 0;
 }
+
+/**
+ * @brief Check for client timeout
+ *
+ * @param conn The connection data
+ * @param current_fd The current file descriptor
+ */
+void check_for_client_timeout(HTTPConnxData &conn) {
+  // check for timeouts
+  if (conn.data.client_timeout == 0) {
+    // first time exiting ther loop without finding the fd
+    conn.data.client_timeout = std::time(NULL);
+  } else {
+    // check if the timeout is reached
+    if (std::time(NULL) - conn.data.client_timeout >
+        Constants::cgi_child_timeout) {
+      debug("Client timeout reached");
+      // conn.reset();
+
+      if (conn.cgiData.cgi_stdin_fd != -1) {
+        SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+        close(conn.cgiData.cgi_stdin_fd);
+        conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+      }
+      if (conn.cgiData.cgi_stdout_fd != -1) {
+        SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+        close(conn.cgiData.cgi_stdout_fd);
+        conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
+      }
+      // When detecting a client timeout
+      debuglog(YELLOW, "Closing the connection (fd %d)", conn.client_fd);
+      // here I am in a state where typically the client remains
+      // in POLLOUT and state incoming... I just close the connection
+      close(conn.client_fd);
+      SocketUtils::remove_from_poll(conn.client_fd);
+      HTTPServer::connections.erase(conn.client_fd);
+    }
+  }
+}
+
 
 /**
  * @brief Write the buffer to the client from CGI

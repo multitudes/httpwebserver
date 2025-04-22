@@ -75,4 +75,5 @@ void uploadLoop(HTTPConnxData &conn, pollfd currentfd);
 void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd);
 void read_from_client_into_buffer(HTTPConnxData &conn, int current_fd); 
 void write_to_client_from_cgi(HTTPConnxData &conn, int current_fd);
+void check_for_client_timeout(HTTPConnxData &conn);
 } // namespace HTTPServer
