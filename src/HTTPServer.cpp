@@ -308,7 +308,8 @@ int run(std::string configFile) {
               if (std::time(NULL) - conn.cgiData.child_timeout >
                   Constants::cgi_child_timeout) {
                 debug("CGI timeout reached");
-              conn.state = CONN_CGI_FINISHED;
+                conn.state = CONN_CGI_FINISHED;
+                send_critical_error(conn.client_fd, 504);
                 break;
               }
             }
@@ -397,6 +398,7 @@ int run(std::string configFile) {
             if (std::time(NULL) - conn.cgiData.child_timeout >
                 Constants::cgi_child_timeout) {
               debug("CGI timeout reached");
+              send_critical_error(conn.client_fd, 504);
               conn.state = CONN_CGI_FINISHED;
               break;
             }
@@ -425,10 +427,11 @@ int run(std::string configFile) {
             conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
           }
           // When detecting a client timeout
-          debuglog(YELLOW, "Client timeout detected after %ld seconds", std::time(NULL) - conn.data.client_timeout );
-          
-          // Responses::htmlErrorResponse(conn, 408); // 408 Request Timeout
-          send_critical_error(conn.client_fd, 408);
+          debuglog(YELLOW, "Client timeout detected after %ld seconds",
+                   std::time(NULL) - conn.data.client_timeout);
+
+          // Responses::htmlErrorResponse(conn, 504); // 504 Request Timeout
+          send_critical_error(conn.client_fd, 504);
           close(conn.client_fd);
           SocketUtils::remove_from_poll(conn.client_fd);
           HTTPServer::connections.erase(conn.client_fd);
@@ -469,7 +472,8 @@ void write_to_client_from_cgi(HTTPConnxData &conn, int current_fd) {
                conn.cgiData.buffer.size());
       debuglog(RED, "Wrote 0 bytes to client unexpectedly.");
       conn.state = CONN_CGI_FINISHED;
-    } else if (static_cast<size_t>(bytes_written) < conn.cgiData.buffer.size()) {
+    } else if (static_cast<size_t>(bytes_written) <
+               conn.cgiData.buffer.size()) {
       // Partial write: Remove written data and wait for next POLLOUT
       debug("Partial write: Wrote %ld bytes to client (buffer size: %zu)",
             bytes_written, conn.cgiData.buffer.size());
@@ -526,13 +530,13 @@ void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd) {
   if (bytes_written < 0) {
     perror("Failed to write to CGI stdin");
     debug("Failed to write to CGI stdin");
-  conn.state = CONN_CGI_FINISHED;
+    conn.state = CONN_CGI_FINISHED;
   } else if (bytes_written == 0) {
     // Should not happen with blocking write unless size was 0
     debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)",
              conn.cgiData.buffer.size());
     debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
-  conn.state = CONN_CGI_FINISHED;
+    conn.state = CONN_CGI_FINISHED;
     conn.cgiData.buffer.clear();
   } else if (bytes_written < conn.cgiData.buffer.size()) {
     // Partial write: Remove written data and wait for next POLLOUT
