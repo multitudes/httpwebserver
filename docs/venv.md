@@ -40,3 +40,27 @@ venv/bin/pip install requests
 ## in the makefile
 
 we do not use `source venv/bin activate` because make runs each command in a separate shell, so source wouldn’t persist.
+
+Yes, you can install the requirements from requirements.txt into your activated virtual environment. Here's how:
+
+Steps:
+1. Make sure your venv is activated (you should see (venv) in your prompt)
+2. Use pip install with the -r flag to install from requirements.txt
+3. Verify the installations worked
+
+With venv activated, run:
+```bash
+pip install -r tests/requirements.txt
+```
+
+Or if you're in the tests directory:
+```bash
+pip install -r requirements.txt
+```
+
+This will install both pytest and requests packages listed in your requirements.txt file into your virtual environment. You can verify the installation worked by running:
+```bash
+pytest --version
+```
+
+No file changes are needed since your requirements.txt already contains the correct dependencies.
