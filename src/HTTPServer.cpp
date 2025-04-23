@@ -254,7 +254,7 @@ int run(std::string configFile) {
         }
         conn.reset(); // todo check if pid not reset
         // SocketUtils::remove_from_poll(conn.client_fd);
-        debug("CGI finished but kept alive", conn.client_fd);
+        debug("CGI finished but kept alive %d", conn.client_fd);
         break;
       }
 
@@ -406,9 +406,9 @@ int run(std::string configFile) {
             }
           }
 
-          // if (check_for_child_timeout(conn)) {
-          //   break;
-          // }
+          if (check_for_child_timeout(conn)) {
+            break;
+          }
         }
 
       } // end of the state cgi check
@@ -441,21 +441,22 @@ int run(std::string configFile) {
 
 bool check_for_child_timeout(HTTPConnxData& conn) {
   debug("checking for child timeout");
-  debug("child timeout %ld", conn.cgiData.child_timeout);
-
+  
   if (conn.cgiData.child_timeout == 0) {
     conn.cgiData.child_timeout = std::time(NULL);
-    return false;
+
   } else {
     // check if the timeout is reached
+    debug("child timeout %ld", conn.cgiData.child_timeout);
     if (std::time(NULL) - conn.cgiData.child_timeout >
         Constants::cgi_child_timeout) {
       debug("CGI timeout reached");
       send_critical_error(conn.client_fd, 504);
       conn.state = CONN_CGI_FINISHED;
-      return true;
+
     }
   }
+  return true;
 }
 
 /**
@@ -666,7 +667,7 @@ void createServerSockets(const vector<ServerData> &configs,
  */
 void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
                       vector<ServerData> &configs_) {
-  SocketUtils::shutdownServer();
+  SocketUtils::shutdownshutdownServer();
   SocketUtils::initialize();
   Config::cleanup();
   Config::initialize(configFile);
