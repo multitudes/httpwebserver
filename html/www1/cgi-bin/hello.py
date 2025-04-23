@@ -18,7 +18,10 @@ def main():
         body = sys.stdin.read(content_length)
 
     # Construct the HTML content
-    message = "<html><body>"
+    message = "<html><head>"
+    message += "<link rel=\"icon\" href=\"/favicon/favicon.ico\" type=\"image/x-icon\">"
+    message += "<link rel=\"stylesheet\" type=\"text/css\" href=\"/css/style.css\">"
+    message += "</head><body>"
     message += "<h1>Hello, CGI-World!</h1>"
     message += "<h2>Environment Variables</h2>"
     message += "<ul>"

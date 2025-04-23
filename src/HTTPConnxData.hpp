@@ -22,18 +22,20 @@ using std::vector;
  */
 enum ConnectionState {
   CONN_INCOMING,       // New connection, nothing processed yet
-  CONN_PARSING_HEADER, // Receiving/parsing headers
-  CONN_CGI,            // Processing CGI request
+  CONN_PARSING_HEADER, 
+  CONN_CGI_INCOMING,           
+  CONN_CGI_FINISHED,
+  CONN_CGI_SENDING,
   CONN_FILE_REQUEST,   // Serving a file
   CONN_SIMPLE_RESPONSE,
-  CONN_UPLOAD, // Handling file upload
-  CONN_RECV_CHUNKS, // Receiving chunked data
+  CONN_UPLOAD, 
+  CONN_RECV_CHUNKS // Receiving chunked data
 };
 
 /**
  * @brief Tracks the state of the header parsing
  */
-enum ParseStatus { PARSE_SUCCESS, PARSE_INCOMPLETE, PARSE_ERROR };
+enum ParseStatus { HEADERS_PARSE_SUCCESS, HEADERS_PARSE_INCOMPLETE, HEADERS_PARSE_ERROR };
 
 /**
  * @brief Connection state struct
@@ -80,7 +82,7 @@ struct HTTPConnxData {
     bool headers_set;
     bool sending_response;
     bool response_sent;
-    enum ParseStatus { PARSE_SUCCESS, PARSE_INCOMPLETE, PARSE_ERROR };
+    enum ParseStatus { HEADERS_PARSE_SUCCESS, HEADERS_PARSE_INCOMPLETE, HEADERS_PARSE_ERROR };
     ParseStatus parse_status;
 
     // Session management for Cookies -------------------Rufus
@@ -90,6 +92,9 @@ struct HTTPConnxData {
     time_t session_last_accessed;
     map<string, string> session_data;
 
+    time_t lastActivityTime;
+    time_t client_timeout;
+
     ConnectionData()
         : method(""), target(""), version(""), host(""), port(4244),
           request(""), content_length(0), headers(), cookies(),
@@ -97,16 +102,17 @@ struct HTTPConnxData {
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
           headers_set(false), sending_response(false), response_sent(false),
-          parse_status(PARSE_INCOMPLETE), session_id(""),
+          parse_status(HEADERS_PARSE_INCOMPLETE), session_id(""),
           has_session(false), // for session management
           session_created(0), session_last_accessed(0),
-          session_data() // for session management
+          session_data(), // for session management
+          lastActivityTime(std::time(NULL)),
+          client_timeout(0)  
     {}
   };
 
   struct URLMatcherData {
 
-    const ServerData *config;
     string target;
     string full_path;     // Full path to the requested resource
     string path_for_stat; // Path adjusted for stat() calls
@@ -118,7 +124,7 @@ struct HTTPConnxData {
 
     std::vector<std::string> acceptedMethods;
     URLMatcherData()
-        : config(NULL), full_path(""), path_for_stat(""), content_type(""),
+        : full_path(""), path_for_stat(""), content_type(""),
           autoindex(false), return_directive(false), file_upload(false),
           cookie(false), acceptedMethods() {}
   };
@@ -126,20 +132,26 @@ struct HTTPConnxData {
   struct CGIData {
     string buffer;
     string script_name;
-    bool is_sending;
-    bool is_receiving;
     string path_info;
     string query_string;
     pid_t child_pid;
     std::map<std::string, std::string> env;
+
     // CGI processing
     int child_stdin_pipe[2];
     int child_stdout_pipe[2];
-    bool cgi_finished;
+    int cgi_stdin_fd;
+    int cgi_stdout_fd;
+    bool cgi_stdout_closed;
+    size_t bytes_received;
+    size_t bytes_sent;
+    std::time_t child_timeout;
 
     CGIData()
-        : buffer(""), script_name(""), is_sending(false), is_receiving(true), child_pid(-1),
-          path_info(""), query_string(), env() {
+        : buffer(""), script_name(""), 
+          path_info(""), query_string(), child_pid(-1), env(), cgi_stdin_fd(-1), cgi_stdout_fd(-1), 
+          cgi_stdout_closed(false), bytes_received(0), bytes_sent(0)
+          , child_timeout(0) {
 
       child_stdin_pipe[0] = -1;
       child_stdin_pipe[1] = -1;
@@ -172,24 +184,25 @@ struct HTTPConnxData {
   URLMatcherData urlMatcherData;
   CGIData cgiData;
 
+  const ServerData *config;
+
   HTTPConnxData()
       : state(CONN_INCOMING), data(), client_fd(-1), headers_set(false),
         file_fd(-1), file_size(0), file_offset(0), writeto_fd(-1),
-        upload_completed(false), bytes_received(0) {
+        upload_completed(false), bytes_received(0), config(NULL) {
     filename[0] = '\0';
     memset(client_ip, 0, sizeof(client_ip));
+    config = NULL;  
   }
 
   void reset();
-  bool checkHeader(HTTPConnxData &state, const string &headerName,
-                   string &targetVariable);
+  bool checkHeader(const string &headerName, string &targetVariable);
   string trim(const string &str);
-  bool parsingHeaders(int client_fd, HTTPConnxData &state);
   ParseStatus parseRequestLine(const string &line);
   ParseStatus parseHeaderLine(const string &line);
   ParseStatus parseCookies(const string &cookieHeader);
   ParseStatus processContentHeaders();
-  ParseStatus parseHeaders(HTTPConnxData &conn);
+  ParseStatus parseHeaders();
   ParseStatus extractPortFromHost(std::string &host, uint16_t &port);
   string formatConnectionData(const ConnectionData &data);
   string formatConnectionDataLong(const ConnectionData &data);

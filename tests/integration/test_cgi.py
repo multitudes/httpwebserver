@@ -184,6 +184,33 @@ def test_cgi_delete(webserver_normal_config):
     assert "<li>SERVER_PORT: 4244</li>" in response.text, "SERVER_PORT mismatch"
     assert "<li>GATEWAY_INTERFACE: CGI/1.1</li>" in response.text, "GATEWAY_INTERFACE mismatch"
 
-# You might want a final print statement outside the functions if running directly
-# but pytest handles reporting.
-# print("All CGI tests defined.")
+# ... existing imports ...
+
+# --- Test for Perl CGI script (hello.pl) ---
+def test_cgi_perl_hello(webserver_normal_config):
+    """Test the Perl CGI script hello.pl"""
+    url = 'http://localhost:4244/cgi/hello.pl'  
+    try: 
+        response = requests.get(url, timeout=0.1)
+    except Exception as e:
+        pytest.fail(f"An unexpected error occurred: {e}")
+
+    # Validate the response status and headers
+    assert response.status_code == 200, f"Unexpected status code: {response.status_code}"
+    # Assuming the Perl script outputs text/html Content-Type header
+    assert response.headers.get("Content-Type", "").startswith("text/html"), "Content-Type header mismatch"
+
+    # Validate the HTML structure and content
+    assert "<title>Ricken's Quotes</title>" in response.text, "Missing correct title tag"
+    assert "<h1>Ricken's Philosophical Quotes</h1>" in response.text, "Missing main heading"
+    assert '<link rel="stylesheet" type="text/css" href="/css/style.css">' in response.text, "Missing CSS link"
+    assert '<link rel="icon" href="/favicon/favicon.ico" type="image/x-icon">' in response.text, "Missing favicon link"
+
+    # Validate the presence of specific quotes within <div class="quote">
+    # Checking a few key quotes for brevity and robustness
+    assert '<div class="quote">Bullies are bull and lies <br>---<br></div>' in response.text, "Missing quote: Bullies"
+    assert '<div class="quote">In the center of industry is dust.<br>---<br></div>' in response.text, "Missing quote: Industry"
+    assert '<div class="quote">A good person will follow the rules. A great person will follow himself.<br>---<br></div>' in response.text, "Missing quote: Good person"
+    assert 'Also they are made of metal, whereas man is made of skin.<br>---<br></div>' in response.text, "Missing quote fragment: Metal/Skin"
+    assert 'you are a mile away from them and you have their shoes.<br>---<br></div>' in response.text, "Missing quote fragment: Shoes"
+

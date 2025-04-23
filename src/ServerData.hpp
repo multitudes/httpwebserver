@@ -35,10 +35,9 @@ struct Location {
         autoindex(false),   // 4 same priority because different
         file_upload(false), // 4 same priority because different
         internal(false), 
-        acceptedMethods(),  // 2 if post then could be upload - if not could be
-                            // autoindex
-        return_directive(), // 1st - return immediately
         root(""),           // 5 check for new root yes no
+        acceptedMethods(),  // 2 if post then could be upload - if not could be autoindex
+        return_directive(), // 1st - return immediately
         error_pages() {}
 };
 
@@ -53,8 +52,10 @@ struct BaseConf {
   std::string upload_dir;
 
   BaseConf()
-      : maxBodySize(10000000), autoindex(false), file_server(true),
-        upload_dir("./html/www1/upload"), parsedindex(false) {
+      : maxBodySize(10000000), autoindex(false), 
+      parsedindex(false), 
+      file_server(true),
+       upload_dir("./html/www1/upload") {
     defaultheaders["Content-Type"] = "text/html";
     defaultheaders["Server"] = "webserv/1.0";
     defaultheaders["Connection"] = "keep-alive";

@@ -63,12 +63,13 @@ void initialize() {
 }
 
 void setSignalHandlers() {
-  // SIGINT is ctrl+c
-  // SIGQUIT is ctrl+\
-// SIGTERM is kill
-  // SIGHUP is terminal hangup
-  // SIGPIPE is write to a socket that has been closed
-  // SIGCHLD is child process terminated
+  /* SIGINT is ctrl+c
+  SIGQUIT is ctrl+\
+  SIGTERM is kill
+  SIGHUP is terminal hangup
+  SIGPIPE is write to a socket that has been closed
+  SIGCHLD is child process terminated
+  */
   signal(SIGINT, handleSignal);
   signal(SIGQUIT, handleSignal);
   signal(SIGTERM, handleSignal);
@@ -116,10 +117,15 @@ void handleSignal(int signal) {
 void handleChild(int signal) {
   debuglog(YELLOW, "Received SIGCHLD signal %d, reaping child ...", signal);
   int savedErrno;
+  pid_t pid;
 
   savedErrno = errno;
-  while (waitpid(-1, NULL, WNOHANG) > 0)
+  while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) {
+    HTTPServer::terminatedPids.insert(pid);
+    debuglog(YELLOW, "Child process %d terminated", pid);
+    debug("Child process %d terminated", pid);
     continue;
+  }
   errno = savedErrno;
 }
 
@@ -161,18 +167,21 @@ void handleAlarm(int signal) {
  * sockets.
  */
 void shutdownServer() {
-  // Close all client connections first
-  for (HTTPServer::PollfdsVector::const_iterator it =
-           HTTPServer::pollfds.begin();
-       it != HTTPServer::pollfds.end(); ++it) {
-    int fd = it->fd;
+    // Close all server sockets first
+  for (std::vector<int>::const_iterator it = HTTPServer::serverSockets.begin();
+    it != HTTPServer::serverSockets.end(); ++it) {
+    debuglog(YELLOW, "Closing server socket %d\n", *it);
+    shutdown(*it, SHUT_RDWR);
+    close(*it);
+    remove_from_poll(*it); 
+  }
+  // Close all client connections but make a copy
+  HTTPServer::PollfdsVector pollfds_copy = HTTPServer::pollfds; 
 
-    // Skip server sockets (they'll be closed separately)
-    if (std::find(HTTPServer::serverSockets.begin(),
-                  HTTPServer::serverSockets.end(),
-                  fd) != HTTPServer::serverSockets.end()) {
-      continue;
-    }
+  for (HTTPServer::PollfdsVector::const_iterator it =
+           pollfds_copy.begin();
+       it != pollfds_copy.end(); ++it) {
+    int fd = it->fd;
 
     debuglog(YELLOW, "Closing client socket %d\n", fd);
     debug("Closing client socket %d\n", fd);
@@ -182,32 +191,17 @@ void shutdownServer() {
     // Clean up associated resources
     if (HTTPServer::connections.find(fd) != HTTPServer::connections.end()) {
       HTTPConnxData &conn = HTTPServer::connections[fd];
-      if (conn.file_fd != -1) {
-        ::close(conn.file_fd);
-      }
-      int status;
-      if (::waitpid(conn.cgiData.child_pid, &status, 0) > 0) {
-          debug("CGI process with PID %d exited with status %d", conn.cgiData.child_pid, status);
-      } else {
-          perror("waitpid failed");
-      }
-      HTTPServer::connections.erase(fd);
+      conn.reset(); // reset the connection data
     }
-  }
-
-  // Close all server sockets
-  for (std::vector<int>::const_iterator it = HTTPServer::serverSockets.begin();
-       it != HTTPServer::serverSockets.end(); ++it) {
-    debuglog(YELLOW, "Closing server socket %d\n", *it);
-    shutdown(*it, SHUT_RDWR);
-    close(*it);
   }
 
   // Clear all data structures
   HTTPServer::pollfds.clear();
+  pollfds_copy.clear();
   HTTPServer::serverSockets.clear();
   HTTPServer::connections.clear();
-  HTTPServer::lastActivityTime.clear();
+  HTTPServer::terminatedPids.clear();
+  debuglog(YELLOW, "Server shutdown complete.");
 }
 
 /**
@@ -349,22 +343,23 @@ bool setSendRecTimeout(int clientfd) {
  * TODO send a 408 Request Timeout response to the client before closing
  */
 void checkForIdleConnections() {
-  std::time_t now = std::time(NULL);
-  std::map<int, std::time_t>::iterator it =
-      HTTPServer::lastActivityTime.begin();
+  std::time_t now = std::time(NULL); // seconds since epoch!
+  std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+  // only clientfds have to be in the lastActivityTime map
+  // so we can safely? erase them
+  while (it != HTTPServer::connections.end()) {
+    HTTPConnxData& conn = it->second;
 
-  while (it != HTTPServer::lastActivityTime.end()) {
-    if (now - it->second > Constants::keepalive_timeout) {
-      int fd = it->first;
-      debuglog(YELLOW, "Closing idle connection (fd %d)", fd);
-
-      HTTPServer::connections.erase(fd);
-      remove_from_poll(fd);
-      close(fd);
-      HTTPServer::lastActivityTime.erase(it++);
-    } else {
-      ++it;
-    }
+    // Check idle time
+    if (now - conn.data.lastActivityTime > Constants::keepalive_timeout) {
+        debuglog(YELLOW, "Closing idle connection (fd %d)", conn.client_fd);
+        debug("Closing idle connection (fd %d)", conn.client_fd);
+        conn.reset();
+        SocketUtils::remove_from_poll(conn.client_fd);
+        close(conn.client_fd);
+        conn.client_fd = -1; // Mark as closed
+    } 
+    ++it; // Move to next connection
   }
 }
 
@@ -396,5 +391,133 @@ return dst;
 errno = EAFNOSUPPORT;
 return NULL;
 }
+
+/**
+ * @brief Print the local address of the client
+ *
+ * @param clientfd The client socket file descriptor
+ * @return bool True if the address was printed successfully, false otherwise
+ *
+ * The local address refers to the IP address and port number assigned to the
+ * server's socket on the local machine. This is the address that the server
+ * uses to listen for incoming connections from clients.
+ */
+bool printLocalAddress(int clientfd) {
+  struct sockaddr_in local_addr;
+  socklen_t addr_len = sizeof(local_addr);
+  if (::getsockname(clientfd, (struct sockaddr *)&local_addr, &addr_len) ==
+      -1) {
+    debug("[Server] getsockname error: %s\n", strerror(errno));
+    return false;
+  }
+  uint16_t local_port = ntohs(local_addr.sin_port);
+  debug("[Server] Accepted new connection on client socket %d, port %d",
+        clientfd, local_port);
+  return true;
+}
+
+
+bool gotPollhupShouldSkip(pollfd &currentfd) {
+    // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
+  // requested
+  if (currentfd.revents & POLLHUP) {
+    debuglog(RED, "POLLHUP Connection on fd %d ", currentfd.fd);
+    debug("POLLHUP Connection on fd %d ", currentfd.fd);
+    // Now safely get reference to the connection data
+    std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(currentfd.fd);
+
+    if (conn_it == HTTPServer::connections.end()) {
+      for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+           it != HTTPServer::connections.end(); ++it) {
+        if (it->second.cgiData.cgi_stdin_fd == currentfd.fd ||
+            it->second.cgiData.cgi_stdout_fd == currentfd.fd) {
+          conn_it = it;
+          break;
+        }
+      }
+      // Still not found? Cannot happen
+      debug("FD %d not found in connections - removing", currentfd.fd);
+      
+      return true;
+    }
+
+    HTTPConnxData &conn = conn_it->second;
+
+    if (currentfd.fd == conn.client_fd) {
+      debug("Closing and erasing the connection %d from the map", currentfd.fd);
+      debug("POLLHUP on client fd %d - total number of connx %ld - size of pollfds %ld ", currentfd.fd, HTTPServer::connections.size(), 
+        HTTPServer::pollfds.size()); 
+      conn.reset();
+      SocketUtils::remove_from_poll(conn.client_fd);
+      close(conn.client_fd);
+      conn.client_fd = -1; // Mark as closed
+      return true;
+    }
+
+    // non fatal pollhups
+   if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
+      debug("POLLHUP on CGI stdout pipe %d", conn.cgiData.cgi_stdout_fd);
+      close(conn.cgiData.cgi_stdout_fd);
+      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+      conn.cgiData.cgi_stdout_closed = true;
+      conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
+    }
+  }
+  return false;
+}
+
+bool gotPollerrShouldSkip(pollfd &currentfd) {
+  if (currentfd.revents & (POLLERR | POLLNVAL)) {
+    debuglog(RED, "Error condition on fd %d", currentfd.fd);
+    int error = 0;
+    socklen_t len = sizeof(error);
+
+    // Now safely get reference to the connection data
+    std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(currentfd.fd);
+
+    if (conn_it == HTTPServer::connections.end()) {
+      for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+           it != HTTPServer::connections.end(); ++it) {
+        if (it->second.cgiData.cgi_stdin_fd == currentfd.fd ||
+            it->second.cgiData.cgi_stdout_fd == currentfd.fd) {
+          conn_it = it;
+          break;
+        }
+      }
+      // Still not found? Cannot happen - maybe throw an exception?
+            // Still not found? Cannot happen
+      debug("FD %d not found in connections - removing", currentfd.fd);
+      SocketUtils::remove_from_poll(currentfd.fd);
+      close(currentfd.fd);
+      return true;
+    }
+
+    HTTPConnxData &conn = conn_it->second;
+    
+    if (currentfd.fd == conn.client_fd) {
+      // unusable connection
+      debug("Closing client fd %d", currentfd.fd);
+      conn.reset();
+      SocketUtils::remove_from_poll(conn.client_fd);
+      close(conn.client_fd);
+      conn.client_fd = -1; // Mark as closed
+    }
+    if (currentfd.fd == conn.cgiData.cgi_stdin_fd) {
+      debug("Closing CGI stdin pipe %d", currentfd.fd);
+      close(conn.cgiData.cgi_stdin_fd);
+      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
+      conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
+    } else if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
+      debug("Closing CGI stdout pipe %d", currentfd.fd);
+      close(conn.cgiData.cgi_stdout_fd);
+      SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
+      conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
+    } 
+    
+    return true;
+  }
+  return false;
+}
+
 
 } // namespace SocketUtils

@@ -47,24 +47,34 @@ typedef std::vector<struct pollfd> PollfdsVector;
 extern PollfdsVector pollfds;
 extern std::vector<int> serverSockets;
 extern std::map<int, HTTPConnxData> connections;
-extern std::map<int, std::time_t> lastActivityTime;
 extern vector<ServerData> configs_;
+extern std::set<pid_t> terminatedPids;
 
 int run(std::string configFile);
-void finish_upload(HTTPConnxData &conn);
-bool send_headers(HTTPConnxData &conn);
 void createServerSockets(const vector<ServerData> &configs,
                          vector<int> &serverSockets);
 void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
                       vector<ServerData> &configs_);
-bool reload(string configFile, long long currentTime);
+bool reload(string configFile, long currentTime);
 bool checkPollErrors(pollfd fd);
 bool gotServerSocketAddNewConnx(int fd);
 void acceptNewClient(int server_fd);
 void setSendRecTimeout(int clientfd);
 bool maxConnectionsCheck(int clientfd);
-bool printLocalAddress(int clientfd);
-HTTPConnxData &getConnectionData(int fd);
 void send_critical_error(int fd, int code); 
-
+void uploadLoop(HTTPConnxData &conn, pollfd currentfd);
+void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd);
+bool uploadComplete(HTTPConnxData &conn); 
+bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn);
+bool readFromClientForUpload(HTTPConnxData &conn);
+bool writeUploadToFile(HTTPConnxData &conn);
+bool finishedSendingSimpleResponse(HTTPConnxData &conn);
+bool settingHeadersIfNeeded(HTTPConnxData &conn); 
+bool readNewDataFromFile(HTTPConnxData &conn);
+bool sendNewDataFromFileToClient(HTTPConnxData &conn);
+void checkCompletionConditions(HTTPConnxData &conn);
+void read_from_client_into_buffer(HTTPConnxData &conn); 
+void write_to_client_from_cgi(HTTPConnxData &conn);
+void check_for_client_timeout(HTTPConnxData &conn);
+bool check_for_child_timeout(HTTPConnxData& conn);
 } // namespace HTTPServer
