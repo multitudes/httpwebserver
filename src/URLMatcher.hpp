@@ -8,6 +8,7 @@
 struct HTTPConnxData;
 namespace URLMatcher
 {
+  void validateRequest(HTTPConnxData &conn);
   bool receiveAndParseRequest(HTTPConnxData &conn);
   bool getConfigSetURLMatcherData(HTTPConnxData &conn);
   void determineContentType(HTTPConnxData &conn, const std::string &path);
@@ -18,7 +19,6 @@ namespace URLMatcher
   bool handleDirectoryListing(HTTPConnxData &conn);
   bool findCGIPathAlias(HTTPConnxData &conn);
   void updateWithLocationBlockConfig(HTTPConnxData &conn);
-  void validateRequest(HTTPConnxData &conn);
   bool handleChunkedData(HTTPConnxData &conn);
   bool handleCookieUpdateRequest(HTTPConnxData &conn);
 }

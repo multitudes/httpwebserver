@@ -30,8 +30,8 @@ void validateRequest(HTTPConnxData &conn) {
   if (!receiveAndParseRequest(conn))
     return; // Request handling complete or failed
   
-  conn.urlMatcherData.config = Config::getConfigByPort(conn.data.port);
-  debug("conf root is %s", conn.urlMatcherData.config->root.c_str());
+  conn.config = Config::getConfigByPort(conn.data.port);
+  debug("conf root is %s", conn.config->root.c_str());
   debug("target is %s", conn.data.target.c_str());
     // Handle chunked data if present
     if (!handleChunkedData(conn))
@@ -125,9 +125,9 @@ void validateRequest(HTTPConnxData &conn) {
       debuglog(YELLOW, "URLMatcher: Upload request detected.");
 
         // Add this code to check max body size
-    if (conn.data.content_length > conn.urlMatcherData.config->maxBodySize) {
+    if (conn.data.content_length > conn.config->maxBodySize) {
       debuglog(RED, "URLMatcher: Content length %zu exceeds maximum allowed size %zu", 
-             conn.data.content_length, conn.urlMatcherData.config->maxBodySize);
+             conn.data.content_length, conn.config->maxBodySize);
       Responses::htmlErrorResponse(conn, 413); // Request Entity Too Large
       return;
   }
@@ -187,7 +187,7 @@ void validateRequest(HTTPConnxData &conn) {
             index_file_path[index_file_path.length() - 1] != '/') {
           index_file_path += '/';
         }
-        index_file_path += conn.urlMatcherData.config->index;
+        index_file_path += conn.config->index;
 
         struct stat index_stat;
         debuglog(YELLOW, "URLMatcher: Checking for index file at '%s'",
@@ -203,7 +203,7 @@ void validateRequest(HTTPConnxData &conn) {
           debuglog(YELLOW,
                    "URLMatcher: Index file '%s' not found or not regular. "
                    "Checking autoindex.",
-                   conn.urlMatcherData.config->index.c_str());
+                   conn.config->index.c_str());
           handleDirectoryListing(conn);
         }
       }
@@ -323,7 +323,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
  * complete
  */
 bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
-  if (!conn.urlMatcherData.config) {
+  if (!conn.config) {
     debuglog(RED, "URLMatcher: No config found for port %d!", conn.data.port);
     Responses::htmlErrorResponse(conn, 500); // Internal Server Error
     return false;
@@ -343,17 +343,17 @@ bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
     return false;
   }
 
-  conn.urlMatcherData.full_path = conn.urlMatcherData.config->root + target;
+  conn.urlMatcherData.full_path = conn.config->root + target;
   conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
-  conn.urlMatcherData.autoindex = conn.urlMatcherData.config->autoindex;
+  conn.urlMatcherData.autoindex = conn.config->autoindex;
   conn.urlMatcherData.acceptedMethods =
-      conn.urlMatcherData.config->acceptedMethods;
+      conn.config->acceptedMethods;
   // conn.urlMatcherData.file_upload_dir =
-  // conn.urlMatcherData.config->upload_dir;
+  // conn.config->upload_dir;
 
   // Adjust path_for_stat: remove trailing slash unless it's just the root path
   if (conn.urlMatcherData.path_for_stat.length() >
-          conn.urlMatcherData.config->root.length() + 1 &&
+          conn.config->root.length() + 1 &&
       conn.urlMatcherData
               .path_for_stat[conn.urlMatcherData.path_for_stat.length() - 1] ==
           '/') {
@@ -518,8 +518,8 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
 
 bool findCGIPathAlias(HTTPConnxData &conn) {
   string cgi_path_alias =
-      conn.urlMatcherData.config->cgiData.cgi_path_alias.first;
-  string cgi_path = conn.urlMatcherData.config->cgiData.cgi_path_alias.second;
+      conn.config->cgiData.cgi_path_alias.first;
+  string cgi_path = conn.config->cgiData.cgi_path_alias.second;
 
   // First check if a CGI alias is defined
   if (cgi_path_alias.empty()) {
@@ -562,15 +562,15 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
 
 void updateWithLocationBlockConfig(HTTPConnxData &conn) {
   // Check if the server config has any location blocks defined
-  if (conn.urlMatcherData.config->has_locations) {
+  if (conn.config->has_locations) {
     debuglog(YELLOW, "URLMatcher: Checking %lu location blocks for URI '%s'",
-             conn.urlMatcherData.config->location_blocks.size(),
+             conn.config->location_blocks.size(),
              conn.data.target.c_str());
 
     // Loop through all location blocks to find a matching one
     for (std::map<std::string, Location>::const_iterator location_pair =
-             conn.urlMatcherData.config->location_blocks.begin();
-         location_pair != conn.urlMatcherData.config->location_blocks.end();
+             conn.config->location_blocks.begin();
+         location_pair != conn.config->location_blocks.end();
          ++location_pair) {
       debuglog(YELLOW, "URLMatcher: Checking location '%s' against target '%s'",
                location_pair->first.c_str(), conn.data.target.c_str());
@@ -586,7 +586,7 @@ void updateWithLocationBlockConfig(HTTPConnxData &conn) {
 
         // Only update paths if location's root is different from the server's
         // root
-        if (location.root != conn.urlMatcherData.config->root) {
+        if (location.root != conn.config->root) {
           debuglog(RED, "URLMatcher: Overriding path with location block root");
           // Override paths only if root is different from server root
           conn.urlMatcherData.full_path =

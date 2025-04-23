@@ -113,7 +113,6 @@ struct HTTPConnxData {
 
   struct URLMatcherData {
 
-    const ServerData *config;
     string target;
     string full_path;     // Full path to the requested resource
     string path_for_stat; // Path adjusted for stat() calls
@@ -125,7 +124,7 @@ struct HTTPConnxData {
 
     std::vector<std::string> acceptedMethods;
     URLMatcherData()
-        : config(NULL), full_path(""), path_for_stat(""), content_type(""),
+        : full_path(""), path_for_stat(""), content_type(""),
           autoindex(false), return_directive(false), file_upload(false),
           cookie(false), acceptedMethods() {}
   };
@@ -185,12 +184,15 @@ struct HTTPConnxData {
   URLMatcherData urlMatcherData;
   CGIData cgiData;
 
+  const ServerData *config;
+
   HTTPConnxData()
       : state(CONN_INCOMING), data(), client_fd(-1), headers_set(false),
         file_fd(-1), file_size(0), file_offset(0), writeto_fd(-1),
-        upload_completed(false), bytes_received(0) {
+        upload_completed(false), bytes_received(0), config(NULL) {
     filename[0] = '\0';
     memset(client_ip, 0, sizeof(client_ip));
+    config = NULL;  
   }
 
   void reset();

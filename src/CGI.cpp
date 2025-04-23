@@ -95,7 +95,7 @@ int prepareCGI(HTTPConnxData &conn) {
     envArray[i] = NULL;
 
     std::string script_path = removeLeadingSlash(ensureTrailinSlash(
-                                  conn.urlMatcherData.config->root)) +
+                                  conn.config->root)) +
                               removeLeadingSlash(conn.urlMatcherData.full_path);
     debug("CGI script_path: %s", script_path.c_str());
 
@@ -186,7 +186,7 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set query string to %s", conn.cgiData.env["QUERY_STRING"].c_str());
 
   string path_translated =
-      ensureTrailinSlash(conn.urlMatcherData.config->root) +
+      ensureTrailinSlash(conn.config->root) +
       removeLeadingSlash(conn.cgiData.path_info);
   conn.cgiData.env["PATH_TRANSLATED"] = path_translated;
   debug("set path translated to %s",
