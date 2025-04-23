@@ -2,6 +2,7 @@
 
 #include <map>
 #include <string>
+#include <ctime>
 
 namespace Constants {
 extern std::map<int, std::string> statusMessages;

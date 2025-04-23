@@ -126,6 +126,8 @@ int prepareCGI(HTTPConnxData &conn) {
     // for clarity I will assign the fds to the connection data cgi
     conn.cgiData.cgi_stdin_fd = conn.cgiData.child_stdin_pipe[1];
     conn.cgiData.cgi_stdout_fd = conn.cgiData.child_stdout_pipe[0];
+    debug("CGI stdin fd: %d", conn.cgiData.cgi_stdin_fd);
+    debug("CGI stdout fd: %d", conn.cgiData.cgi_stdout_fd);
     // assign the fds to the connection data
     if (conn.data.method == "GET" || (conn.data.content_length == 0)) {
       // No data to send to CGI stdin, close the write end of the pipe

@@ -265,9 +265,10 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     if (bytes_read == 0) {
       debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.",
                conn.client_fd);
+      conn.reset();
       SocketUtils::remove_from_poll(conn.client_fd);
       close(conn.client_fd);
-      HTTPServer::connections.erase(conn.client_fd);
+      conn.client_fd = -1; // Mark as closed
       return false;
     } else {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -303,10 +304,10 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     debuglog(RED, "Error parsing headers");
     debug("Error parsing headers");
     HTTPServer::send_critical_error(conn.client_fd, 400);
-    // conn.reset();
+    conn.reset();
     SocketUtils::remove_from_poll(conn.client_fd);
     close(conn.client_fd);
-    HTTPServer::connections.erase(conn.client_fd);
+    conn.client_fd = -1; // Mark as closed
     return false;
   }
 
