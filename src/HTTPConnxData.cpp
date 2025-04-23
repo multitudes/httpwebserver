@@ -124,10 +124,10 @@ string HTTPConnxData::trim(const string &str) {
 /**
  * @brief Check if a specific header is present and set the target variable
  */
-bool HTTPConnxData::checkHeader(HTTPConnxData &state, const string &headerName,
+bool HTTPConnxData::checkHeader(const string &headerName,
                                 string &targetVariable) {
-  map<string, string>::iterator headerIt = state.data.headers.find(headerName);
-  if (headerIt != state.data.headers.end()) {
+  map<string, string>::iterator headerIt = data.headers.find(headerName);
+  if (headerIt != data.headers.end()) {
     targetVariable = headerIt->second;
     return true; // Header found and set
   } else {
@@ -266,7 +266,7 @@ ParseStatus HTTPConnxData::extractPortFromHost(string &host,
 
 ParseStatus HTTPConnxData::processContentHeaders() {
   // Process Host header
-  if (!checkHeader(*this, "Host", data.host)) {
+  if (!checkHeader("Host", data.host)) {
     debug("Missing Host header");
     debuglog(RED, "Missing Host header");
     return HEADERS_PARSE_ERROR;
@@ -280,14 +280,14 @@ ParseStatus HTTPConnxData::processContentHeaders() {
 
   // Process Content-Length
   string content_length_str;
-  if (checkHeader(*this, "Content-Length", content_length_str)) {
+  if (checkHeader("Content-Length", content_length_str)) {
     data.content_length = strtoul(content_length_str.c_str(), NULL, 10);
     debuglog(YELLOW, "Content-Length: %ld", data.content_length);
   }
 
   // Process Transfer-Encoding
   string transfer_encoding;
-  if (checkHeader(*this, "Transfer-Encoding", transfer_encoding)) {
+  if (checkHeader("Transfer-Encoding", transfer_encoding)) {
     data.chunked = (transfer_encoding == "chunked");
     if (data.chunked) {
       debug("Chunked transfer encoding detected");
@@ -296,7 +296,7 @@ ParseStatus HTTPConnxData::processContentHeaders() {
   }
 
   string content_type;
-  if (checkHeader(*this, "Content-Type", content_type)) {
+  if (checkHeader("Content-Type", content_type)) {
     data.headers["Content-Type"] = content_type;
 
     // Special handling for multipart
@@ -321,7 +321,7 @@ ParseStatus HTTPConnxData::processContentHeaders() {
 
   // Process Cookies
   string cookieHeader;
-  if (checkHeader(*this, "Cookie", cookieHeader)) {
+  if (checkHeader("Cookie", cookieHeader)) {
     debuglog(GREEN, "Found cookies in header: %s", cookieHeader.c_str());
 
     // Split cookies by semicolon
@@ -351,8 +351,7 @@ ParseStatus HTTPConnxData::processContentHeaders() {
   return HEADERS_PARSE_SUCCESS;
 }
 
-ParseStatus HTTPConnxData::parseHeaders(HTTPConnxData &conn) {
-  ConnectionData &data = conn.data;
+ParseStatus HTTPConnxData::parseHeaders() {
   if (data.request.empty()) {
     debug("Empty request received");
     return HEADERS_PARSE_INCOMPLETE;

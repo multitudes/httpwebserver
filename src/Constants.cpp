@@ -12,7 +12,7 @@ int requestTimeout = 10;
 int responseTimeout = 10;
 int keepalive_timeout = 15;
 bool autoReload = false;
-time_t cgi_child_timeout = 0.5; // this is in case of an endless loop - all our cgi are faster
+time_t cgi_child_timeout = 1; // this is in case of an endless loop - all our cgi are faster
 time_t client_timeout = 3;
 
 void initStatusMessageMap() {

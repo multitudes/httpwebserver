@@ -289,7 +289,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
            conn.client_fd);
 
   // Remove old chunking code and just handle headers
-  switch (conn.parseHeaders(conn)) {
+  switch (conn.parseHeaders()) {
   case HEADERS_PARSE_SUCCESS:
     debuglog(YELLOW, "Headers parsed successfully");
     conn.data.headers_received = true;

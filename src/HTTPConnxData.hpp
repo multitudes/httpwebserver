@@ -196,15 +196,13 @@ struct HTTPConnxData {
   }
 
   void reset();
-  bool checkHeader(HTTPConnxData &state, const string &headerName,
-                   string &targetVariable);
+  bool checkHeader(const string &headerName, string &targetVariable);
   string trim(const string &str);
-  bool parsingHeaders(int client_fd, HTTPConnxData &state);
   ParseStatus parseRequestLine(const string &line);
   ParseStatus parseHeaderLine(const string &line);
   ParseStatus parseCookies(const string &cookieHeader);
   ParseStatus processContentHeaders();
-  ParseStatus parseHeaders(HTTPConnxData &conn);
+  ParseStatus parseHeaders();
   ParseStatus extractPortFromHost(std::string &host, uint16_t &port);
   string formatConnectionData(const ConnectionData &data);
   string formatConnectionDataLong(const ConnectionData &data);
