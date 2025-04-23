@@ -142,7 +142,7 @@ int run(std::string configFile) {
       // Now safely get reference - the connection data is in a map
       // and it has been added in accept. the fd could be an fd cgi and
       // it will return the parent connection data -
-      debug("getting connection data for fd %d", current_fd);
+      // debug("getting connection data for fd %d", current_fd);
       // Now safely get reference to the connection data
       bool found = false;
       std::map<int, HTTPConnxData>::iterator conn_it =
@@ -166,13 +166,13 @@ int run(std::string configFile) {
           continue; // break to outer loop
         }
       }
-      debug("found connection data for fd %d", current_fd);
+      // debug("found connection data for fd %d", current_fd);
       HTTPConnxData &conn = conn_it->second;
-      debug("conn fd %d state %d", conn.client_fd, conn.state);
-      debug("------ current fd %d and is %s", current_fd,
-            (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
-      debug("poll size %ld", pollfds.size());
-      debug("number of connections %ld", HTTPServer::connections.size());
+      // debug("conn fd %d state %d", conn.client_fd, conn.state);
+      // debug("------ current fd %d and is %s", current_fd,
+      //       (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
+      // debug("poll size %ld", pollfds.size());
+      // debug("number of connections %ld", HTTPServer::connections.size());
       // Update activity time ONLY when I/O actually happens
       if (pollfds[i].revents & (POLLIN | POLLOUT)) {
         conn.data.lastActivityTime = std::time(NULL);
@@ -212,9 +212,9 @@ int run(std::string configFile) {
 
       /*    -------- FILE REQUEST -----------      */
       if (pollfds[i].revents & POLLOUT && conn.state == CONN_FILE_REQUEST) {
-        debug("CONN_FILE_REQUEST client fd %d POLLOUT", conn.client_fd);
-        debuglog(YELLOW, "CONN_FILE_REQUEST client fd %d POLLOUT",
-                 conn.client_fd);
+        // debug("CONN_FILE_REQUEST client fd %d POLLOUT", conn.client_fd);
+        // debuglog(YELLOW, "CONN_FILE_REQUEST client fd %d POLLOUT",
+                //  conn.client_fd);
         if (!settingHeadersIfNeeded(conn)) {
           debug("Failed to set headers for connection %d", conn.client_fd);
           debuglog(RED, "Failed to send headers for connection %d",
@@ -1068,8 +1068,8 @@ bool sendNewDataFromFileToClient(HTTPConnxData &conn) {
       conn.data.bytes_sent += static_cast<size_t>(bytes_sent);
       conn.data.buffer.erase(conn.data.buffer.begin(),
                              conn.data.buffer.begin() + bytes_sent);
-      debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
-            conn.data.buffer.size());
+      // debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
+            // conn.data.buffer.size());
     }
   }
   return true;

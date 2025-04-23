@@ -8,6 +8,15 @@ python3 -m venv --without-pip venv
 ```
 
 So this creates a venv directory without pip
+
+Steps to properly install pip in the venv:
+
+First activate the virtual environment
+```
+source venv/bin/activate
+```
+Then run get-pip.py with the venv's Python
+
 I download get-pip.py and run it
 ```
 curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
