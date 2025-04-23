@@ -667,7 +667,7 @@ void createServerSockets(const vector<ServerData> &configs,
  */
 void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
                       vector<ServerData> &configs_) {
-  SocketUtils::shutdownshutdownServer();
+  SocketUtils::shutdownServer();
   SocketUtils::initialize();
   Config::cleanup();
   Config::initialize(configFile);
