@@ -843,6 +843,10 @@ bool HTTPConnxData::finishedSendingSimpleResponse() {
   return true;
 }
 
+/**
+ * @brief Util function to close the connection after an error
+ * mostly used in case of failed send or read
+ */
 void HTTPConnxData::close_conn_after_error() {
   SocketUtils::remove_from_poll(client_fd);
   reset();
@@ -851,7 +855,11 @@ void HTTPConnxData::close_conn_after_error() {
   client_fd = -1; // Mark as closed
 }
 
-
+/**
+ * @brief Response headers are set if not already in place
+ * 
+ * Also checks for the presence of the HTTP/1.1 header
+ */
 bool HTTPConnxData::settingHeadersIfNeeded() {
   if (!headers_set) {
     if (!data.response.empty()) {
