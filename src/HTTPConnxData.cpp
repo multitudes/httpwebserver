@@ -522,8 +522,7 @@ string HTTPConnxData::formatConnectionData() {
   oss << " hdrs=" << data.headers.size() << " cookies=" << data.cookies.size();
 
   // Response state
-  oss << " status=" << data.response_status << " sent=" << data.bytes_sent
-      << "/" << (data.response_body.empty() ? 0 : data.response_body.length());
+  oss << " status=" << data.response_status << " sent=" << data.bytes_sent;
 
   // Flags at the end
   oss << (data.headers_received ? " HDRS_RCVD" : "")

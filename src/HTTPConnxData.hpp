@@ -52,35 +52,36 @@ struct HTTPConnxData {
     string method;
     string target;
     string version;
-
+    
     // Connection info
     string host;
     uint16_t port;
-
+    
     string request;
     size_t content_length;
-
+    
     // headers and cookies
     map<std::string, std::string> headers;
     map<std::string, std::string> cookies;
-
+    
     bool headers_received;
     vector<char> buffer;
     bool chunked;
     string chunkedBody;
-
+    
     bool multipart;
     string boundary;
     size_t headers_end;
-
+    
     // Response data
     int response_status;
     string response;
     string response_headers;
-    string response_body;
     size_t bytes_sent;
     bool sending_response;
     bool response_sent;
+
+    // enum to keep trackof the header parsing state
     enum ParseStatus { HEADERS_PARSE_SUCCESS, HEADERS_PARSE_INCOMPLETE, HEADERS_PARSE_ERROR };
     ParseStatus parse_status;
 
@@ -99,7 +100,7 @@ struct HTTPConnxData {
           request(""), content_length(0), headers(), cookies(),
           headers_received(false), chunked(false), chunkedBody(""),
           multipart(false), boundary(""), headers_end(0), response_status(200),
-          response_headers(""), response_body(""), bytes_sent(0),
+          response_headers(""), bytes_sent(0),
           sending_response(false), response_sent(false),
           parse_status(HEADERS_PARSE_INCOMPLETE), session_id(""),
           has_session(false), // for session management
