@@ -186,11 +186,13 @@ struct HTTPConnxData {
 
   const ServerData *config;
   int errorStatus;
+  bool closeConnection;
 
   HTTPConnxData()
       : state(CONN_INCOMING), data(), client_fd(-1), headers_set(false),
         file_fd(-1), file_size(0), file_offset(0), writeto_fd(-1),
-        upload_completed(false), bytes_received(0), config(NULL), errorStatus(0) {
+        upload_completed(false), bytes_received(0), config(NULL), errorStatus(0),
+        closeConnection(false) {
     filename[0] = '\0';
     memset(client_ip, 0, sizeof(client_ip));
     config = NULL;  
@@ -227,4 +229,5 @@ struct HTTPConnxData {
   void write_to_client_from_cgi();
   void check_for_client_timeout();
   bool check_for_child_timeout();
+  bool sendCgiDataToClient(ssize_t bytes_read);
 };
