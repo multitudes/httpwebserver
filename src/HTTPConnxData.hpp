@@ -185,17 +185,18 @@ struct HTTPConnxData {
   CGIData cgiData;
 
   const ServerData *config;
+  int errorStatus;
 
   HTTPConnxData()
       : state(CONN_INCOMING), data(), client_fd(-1), headers_set(false),
         file_fd(-1), file_size(0), file_offset(0), writeto_fd(-1),
-        upload_completed(false), bytes_received(0), config(NULL) {
+        upload_completed(false), bytes_received(0), config(NULL), errorStatus(0) {
     filename[0] = '\0';
     memset(client_ip, 0, sizeof(client_ip));
     config = NULL;  
   }
 
-  void reset();
+  void reset(); // will not clear the error status or clientid 
   bool checkHeader(const string &headerName, string &targetVariable);
   string trim(const string &str);
   ParseStatus parseRequestLine(const string &line);
@@ -204,8 +205,8 @@ struct HTTPConnxData {
   ParseStatus processContentHeaders();
   ParseStatus parseHeaders();
   ParseStatus extractPortFromHost(std::string &host, uint16_t &port);
-  string formatConnectionData(const ConnectionData &data);
-  string formatConnectionDataLong(const ConnectionData &data);
+  string formatConnectionData();
+  string formatConnectionDataLong();
 
   // Session management methods -------------------------------------Rufus
   string generateSessionId();
@@ -213,4 +214,17 @@ struct HTTPConnxData {
   bool retrieveSession();
  // void dechunkDataCGI();
   string dechunkData(string chunked_string);
+  bool uploadComplete(); 
+  bool writingFirstPayloadCompletesUpload();
+  bool readFromClientForUpload();
+  bool writeUploadToFile();
+  bool finishedSendingSimpleResponse();
+  bool settingHeadersIfNeeded(); 
+  bool readNewDataFromFile();
+  bool sendNewDataFromFileToClient();
+  void checkCompletionConditions();
+  void read_from_client_into_buffer(); 
+  void write_to_client_from_cgi();
+  void check_for_client_timeout();
+  bool check_for_child_timeout();
 };

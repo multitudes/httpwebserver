@@ -26,27 +26,20 @@ namespace URLMatcher {
  * @param conn The connection data structure.
  */
 void validateRequest(HTTPConnxData &conn) {
-  
-  if (!receiveAndParseRequest(conn))
-    return; // Request handling complete or failed
-  
-  conn.config = Config::getConfigByPort(conn.data.port);
-  debug("conf root is %s", conn.config->root.c_str());
-  debug("target is %s", conn.data.target.c_str());
-    // Handle chunked data if present
-    if (!handleChunkedData(conn))
-        return; // Still receiving chunks
-
-    // Handle cookie update requests first
-    if (handleCookieUpdateRequest(conn)) {
+    if (!receiveAndParseRequest(conn))
         return;
-    }
+    
+    conn.config = Config::getConfigByPort(conn.data.port);
+    
+    if (!handleChunkedData(conn))
+        return;
 
-    // Get server configuration and construct the standard target path
+    if (handleCookieUpdateRequest(conn))
+        return;
+
     if (!getConfigSetURLMatcherData(conn))
-        return; // Request handling complete or failed
+        return;
 
-    // check if target contains CGI alias
     if (findCGIPathAlias(conn))
         return;
 
@@ -54,130 +47,36 @@ void validateRequest(HTTPConnxData &conn) {
     if (conn.urlMatcherData.return_directive)
         return;
 
-    // Debug log to verify location blocks are being checked
-    debuglog(
-        MAGENTA,
-        "URLMatcher: After location check - path_for_stat: '%s', autoindex: %s",
-        conn.urlMatcherData.path_for_stat.c_str(),
-        conn.urlMatcherData.autoindex ? "true" : "false");
-
-    // check if the request method is accepted (GET POST etc)
+    // Validate method is allowed
     if (std::find(conn.urlMatcherData.acceptedMethods.begin(),
                   conn.urlMatcherData.acceptedMethods.end(),
                   std::string(conn.data.method)) ==
         conn.urlMatcherData.acceptedMethods.end()) {
-      debuglog(RED, "URLMatcher: Method '%s' not allowed in location '%s'",
-               conn.data.method.c_str(), conn.urlMatcherData.full_path.c_str());
-      Responses::htmlErrorResponse(conn, 405); // Method Not Allowed
-       
-      return;
-    }
-    debug("accepted method found: %s", conn.data.method.c_str());
-
-    // handle DELETE request
-    if (conn.data.method == "DELETE") {
-      debuglog(YELLOW, "URLMatcher: DELETE request detected for path '%s'",
-               conn.urlMatcherData.full_path.c_str());
-
-      // Check if file upload is enabled for this location
-      if (conn.urlMatcherData.file_upload) {
-        debuglog(
-            GREEN,
-            "URLMatcher: File upload is enabled, attempting to delete the file");
-
-        // Delete the file directly using the full path without checking upload
-        // directory
-        int result = unlink(conn.urlMatcherData.full_path.c_str());
-        if (result == 0) {
-          debuglog(GREEN, "URLMatcher: Successfully deleted file '%s'",
-                   conn.urlMatcherData.full_path.c_str());
-          Responses::createResponse(conn, "text/plain", "File deleted", 200);
-        } else {
-          // Log the error if delete failed
-          debuglog(RED, "URLMatcher: Failed to delete file '%s': %s",
-                   conn.urlMatcherData.full_path.c_str(), strerror(errno));
-
-          // Check if file exists but can't be deleted, or doesn't exist
-          if (errno == ENOENT) {
-            Responses::htmlErrorResponse(conn, 404); // Not Found
-          } else {
-            Responses::createResponse(
-                conn, "text/plain",
-                "Failed to delete file: " + std::string(strerror(errno)), 500);
-          }
-        }
-         
+        debuglog(RED, "URLMatcher: Method '%s' not allowed", conn.data.method.c_str());
+        Responses::htmlErrorResponse(conn, 405);
         return;
-      } else {
-        debuglog(RED, "URLMatcher: File upload is not enabled for this location");
-      }
-
-      debuglog(RED, "URLMatcher: DELETE request not allowed for path '%s'",
-               conn.urlMatcherData.full_path.c_str());
-      Responses::htmlErrorResponse(conn, 403); // Forbidden
-       
-      return;
     }
 
-    // Check if the request is a POST request with a payload
-    if (conn.data.method == "POST" && conn.data.content_length > 0) {
-      debug("POST request detected");
-      debuglog(YELLOW, "URLMatcher: Upload request detected.");
-
-        // Add this code to check max body size
-    if (conn.data.content_length > conn.config->maxBodySize) {
-      debuglog(RED, "URLMatcher: Content length %zu exceeds maximum allowed size %zu", 
-             conn.data.content_length, conn.config->maxBodySize);
-      Responses::htmlErrorResponse(conn, 413); // Request Entity Too Large
-      return;
-  }
-  
-      // check if upload allowed
-      if (!conn.urlMatcherData.file_upload) {
-        debug("file upload not allowed");
-        debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
-                 conn.urlMatcherData.full_path.c_str());
-        Responses::htmlErrorResponse(conn, 403); // Forbidden
-         
-        return;
-      }
-      debugcolor(MAGENTA, "opening file for upload: %s",
-                 conn.urlMatcherData.full_path.c_str());
-      conn.file_fd = open(conn.urlMatcherData.full_path.c_str(),
-                          O_WRONLY | O_CREAT | O_TRUNC, 0644);
-      if (conn.file_fd < 0) {
-        perror("URLMatcher: Failed to open file for upload");
-        Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-         
-        return;
-      }
-
-      std::string payload = conn.data.request.substr(conn.data.headers_end);
-      if (!payload.empty()) {
-        debug("payload found %s", payload.c_str());
-        conn.data.response = payload;
-        conn.data.bytes_sent = 0;
-      }
-      conn.state = CONN_UPLOAD;
-      debug("setting state to CONN_UPLOAD");
-      return;
-    } // end POST
-
+    // Route to appropriate handler
     if (conn.data.method == "GET") {
-      struct stat path_stat;
-      if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0) {
-        perror("URLMatcher: stat failed");
-        Responses::htmlErrorResponse(conn, 404); // Not Found
-         
-        return;
-      }
+        handleGETRequest(conn);
+    } else if (conn.data.method == "POST") {
+        handlePOSTRequest(conn);
+    } else if (conn.data.method == "DELETE") {
+        handleDELETERequest(conn);
+    }
+}
 
-      // Handle regular file
-      if (S_ISREG(path_stat.st_mode)) {
-        handleRegularFile(conn, conn.urlMatcherData.path_for_stat, path_stat);
-      }
-      // Handle directory
-      else if (S_ISDIR(path_stat.st_mode)) {
+bool handleGETRequest(HTTPConnxData &conn) {
+    struct stat path_stat;
+    if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0) {
+        Responses::htmlErrorResponse(conn, 404);
+        return false;
+    }
+
+    if (S_ISREG(path_stat.st_mode)) {
+        return handleRegularFile(conn, conn.urlMatcherData.path_for_stat, path_stat);
+    } else if (S_ISDIR(path_stat.st_mode)) {
         debuglog(YELLOW, "URLMatcher: Target is a directory '%s'",
                  conn.urlMatcherData.full_path.c_str());
 
@@ -206,17 +105,73 @@ void validateRequest(HTTPConnxData &conn) {
                    conn.config->index.c_str());
           handleDirectoryListing(conn);
         }
-      }
-      // Handle other file types
-      else {
-        debuglog(RED, "URLMatcher: Path '%s' is not a regular file or directory.",
-                 conn.urlMatcherData.path_for_stat.c_str());
-        Responses::htmlErrorResponse(conn, 415); // Unsupported Media Type
-         
-      }
-    } // end GET
-} // end of validateRequest
+    } else {
+        Responses::htmlErrorResponse(conn, 415);
+        return false;
+    }
+    return true;
+}
 
+bool handlePOSTRequest(HTTPConnxData &conn) {
+    if (conn.data.content_length == 0)
+        return false;
+
+    if (conn.data.content_length > conn.config->maxBodySize) {
+        Responses::htmlErrorResponse(conn, 413);
+        return false;
+    }
+    
+    // Check if upload allowed
+    if (!conn.urlMatcherData.file_upload) {
+        debug("file upload not allowed");
+        debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
+                 conn.urlMatcherData.full_path.c_str());
+        Responses::htmlErrorResponse(conn, 403); // Forbidden
+         
+        return false;
+    }
+    debugcolor(MAGENTA, "opening file for upload: %s",
+               conn.urlMatcherData.full_path.c_str());
+    conn.file_fd = open(conn.urlMatcherData.full_path.c_str(),
+                        O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (conn.file_fd < 0) {
+        perror("URLMatcher: Failed to open file for upload");
+        Responses::htmlErrorResponse(conn, 500); // Internal Server Error
+         
+        return false;
+    }
+
+    std::string payload = conn.data.request.substr(conn.data.headers_end);
+    if (!payload.empty()) {
+        debug("payload found %s", payload.c_str());
+        conn.data.response = payload;
+        conn.data.bytes_sent = 0;
+    }
+    conn.state = CONN_UPLOAD;
+    debug("setting state to CONN_UPLOAD");
+    return true;
+}
+
+bool handleDELETERequest(HTTPConnxData &conn) {
+    if (!conn.urlMatcherData.file_upload) {
+        Responses::htmlErrorResponse(conn, 403);
+        return false;
+    }
+
+    int result = unlink(conn.urlMatcherData.full_path.c_str());
+    if (result == 0) {
+        Responses::createResponse(conn, "text/plain", "File deleted", 200);
+        return true;
+    }
+
+    if (errno == ENOENT) {
+        Responses::htmlErrorResponse(conn, 404);
+    } else {
+        Responses::createResponse(conn, "text/plain",
+            "Failed to delete file: " + std::string(strerror(errno)), 500);
+    }
+    return false;
+}
 
 // handles %20 -> space, %2F -> /, $3F -> ?, +  -> space etc...
 string urlDecode(const string& encoded) {
@@ -257,9 +212,9 @@ string urlDecode(const string& encoded) {
  */
 bool receiveAndParseRequest(HTTPConnxData &conn) {
   debug("checking the request");
-  char buffer[BUFFER_SIZE + 1];
+  char buffer[Constants::BUFFER_SIZE + 1];
 
-  ssize_t bytes_read = ::recv(conn.client_fd, buffer, BUFFER_SIZE, MSG_DONTWAIT);
+  ssize_t bytes_read = ::recv(conn.client_fd, buffer, Constants::BUFFER_SIZE, MSG_DONTWAIT);
 
   if (bytes_read <= 0) {
     if (bytes_read == 0) {
@@ -343,23 +298,13 @@ bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
     return false;
   }
 
+  // Construct the full path for the file or directory stat check
   conn.urlMatcherData.full_path = conn.config->root + target;
-  conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
+  conn.urlMatcherData.path_for_stat = conn.config->root;
+  conn.urlMatcherData.path_for_stat = CGI::ensureTrailinSlash(conn.urlMatcherData.path_for_stat) + target;
   conn.urlMatcherData.autoindex = conn.config->autoindex;
   conn.urlMatcherData.acceptedMethods =
       conn.config->acceptedMethods;
-  // conn.urlMatcherData.file_upload_dir =
-  // conn.config->upload_dir;
-
-  // Adjust path_for_stat: remove trailing slash unless it's just the root path
-  if (conn.urlMatcherData.path_for_stat.length() >
-          conn.config->root.length() + 1 &&
-      conn.urlMatcherData
-              .path_for_stat[conn.urlMatcherData.path_for_stat.length() - 1] ==
-          '/') {
-    conn.urlMatcherData.path_for_stat.erase(
-        conn.urlMatcherData.path_for_stat.length() - 1, 1);
-  }
 
   debuglog(YELLOW, "URLMatcher: Constructed path for stat: '%s'",
            conn.urlMatcherData.path_for_stat.c_str());
@@ -517,142 +462,106 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
 }
 
 bool findCGIPathAlias(HTTPConnxData &conn) {
-  string cgi_path_alias =
-      conn.config->cgiData.cgi_path_alias.first;
-  string cgi_path = conn.config->cgiData.cgi_path_alias.second;
+    // Get CGI path mappings from config
+    string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
+    string cgi_path = conn.config->cgiData.cgi_path_alias.second;
 
-  // First check if a CGI alias is defined
-  if (cgi_path_alias.empty()) {
-    debuglog(BLUE, "URLMatcher: No CGI alias defined in config.");
-    return false;
-  }
-
-  // here i need to make sure cgi alias is not being substituted incorrectly
-  // ex if the alias is "cgi" -> cgi-bin and i pass cgicgi i will check that it includes the end / 
-  if (conn.data.target == cgi_path_alias || 
-    (conn.data.target.find(CGI::ensureTrailinSlash(cgi_path_alias)) == 0)) { // found CGI alias
-    debuglog(BLUE, "URLMatcher: CGI path alias: '%s' -> '%s'",
-             cgi_path_alias.c_str(), cgi_path.c_str());
-    debuglog(BLUE, "URLMatcher: CGI alias found. Target: %s",
-             conn.data.target.c_str());
-    // TODO, use cgi path
-    conn.urlMatcherData.full_path =
-        cgi_path + conn.data.target.substr(cgi_path_alias.length());
-    conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
-    debuglog(BLUE, "URLMatcher: Updated full path to CGI: '%s'",
-             conn.urlMatcherData.full_path.c_str());
-    conn.cgiData.script_name = conn.urlMatcherData.full_path;
-    conn.state = CONN_CGI_INCOMING;
-    debug("CGI request detected");
-    // Start CGI process for this connection
-    if (CGI::prepareCGI(conn) < 0) {
-      conn.reset();
-      Responses::createResponse(
-          conn, "text/plain",
-          "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
-       
-      return false;
+    if (cgi_path_alias.empty()) {
+        return false;
     }
-    return true;
-  } else {
-    debuglog(BLUE, "URLMatcher: No CGI alias found.");
+
+    if (conn.data.target == cgi_path_alias || 
+        (conn.data.target.find(CGI::ensureTrailinSlash(cgi_path_alias)) == 0)) {
+        
+        // Map URL path to CGI path
+        string relative_path = conn.data.target.substr(cgi_path_alias.length());
+        conn.urlMatcherData.full_path = cgi_path + relative_path;
+        conn.cgiData.script_name = conn.urlMatcherData.full_path;
+
+        // Build filesystem path for stat check
+        string check_path = conn.config->root;
+        if (!check_path.empty() && check_path[check_path.length() - 1] == '/') {
+            check_path = check_path.substr(0, check_path.length() - 1);
+        }
+        check_path += "/" + conn.urlMatcherData.full_path;
+
+        // Verify script exists and is regular file
+        struct stat script_stat;
+        if (stat(check_path.c_str(), &script_stat) != 0 || !S_ISREG(script_stat.st_mode)) {
+            Responses::htmlErrorResponse(conn, 404);
+            return true;
+        }
+
+        // Script exists, execute it
+        conn.state = CONN_CGI_INCOMING;
+        if (CGI::prepareCGI(conn) < 0) {
+            conn.reset();
+            Responses::createResponse(conn, "text/plain", "Failed to execute CGI script", 500);
+            return true;
+        }
+        return true;
+    }
     return false;
-  }
+}
+
+void updatePathsFromLocation(HTTPConnxData &conn, const Location& location, 
+                           const std::string& locationPath) {
+    if (location.root != conn.config->root) {
+        debuglog(RED, "URLMatcher: Overriding path with location block root");
+        conn.urlMatcherData.full_path = location.root + 
+            conn.data.target.substr(locationPath.length());
+        conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
+        debuglog(RED, "URLMatcher: Updated full path to '%s'",
+                conn.urlMatcherData.full_path.c_str());
+    }
+}
+
+bool applyLocationBlockSettings(HTTPConnxData &conn, const Location& location) {
+    conn.urlMatcherData.autoindex = location.autoindex;
+    conn.urlMatcherData.acceptedMethods = location.acceptedMethods;
+
+    if (location.return_directive.first != 0) {
+        conn.urlMatcherData.return_directive = true;
+        Responses::createResponse(conn, "text/plain",
+                                location.return_directive.second,
+                                location.return_directive.first);
+        return true;
+    }
+
+    if (location.file_upload) {
+        conn.urlMatcherData.file_upload = true;
+    }
+    return false;
 }
 
 void updateWithLocationBlockConfig(HTTPConnxData &conn) {
-  // Check if the server config has any location blocks defined
-  if (conn.config->has_locations) {
-    debuglog(YELLOW, "URLMatcher: Checking %lu location blocks for URI '%s'",
-             conn.config->location_blocks.size(),
-             conn.data.target.c_str());
+    if (!conn.config->has_locations) {
+        debuglog(YELLOW, "URLMatcher: Server has no location blocks defined");
+        return;
+    }
 
-    // Loop through all location blocks to find a matching one
     for (std::map<std::string, Location>::const_iterator location_pair =
              conn.config->location_blocks.begin();
          location_pair != conn.config->location_blocks.end();
          ++location_pair) {
-      debuglog(YELLOW, "URLMatcher: Checking location '%s' against target '%s'",
-               location_pair->first.c_str(), conn.data.target.c_str());
 
-      // Check if the target URL starts with this location path
-      if (conn.data.target.find(location_pair->first) == 0) {
-        // Found a matching location block
+        if (conn.data.target.find(location_pair->first) != 0)
+            continue;
+
         Location location = location_pair->second;
-        debuglog(GREEN, "URLMatcher: Found matching location block for '%s'",
-                 location_pair->first.c_str());
-        debuglog(GREEN, "URLMatcher: Location root is '%s'",
-                 location.root.c_str());
+        updatePathsFromLocation(conn, location, location_pair->first);
+        
+        if (applyLocationBlockSettings(conn, location))
+            return;
 
-        // Only update paths if location's root is different from the server's
-        // root
-        if (location.root != conn.config->root) {
-          debuglog(RED, "URLMatcher: Overriding path with location block root");
-          // Override paths only if root is different from server root
-          conn.urlMatcherData.full_path =
-              location.root +
-              conn.data.target.substr(location_pair->first.length());
-          conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
-          debuglog(RED, "URLMatcher: Updated full path to '%s'",
-                   conn.urlMatcherData.full_path.c_str());
-        } else
-          debuglog(RED, "URLMatcher: Location root is same as server root, "
-                        "using default paths");
-
-        // Set autoindex flag from location block
-        conn.urlMatcherData.autoindex = location.autoindex;
-        debuglog(YELLOW, "URLMatcher: Location block autoindex is %s",
-                 conn.urlMatcherData.autoindex ? "enabled" : "disabled");
-
-        // Set accepted methods from location block
-        conn.urlMatcherData.acceptedMethods = location.acceptedMethods;
-        debuglog(YELLOW, "URLMatcher: accepted methods updated to Location "
-                         "block accepted methods");
-
-        // Check for return directive in location block
-        if (location.return_directive.first != 0) {
-          conn.urlMatcherData.return_directive = true;
-          debuglog(YELLOW,
-                   "URLMatcher: Location block return directive found: %d %s",
-                   location.return_directive.first,
-                   location.return_directive.second.c_str());
-          Responses::createResponse(conn, "text/plain",
-                                    location.return_directive.second,
-                                    location.return_directive.first);
-           
-          return;
-        }
-
-          // Check for file upload settings in location block
-          if (location.file_upload) //&& !location.upload_dir.empty())
-          {
-            conn.urlMatcherData.file_upload = true;
-            debuglog(YELLOW, "URLMatcher: File upload enabled in location block %s",
-                     location_pair->first.c_str());
-            // conn.urlMatcherData.file_upload_dir = location.upload_dir;
-            //  debug("file upload enabled in directory: %s",
-            //        location.upload_dir.c_str());
-            //  debuglog(YELLOW, "URLMatcher: File upload enabled with directory: %s",
-            //           location.upload_dir.c_str());
-          }
-
-        // We found a match, so stop looking through location blocks
-        debuglog(GREEN,
-                 "URLMatcher: Applied configuration from location block '%s'",
-                 location_pair->first.c_str());
+        debuglog(GREEN, "URLMatcher: Applied configuration from location block '%s'",
+                location_pair->first.c_str());
         return;
-      }
     }
 
-      // If we reach here, no matching location block was found
-      debuglog(YELLOW, "URLMatcher: No matching location block found for '%s'",
-               conn.data.target.c_str());
-    }
-    else
-    {
-      debuglog(YELLOW, "URLMatcher: Server has no location blocks defined");
-    }
-  }
+    debuglog(YELLOW, "URLMatcher: No matching location block found for '%s'",
+             conn.data.target.c_str());
+}
 
 bool handleCookieUpdateRequest(HTTPConnxData &conn)
 {

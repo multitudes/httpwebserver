@@ -11,6 +11,7 @@ extern const char *default_config_file;
 void initStatusMessageMap();
 void initMimeTypes();
 
+extern size_t BUFFER_SIZE;
 extern int maxConnections;
 extern int requestTimeout;
 extern int responseTimeout;
