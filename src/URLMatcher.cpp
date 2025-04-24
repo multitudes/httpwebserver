@@ -372,14 +372,14 @@ bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat,
     return false;
   }
 
-  conn.file_size = path_stat.st_size;
+  conn.urlMatcherData.file_size = path_stat.st_size;
   conn.state = CONN_FILE_REQUEST;
 
-  Responses::prepareFileResponse(conn, conn.file_size);
+  Responses::prepareFileResponse(conn, conn.urlMatcherData.file_size);
 
   debuglog(GREEN,
            "URLMatcher: Set state to CONN_FILE_REQUEST for fd %d, size %ld",
-           conn.client_fd, conn.file_size);
+           conn.client_fd, conn.urlMatcherData.file_size);
    
   return true;
 }
@@ -407,16 +407,16 @@ bool handleIndexFile(HTTPConnxData &conn, const string &index_file_path,
   // Set the content type in the connection
   determineContentType(conn, index_file_path);
 
-  conn.file_size = index_stat.st_size;
+  conn.urlMatcherData.file_size = index_stat.st_size;
   conn.state = CONN_FILE_REQUEST;
 
   // Use the overloaded version that doesn't need the content type parameter
-  Responses::prepareFileResponse(conn, conn.file_size);
+  Responses::prepareFileResponse(conn, conn.urlMatcherData.file_size);
 
   debuglog(
       GREEN,
       "URLMatcher: Set state to CONN_FILE_REQUEST for index fd %d, size %ld",
-      conn.client_fd, conn.file_size);
+      conn.client_fd, conn.urlMatcherData.file_size);
    
   return true;
 }

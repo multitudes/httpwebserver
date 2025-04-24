@@ -79,7 +79,6 @@ struct HTTPConnxData {
     string response_headers;
     string response_body;
     size_t bytes_sent;
-    bool headers_set;
     bool sending_response;
     bool response_sent;
     enum ParseStatus { HEADERS_PARSE_SUCCESS, HEADERS_PARSE_INCOMPLETE, HEADERS_PARSE_ERROR };
@@ -101,7 +100,7 @@ struct HTTPConnxData {
           headers_received(false), chunked(false), chunkedBody(""),
           multipart(false), boundary(""), headers_end(0), response_status(200),
           response_headers(""), response_body(""), bytes_sent(0),
-          headers_set(false), sending_response(false), response_sent(false),
+          sending_response(false), response_sent(false),
           parse_status(HEADERS_PARSE_INCOMPLETE), session_id(""),
           has_session(false), // for session management
           session_created(0), session_last_accessed(0),
@@ -117,6 +116,7 @@ struct HTTPConnxData {
     string full_path;     // Full path to the requested resource
     string path_for_stat; // Path adjusted for stat() calls
     string content_type;  // Content type (MIME type) for the response
+    long file_size; // not size_t because of stat() return type
     bool autoindex;
     bool return_directive; // Flag for return directive
     bool file_upload;
@@ -124,7 +124,7 @@ struct HTTPConnxData {
 
     std::vector<std::string> acceptedMethods;
     URLMatcherData()
-        : full_path(""), path_for_stat(""), content_type(""),
+        : full_path(""), path_for_stat(""), content_type(""), file_size(0),
           autoindex(false), return_directive(false), file_upload(false),
           cookie(false), acceptedMethods() {}
   };
@@ -171,8 +171,6 @@ struct HTTPConnxData {
 
   // File handling
   int file_fd;
-  long file_size;
-  long file_offset;
 
   // Upload handling
   int writeto_fd;
@@ -190,7 +188,7 @@ struct HTTPConnxData {
 
   HTTPConnxData()
       : state(CONN_INCOMING), data(), client_fd(-1), headers_set(false),
-        file_fd(-1), file_size(0), file_offset(0), writeto_fd(-1),
+        file_fd(-1), writeto_fd(-1),
         upload_completed(false), bytes_received(0), config(NULL), errorStatus(0),
         closeConnection(false) {
     filename[0] = '\0';
@@ -230,4 +228,6 @@ struct HTTPConnxData {
   void check_for_client_timeout();
   bool check_for_child_timeout();
   bool sendCgiDataToClient(ssize_t bytes_read);
+  void close_conn_after_error();
+  
 };

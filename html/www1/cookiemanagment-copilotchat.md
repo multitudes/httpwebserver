@@ -123,8 +123,6 @@ struct HTTPConnxData {
   
   // File handling state data
   int file_fd;
-  long file_size;
-  long file_offset;
   
   // Upload handling state data
   int writeto_fd;
