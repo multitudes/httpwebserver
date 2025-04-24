@@ -483,7 +483,7 @@ string trunc(const string s) {
  * I asked deepseek for a pretty printing of the connection data for
  * debugging purposes.
  */
-string HTTPConnxData::formatConnectionData(const ConnectionData &data) {
+string HTTPConnxData::formatConnectionData() {
   std::ostringstream oss;
 
   // Core request info
@@ -522,7 +522,7 @@ string HTTPConnxData::formatConnectionData(const ConnectionData &data) {
 /**
  * @brief Format the connection data for logging - long version
  */
-string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
+string HTTPConnxData::formatConnectionDataLong() {
   std::ostringstream oss;
 
   oss << "ConnectionData { "
