@@ -146,6 +146,7 @@ int run(std::string configFile) {
             (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
       debug("poll size %ld", pollfds.size());
       debug("number of connections %ld", HTTPServer::connections.size());
+      
       // Update activity time ONLY when I/O actually happens
       if (pollfds[i].revents & (POLLIN | POLLOUT)) {
         conn.data.lastActivityTime = std::time(NULL);
@@ -181,6 +182,14 @@ int run(std::string configFile) {
         if (!conn.finishedSendingSimpleResponse()) {
           continue;
         }
+        if (conn.closeConnection) {
+          debug("Closing connection %d", conn.client_fd);
+          SocketUtils::remove_from_poll(conn.client_fd);
+          close(conn.client_fd);
+          conn.client_fd = -1; // Mark as closed
+        } else {
+          debug("Keeping connection alive %d", conn.client_fd);
+        }
       }
 
       /*    -------- FILE REQUEST -----------      */
@@ -200,6 +209,14 @@ int run(std::string configFile) {
           continue;
         }
         conn.checkCompletionConditions();
+        if (conn.closeConnection) {
+          debug("Closing connection %d", conn.client_fd);
+          SocketUtils::remove_from_poll(conn.client_fd);
+          close(conn.client_fd);
+          conn.client_fd = -1; // Mark as closed
+        } else {
+          debug("Keeping connection alive %d", conn.client_fd);
+        }
         continue;
       }
 
@@ -228,12 +245,14 @@ int run(std::string configFile) {
         if (conn.errorStatus != 0) {
           Responses::htmlErrorResponse(conn, conn.errorStatus);
           conn.errorStatus = 0;
+          conn.closeConnection = true;
+        } else {
+          debug("CGI finished but kept alive %d", conn.client_fd);
         }
-        debug("CGI finished but kept alive %d", conn.client_fd);
         break;
       }
 
-      /*    -------- CGI -----------      */
+      /*    -------- CONN_CGI_INCOMING -----------      */
       if (conn.state == CONN_CGI_INCOMING) {
         debuglog(YELLOW, "Connection fd %d in state CGI", conn.client_fd);
         debug("CONN_CGI_INCOMING; - current fd %d and is %s", current_fd,
@@ -283,13 +302,10 @@ int run(std::string configFile) {
               break; // whatever happens to the state we break the for loop
                      // because we found the fd we were looking for
             } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
-              // set the timeout because not found
           } // end for loop
           if (conn.check_for_child_timeout()) {
             break;
           }
-          // TODO -cgi timeout - if the loop doesnt find the fd after a while
-          // i should break the loop and close the connection
         }
       }
 
@@ -325,36 +341,18 @@ int run(std::string configFile) {
                 conn.state = CONN_CGI_FINISHED;
                 // todo send the error to the client?
                 break;
-              }
-              debug("Received %ld bytes from CGI stdout", bytes_read);
-              debugcolor(MAGENTA, "response from CGI: %s",
-                         conn.cgiData.buffer.c_str());
-              if (bytes_read == 0) {
+              } else if (bytes_read == 0) {
                 debug("CGI process finished");
                 conn.state = CONN_CGI_FINISHED;
                 break;
               }
-              // Send data to client
-              ssize_t bytes_written =
-                  ::send(conn.client_fd, conn.cgiData.buffer.c_str(),
-                         static_cast<size_t>(bytes_read), MSG_NOSIGNAL);
-              if (bytes_written < 0) {
-                perror("Failed to send data to client");
+              debug("Received %ld bytes from CGI stdout", bytes_read);
+              debugcolor(MAGENTA, "response from CGI: %s",
+                         conn.cgiData.buffer.c_str());
+              if (conn.sendCgiDataToClient(bytes_read) == false) {
+                debug("Failed to send data to client");
                 conn.state = CONN_CGI_FINISHED;
-                continue;
-              } else if (bytes_written == 0) {
-                debuglog(YELLOW, "Wrote 0 bytes to client");
-                conn.state = CONN_CGI_FINISHED;
-                break;
-              }
-              debug("Sent %ld bytes to client", bytes_written);
-              if (bytes_written < Constants::BUFFER_SIZE) {
-                // i finished sending the data to the client
-                // close the read end of the pipe to signal EOF to the CGI
-                debuglog(YELLOW, "Finished sending data to client");
-                debug("Closing read end of pipe");
-                conn.state = CONN_CGI_FINISHED;
-              }
+              } 
               break;
             }
           }
@@ -363,15 +361,10 @@ int run(std::string configFile) {
           }
         }
       } // end of the state cgi_sending check
-      
       conn.check_for_client_timeout();
-
     } // end of the main for loop in pollfds
     cleanupClosedConnections();
   }
-
-  // Cleanup
-  // TODO
   return 0;
 }
 

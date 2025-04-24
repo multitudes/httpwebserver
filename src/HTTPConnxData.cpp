@@ -981,8 +981,63 @@ bool HTTPConnxData::check_for_child_timeout() {
         Constants::cgi_child_timeout) {
       debug("CGI timeout reached");
       errorStatus = 504;
+      closeConnection = true;
       state = CONN_CGI_FINISHED;
     }
   }
   return true;
+}
+
+/**
+ * @brief Sends data (read from CGI stdout) to the client socket.
+ *
+ * @param bytes_read The number of bytes previously read from CGI stdout.
+ * @return false if state changes to CONN_CGI_FINISHED or a critical error occurs,
+ *         true if the send was successful (fully or partially) and state remains CONN_CGI_SENDING.
+ */
+bool HTTPConnxData::sendCgiDataToClient(ssize_t bytes_read) {
+  // Ensure there's actually data to send (bytes_read should be > 0)
+  if (bytes_read <= 0) {
+      debuglog(RED, "sendCgiDataToClient called with bytes_read <= 0");
+      state = CONN_CGI_FINISHED; 
+      return false;
+  }
+
+  ssize_t bytes_written =
+      ::send(client_fd, cgiData.buffer.c_str(),
+             static_cast<size_t>(bytes_read), MSG_NOSIGNAL);
+
+  if (bytes_written < 0) {
+    // Handle send error (e.g., client disconnected)
+    perror("Failed to send data to client");
+    debuglog(RED, "Failed to send data to client fd %d", client_fd);
+    state = CONN_CGI_FINISHED;
+    return false; 
+  }
+
+  if (bytes_written == 0) {
+    // Should generally not happen with blocking sockets unless client closed connection cleanly?
+    debuglog(YELLOW, "Wrote 0 bytes to client fd %d (client likely closed connection)", client_fd);
+    state = CONN_CGI_FINISHED;
+    return false;
+  }
+
+  debug("Sent %ld bytes to client fd %d", bytes_written, client_fd);
+
+  // TODO might be placed here to revisit this logic.
+  if (static_cast<size_t>(bytes_written) < Constants::BUFFER_SIZE) {
+    debuglog(YELLOW, "Finished sending data chunk to client fd %d (based on original logic)", client_fd);
+    state = CONN_CGI_FINISHED;
+    return false; 
+  }
+  // TODO: Handle partial writes (bytes_written < bytes_read) if using non-blocking sockets
+  // For now, assume full write or error based on original code structure.
+  // if (static_cast<size_t>(bytes_written) < static_cast<size_t>(bytes_read)) {
+  //     debuglog(YELLOW, "Partial send to client fd %d (%ld / %ld bytes). Needs handling!",
+  //              bytes_written, bytes_read);
+  //     // State remains CONN_CGI_SENDING, but buffer needs adjustment for next POLLOUT
+  //     // This requires more complex buffer management not present in original code.
+  //     // For now, returning true, but this is incomplete for robust partial sends.
+  // }
+  return true; // Indicate send occurred, state remains CONN_CGI_SENDING
 }
