@@ -142,16 +142,13 @@ struct HTTPConnxData {
     int child_stdout_pipe[2];
     int cgi_stdin_fd;
     int cgi_stdout_fd;
-    bool cgi_stdout_closed;
     size_t bytes_received;
-    size_t bytes_sent;
     std::time_t child_timeout;
 
     CGIData()
-        : buffer(""), script_name(""), 
-          path_info(""), query_string(), child_pid(-1), env(), cgi_stdin_fd(-1), cgi_stdout_fd(-1), 
-          cgi_stdout_closed(false), bytes_received(0), bytes_sent(0)
-          , child_timeout(0) {
+        : buffer(""), script_name(""), path_info(""), query_string(),
+          child_pid(-1), env(), cgi_stdin_fd(-1), cgi_stdout_fd(-1), 
+          bytes_received(0), child_timeout(0) {
 
       child_stdin_pipe[0] = -1;
       child_stdin_pipe[1] = -1;
@@ -159,15 +156,16 @@ struct HTTPConnxData {
       child_stdout_pipe[1] = -1;
     }
   };
-  // Connection state and metadata
-  ConnectionState state;
 
-  // Request data TODO : extract out the response
+  ConnectionState state;
   ConnectionData data;
+  URLMatcherData urlMatcherData;
+  CGIData cgiData;
+  const ServerData *config;
 
   int client_fd;
   char client_ip[INET_ADDRSTRLEN]; //  remoteAddress;
-  bool headers_set;
+  bool headers_set; // flag to create the response
 
   // File handling
   int file_fd;
@@ -178,19 +176,13 @@ struct HTTPConnxData {
   bool upload_completed;
   size_t bytes_received;
 
-  // New fields for paths, config, and content type
-  URLMatcherData urlMatcherData;
-  CGIData cgiData;
-
-  const ServerData *config;
   int errorStatus;
   bool closeConnection;
 
   HTTPConnxData()
       : state(CONN_INCOMING), data(), client_fd(-1), headers_set(false),
-        file_fd(-1), writeto_fd(-1),
-        upload_completed(false), bytes_received(0), config(NULL), errorStatus(0),
-        closeConnection(false) {
+        file_fd(-1), writeto_fd(-1), upload_completed(false), bytes_received(0), 
+        config(NULL), errorStatus(0), closeConnection(false) {
     filename[0] = '\0';
     memset(client_ip, 0, sizeof(client_ip));
     config = NULL;  
@@ -199,20 +191,11 @@ struct HTTPConnxData {
   void reset(); // will not clear the error status or clientid 
   bool checkHeader(const string &headerName, string &targetVariable);
   string trim(const string &str);
-  ParseStatus parseRequestLine(const string &line);
-  ParseStatus parseHeaderLine(const string &line);
-  ParseStatus parseCookies(const string &cookieHeader);
-  ParseStatus processContentHeaders();
-  ParseStatus parseHeaders();
-  ParseStatus extractPortFromHost(std::string &host, uint16_t &port);
   string formatConnectionData();
   string formatConnectionDataLong();
-
-  // Session management methods -------------------------------------Rufus
   string generateSessionId();
   void createSession();
   bool retrieveSession();
- // void dechunkDataCGI();
   string dechunkData(string chunked_string);
   bool uploadComplete(); 
   bool writingFirstPayloadCompletesUpload();
@@ -229,5 +212,11 @@ struct HTTPConnxData {
   bool check_for_child_timeout();
   bool sendCgiDataToClient(ssize_t bytes_read);
   void close_conn_after_error();
-  
+  ParseStatus parseRequestLine(const string &line);
+  ParseStatus parseHeaderLine(const string &line);
+  ParseStatus parseCookies(const string &cookieHeader);
+  ParseStatus processContentHeaders();
+  ParseStatus parseHeaders();
+  ParseStatus extractPortFromHost(std::string &host, uint16_t &port);
+
 };
