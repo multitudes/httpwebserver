@@ -215,10 +215,8 @@ int run(std::string configFile) {
 
       /*    -------- CGI FINISHED -----------      */
       if (conn.state == CONN_CGI_FINISHED) {
-        // sanity check
-        if (!conn.cgiData.buffer.empty()) {
-          debug("Buffer not empty! Size: %zu", conn.cgiData.buffer.size());
-        }
+        conn.cgiData.buffer.clear();
+        conn.cgiData.buffer.resize(0);
         if (conn.cgiData.cgi_stdin_fd != -1) {
           SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
         }
@@ -259,16 +257,8 @@ int run(std::string configFile) {
           }
           // set the timeout because not found
           //              conn.cgiData.child_timeout = 0;
-          if (conn.cgiData.child_timeout == 0) {
-            conn.cgiData.child_timeout = std::time(NULL);
-          } else {
-            // check if the timeout is reached
-            if (std::time(NULL) - conn.cgiData.child_timeout >
-                Constants::cgi_child_timeout) {
-              debug("CGI timeout reached");
-              conn.state = CONN_CGI_FINISHED;
-              break;
-            }
+          if (conn.check_for_child_timeout()) {
+            break;
           }
         }
 
@@ -279,6 +269,8 @@ int run(std::string configFile) {
           for (size_t j = 0; j < pollfds.size(); j++) {
             if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
                 (pollfds[j].revents & POLLOUT)) {
+              // found! reset the timeout
+              conn.cgiData.child_timeout = 0;
               debug("POLLOUT event on CGI stdin fd %d",
                     conn.cgiData.cgi_stdin_fd);
               conn.cgiData.child_timeout = 0;
@@ -288,20 +280,10 @@ int run(std::string configFile) {
                      // because we found the fd we were looking for
             } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
               // set the timeout because not found
-            if (conn.cgiData.child_timeout == 0) {
-              conn.cgiData.child_timeout = std::time(NULL);
-            } else {
-              // check if the timeout is reached
-              if (std::time(NULL) - conn.cgiData.child_timeout >
-                  Constants::cgi_child_timeout) {
-                debug("CGI timeout reached");
-                conn.state = CONN_CGI_FINISHED;
-                send_critical_error(conn.client_fd, 504);
-                break;
-              }
-            }
           } // end for loop
-
+          if (conn.check_for_child_timeout()) {
+            break;
+          }
           // TODO -cgi timeout - if the loop doesnt find the fd after a while
           // i should break the loop and close the connection
         }
@@ -345,8 +327,6 @@ int run(std::string configFile) {
                          conn.cgiData.buffer.c_str());
               if (bytes_read == 0) {
                 debug("CGI process finished");
-                conn.cgiData.buffer.clear();
-                conn.cgiData.buffer.resize(0);
                 conn.state = CONN_CGI_FINISHED;
                 break;
               }
@@ -357,28 +337,23 @@ int run(std::string configFile) {
               if (bytes_written < 0) {
                 perror("Failed to send data to client");
                 conn.state = CONN_CGI_FINISHED;
-                conn.cgiData.buffer.clear();
                 continue;
               } else if (bytes_written == 0) {
                 debuglog(YELLOW, "Wrote 0 bytes to client");
                 conn.state = CONN_CGI_FINISHED;
-                conn.cgiData.buffer.clear();
                 break;
               }
               debug("Sent %ld bytes to client", bytes_written);
               if (bytes_written < Constants::BUFFER_SIZE) {
                 // i finished sending the data to the client
                 // close the read end of the pipe to signal EOF to the CGI
-                debuglog(YELLOW, "Closing read end of pipe");
-                SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-                SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
-
+                debuglog(YELLOW, "Finished sending data to client");
+                debug("Closing read end of pipe");
                 conn.state = CONN_CGI_FINISHED;
               }
               break;
             }
           }
-
           if (conn.check_for_child_timeout()) {
             break;
           }
