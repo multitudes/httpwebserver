@@ -225,6 +225,10 @@ int run(std::string configFile) {
         }
         conn.reset(); // todo check if pid not reset
         // SocketUtils::remove_from_poll(conn.client_fd);
+        if (conn.errorStatus != 0) {
+          Responses::htmlErrorResponse(conn, conn.errorStatus);
+          conn.errorStatus = 0;
+        }
         debug("CGI finished but kept alive %d", conn.client_fd);
         break;
       }

@@ -937,6 +937,9 @@ void HTTPConnxData::checkCompletionConditions() {
  *
  * @param conn The connection data
  * @param current_fd The current file descriptor
+ * 
+ * Since it is  the client that is hanging i thnk it is 
+ * not necessary to send a error message. I just close the connection
  */
 void HTTPConnxData::check_for_client_timeout() {
   // check for timeouts
@@ -948,8 +951,6 @@ void HTTPConnxData::check_for_client_timeout() {
     if (std::time(NULL) - data.client_timeout >
         Constants::cgi_child_timeout) {
       debug("Client timeout reached");
-      // reset();
-
       reset(); // reset the connection data
       // When detecting a client timeout
       debuglog(YELLOW, "Closing the connection (fd %d)", client_fd);
@@ -957,7 +958,6 @@ void HTTPConnxData::check_for_client_timeout() {
       // in POLLOUT and state incoming... I just close the connection
       close(client_fd);
       SocketUtils::remove_from_poll(client_fd);
-      // will be erased later
       client_fd = -1; // Mark as closed
     }
   }
@@ -980,9 +980,8 @@ bool HTTPConnxData::check_for_child_timeout() {
     if (std::time(NULL) - cgiData.child_timeout >
         Constants::cgi_child_timeout) {
       debug("CGI timeout reached");
-      HTTPServer::send_critical_error(client_fd, 504);
+      errorStatus = 504;
       state = CONN_CGI_FINISHED;
-
     }
   }
   return true;
