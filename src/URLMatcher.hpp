@@ -28,6 +28,7 @@ namespace URLMatcher
   bool applyLocationBlockSettings(HTTPConnxData &conn, const Location& location);
   void updatePathsFromLocation(HTTPConnxData &conn, const Location& location, 
                                const std::string& locationPath);
+  bool isAllowedCGIExtension(const HTTPConnxData &conn, const std::string &path);
 }
 
 #endif // URL_MATCHER_HPP

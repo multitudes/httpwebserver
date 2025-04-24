@@ -461,6 +461,24 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
   }
 }
 
+bool isAllowedCGIExtension(const HTTPConnxData &conn, const string &path) {
+    size_t dot_pos = path.find_last_of('.');
+    if (dot_pos == string::npos) {
+        debuglog(RED, "URLMatcher: No file extension found for CGI script");
+        return false;
+    }
+
+    string extension = path.substr(dot_pos);
+    for (std::vector<std::string>::const_iterator it = conn.config->cgiData.cgi_extensions.begin();
+         it != conn.config->cgiData.cgi_extensions.end(); ++it) {
+        if (*it == extension) {
+            return true;
+        }
+    }
+    debuglog(RED, "URLMatcher: CGI extension '%s' not allowed", extension.c_str());
+    return false;
+}
+
 bool findCGIPathAlias(HTTPConnxData &conn) {
     // Get CGI path mappings from config
     string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
@@ -478,6 +496,12 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
         conn.urlMatcherData.full_path = cgi_path + relative_path;
         conn.cgiData.script_name = conn.urlMatcherData.full_path;
 
+        // Check if extension is allowed
+        if (!isAllowedCGIExtension(conn, conn.urlMatcherData.full_path)) {
+            Responses::htmlErrorResponse(conn, 403);
+            return true;
+        }
+
         // Build filesystem path for stat check
         string check_path = conn.config->root;
         if (!check_path.empty() && check_path[check_path.length() - 1] == '/') {
@@ -489,6 +513,13 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
         struct stat script_stat;
         if (stat(check_path.c_str(), &script_stat) != 0 || !S_ISREG(script_stat.st_mode)) {
             Responses::htmlErrorResponse(conn, 404);
+            return true;
+        }
+
+        // Check if file is executable by the current user
+        if (!(script_stat.st_mode & S_IXUSR)) {
+            debuglog(RED, "URLMatcher: CGI script is not executable: %s", check_path.c_str());
+            Responses::htmlErrorResponse(conn, 403);
             return true;
         }
 
