@@ -459,7 +459,6 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
       debug("POLLHUP on CGI stdout pipe %d", conn.cgiData.cgi_stdout_fd);
       close(conn.cgiData.cgi_stdout_fd);
       SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
-      conn.cgiData.cgi_stdout_closed = true;
       conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
     }
   }

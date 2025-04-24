@@ -205,12 +205,12 @@ bool serveCustomErrorPage(HTTPConnxData &conn, const string &errorPagePath, int 
 
     // Set up conn for serving the file
     conn.file_fd = fd;
-    conn.file_size = path_stat.st_size;
+    conn.urlMatcherData.file_size = path_stat.st_size;
     conn.state = CONN_FILE_REQUEST;
     
     // Prepare headers with the error status code
     string header;
-    addStandardHeaders(conn, header, statusCode, conn.urlMatcherData.content_type, conn.file_size);
+    addStandardHeaders(conn, header, statusCode, conn.urlMatcherData.content_type, conn.urlMatcherData.file_size);
     
     conn.data.response = header;
     conn.headers_set = false;

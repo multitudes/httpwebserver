@@ -419,25 +419,6 @@ void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd) {
 }
 
 /**
- * @brief send error and close the connection
- *
- * include the Connection: close header in the response to inform the client.
- * This is when the headers are not yet received. In this case
- * I cannot send custom error pages. Example: malformed requests.
- */
-void send_critical_error(int fd, int code) {
-  std::string response = "HTTP/1.1 " + Utils::to_string(code) + " " +
-                         Constants::statusMessages[code] +
-                         "\r\n"
-                         "Connection: close\r\n"
-                         "Content-Length: 0\r\n"
-                         "\r\n";
-  debug("Sending the error response %s", response.c_str());
-  // i dont check for errors here because the connection will be closed
-  ::send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
-}
-
-/**
  * @brief create bind listen sockets for the server
  *
  * This function creates server sockets for each port in the configuration
@@ -466,6 +447,8 @@ void createServerSockets(const vector<ServerData> &configs,
     }
   }
 }
+
+
 
 /**
  * @brief Reload the configuration file called by reload
@@ -540,6 +523,13 @@ bool gotServerSocketAddNewConnx(int fd) {
   return false;
 }
 
+/**
+ * @brief Accept a new client connection
+ * 
+ * Sets the client socket to non-blocking mode and sets the timeout
+ * for the client socket on send and receive. It also checks for
+ * maximum connections and accepts the new connection.
+ */
 void acceptNewClient(int server_fd) {
   int client_fd;
   struct sockaddr_in client_addr;
@@ -559,8 +549,9 @@ void acceptNewClient(int server_fd) {
     }
     // max connection check!
     if (!maxConnectionsCheck(client_fd)) {
-      send_critical_error(client_fd, 503);
       debug("Max connections reached, rejecting new connection");
+      send_critical_error(client_fd, 500);
+      close(client_fd);
       continue;
     }
 
@@ -568,16 +559,18 @@ void acceptNewClient(int server_fd) {
     //   setSendRecTimeout(client_fd);
     if (!SocketUtils::setSendRecTimeout(client_fd)) {
       perror("Failed to set send/receive timeout");
-      send_critical_error(client_fd, 500);
       debug("Failed to set send/receive timeout");
+      send_critical_error(client_fd, 500);
+      close(client_fd);
       continue;
     }
 
     // Get the local address of the accepted socket and print it
     // for debugging purposes
     if (!SocketUtils::printLocalAddress(client_fd)) {
-      send_critical_error(client_fd, 500);
       debug("Failed to get local address");
+      send_critical_error(client_fd, 500);
+      close(client_fd);
       continue;
     }
     debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
@@ -672,6 +665,24 @@ void uploadLoop(HTTPConnxData &conn, pollfd currentfd) {
   }
 }
 
+/**
+ * @brief send error and close the connection
+ *
+ * include the Connection: close header in the response to inform the client.
+ * This is when the headers are not yet received. In this case
+ * I cannot send custom error pages. Example: malformed requests.
+ */
+void send_critical_error(int fd, int code) {
+  std::string response = "HTTP/1.1 " + Utils::to_string(code) + " " +
+                         Constants::statusMessages[code] +
+                         "\r\n"
+                         "Connection: close\r\n"
+                         "Content-Length: 0\r\n"
+                         "\r\n";
+  debug("Sending the error response %s", response.c_str());
+  // i dont check for errors here because the connection will be closed
+  ::send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
+}
 
 /**
  * @brief Finds the connection data associated with a given file descriptor.
