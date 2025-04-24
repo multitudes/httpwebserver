@@ -51,6 +51,7 @@ extern vector<ServerData> configs_;
 extern std::set<pid_t> terminatedPids;
 
 int run(std::string configFile);
+bool not_found(int current_fd, bool found);
 void createServerSockets(const vector<ServerData> &configs,
                          vector<int> &serverSockets);
 void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
@@ -77,4 +78,5 @@ void read_from_client_into_buffer(HTTPConnxData &conn);
 void write_to_client_from_cgi(HTTPConnxData &conn);
 void check_for_client_timeout(HTTPConnxData &conn);
 bool check_for_child_timeout(HTTPConnxData& conn);
+bool getConnectionDataByFD(int fd, HTTPConnxData*& out_conn_ptr);
 } // namespace HTTPServer

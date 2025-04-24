@@ -142,32 +142,21 @@ int run(std::string configFile) {
       // Now safely get reference - the connection data is in a map
       // and it has been added in accept. the fd could be an fd cgi and
       // it will return the parent connection data -
+      // Now safely get reference to the connection data using the new function
       debug("getting connection data for fd %d", current_fd);
-      // Now safely get reference to the connection data
-      bool found = false;
-      std::map<int, HTTPConnxData>::iterator conn_it =
-          HTTPServer::connections.find(current_fd);
-      if (conn_it == HTTPServer::connections.end()) {
-        for (std::map<int, HTTPConnxData>::iterator it =
-                 HTTPServer::connections.begin();
-             it != HTTPServer::connections.end(); ++it) {
-          if (it->second.cgiData.cgi_stdin_fd == current_fd ||
-              it->second.cgiData.cgi_stdout_fd == current_fd) {
-            conn_it = it;
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          // Still not found? should not happen
+      HTTPConnxData* conn_ptr = NULL; // Initialize pointer to NULL
+      if (!getConnectionDataByFD(current_fd, conn_ptr)) {
+          // Connection not found for this fd, handle error/cleanup
           debug("FD %d not found in connections - removing", current_fd);
           SocketUtils::remove_from_poll(current_fd);
           close(current_fd);
-          continue; // break to outer loop
-        }
+          continue; // Continue to the next fd in pollfds
       }
-      debug("found connection data for fd %d", current_fd);
-      HTTPConnxData &conn = conn_it->second;
+      // If we reach here, conn_ptr is valid and points to the connection data
+      HTTPConnxData &conn = *conn_ptr; // Get a reference for convenience
+
+
+
       debug("conn fd %d state %d", conn.client_fd, conn.state);
       debug("------ current fd %d and is %s", current_fd,
             (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
@@ -1108,6 +1097,43 @@ void uploadLoop(HTTPConnxData &conn, pollfd currentfd) {
     }
     uploadComplete(conn);
   }
+}
+
+
+/**
+ * @brief Finds the connection data associated with a given file descriptor.
+ *
+ * Searches the connections map first by client_fd (the map key).
+ * If not found, iterates through all connections to check if the fd
+ * matches a CGI pipe fd (stdin or stdout).
+ *
+ * @param fd The file descriptor to search for.
+ * @param out_conn_ptr A reference to a pointer. If the connection is found,
+ *                     this pointer will be set to point to the found
+ *                     HTTPConnxData object. Otherwise, it might be NULL.
+ * @return true if a connection associated with the fd was found, false otherwise.
+ */
+bool getConnectionDataByFD(int fd, HTTPConnxData*& out_conn_ptr) {
+  // Try finding by client_fd (map key) first
+  std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(fd);
+  if (conn_it != HTTPServer::connections.end()) {
+      out_conn_ptr = &(conn_it->second); // Set the output pointer
+      return true;                       // Found
+  }
+
+  // If not found by client_fd, check CGI pipe fds
+  for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+       it != HTTPServer::connections.end(); ++it) {
+      if (it->second.cgiData.cgi_stdin_fd == fd ||
+          it->second.cgiData.cgi_stdout_fd == fd) {
+          out_conn_ptr = &(it->second); // Set the output pointer
+          return true;                  // Found
+      }
+  }
+
+  // Not found anywhere
+  out_conn_ptr = NULL; // Explicitly set to NULL if not found
+  return false;
 }
 
 } // namespace HTTPServer
