@@ -66,4 +66,5 @@ void send_critical_error(int fd, int code);
 void uploadLoop(HTTPConnxData &conn, pollfd currentfd);
 void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd);
 bool getConnectionDataByFD(int fd, HTTPConnxData*& out_conn_ptr);
+void cleanupClosedConnections();
 } // namespace HTTPServer

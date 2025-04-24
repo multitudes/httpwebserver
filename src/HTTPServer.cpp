@@ -98,22 +98,7 @@ int run(std::string configFile) {
     } else if (poll_result == 0) {
       // also a good place to check
       SocketUtils::checkForIdleConnections();
-
-      // ---> Add cleanup here too, after idle check <---
-      std::map<int, HTTPConnxData>::iterator cleanup_it = HTTPServer::connections.begin();
-      while (cleanup_it != HTTPServer::connections.end()) {
-          if (cleanup_it->second.client_fd == -1) {
-              debuglog(YELLOW, "Cleaning up connection object (idle timeout) for originally fd %d", cleanup_it->first);
-              // Assuming reset() was called in checkForIdleConnections before setting fd = -1
-               // C++98 way to erase from map while iterating:
-            std::map<int, HTTPConnxData>::iterator to_erase = cleanup_it; // Store iterator to erase
-            ++cleanup_it; // Advance the main iterator FIRST
-            HTTPServer::connections.erase(to_erase); // Erase the old position
-          } else {
-              ++cleanup_it;
-          }
-      }
-            
+      cleanupClosedConnections();
       continue;
     }
 
@@ -398,28 +383,12 @@ int run(std::string configFile) {
             break;
           }
         }
-
-      } // end of the state cgi check
-
+      } // end of the state cgi_sending check
+      
       conn.check_for_client_timeout();
 
     } // end of the main for loop in pollfds
-
-    // ---> Add cleanup here too, after idle check <---
-    std::map<int, HTTPConnxData>::iterator cleanup_it = HTTPServer::connections.begin();
-    while (cleanup_it != HTTPServer::connections.end()) {
-        if (cleanup_it->second.client_fd == -1) {
-            debuglog(YELLOW, "Cleaning up connection object (idle timeout) for originally fd %d", cleanup_it->first);
-            // Assuming reset() was called in checkForIdleConnections before setting fd = -1
-             // C++98 way to erase from map while iterating:
-             std::map<int, HTTPConnxData>::iterator to_erase = cleanup_it; // Store iterator to erase
-             ++cleanup_it; // Advance the main iterator FIRST
-             HTTPServer::connections.erase(to_erase); // Erase the old position
-        } else {
-            ++cleanup_it;
-        }
-    }
-    continue; // Continue to next poll() cycle
+    cleanupClosedConnections();
   }
 
   // Cleanup
@@ -766,6 +735,31 @@ bool getConnectionDataByFD(int fd, HTTPConnxData*& out_conn_ptr) {
   // Not found anywhere
   out_conn_ptr = NULL; // Explicitly set to NULL if not found
   return false;
+}
+
+/**
+ * @brief Iterates through the connections map and erases entries marked for removal.
+ *
+ * Connections are marked for removal by setting their client_fd member to -1.
+ * This function safely removes such entries from the global connections map.
+ */
+void cleanupClosedConnections() {
+  std::map<int, HTTPConnxData>::iterator cleanup_it = HTTPServer::connections.begin();
+  while (cleanup_it != HTTPServer::connections.end()) {
+      // Check if the connection is marked for removal
+      if (cleanup_it->second.client_fd == -1) {
+          int original_fd = cleanup_it->first; // Get original fd for logging before erase
+          debuglog(YELLOW, "Erasing connection object marked for removal (originally fd %d)", original_fd);
+          // Ensure reset() was called before setting client_fd = -1
+          // C++98 way to erase from map while iterating:
+          std::map<int, HTTPConnxData>::iterator to_erase = cleanup_it; // Store iterator to erase
+          ++cleanup_it; // Advance the main iterator FIRST
+          HTTPServer::connections.erase(to_erase); // Erase the old position
+      } else {
+          // Move to the next element if not erasing
+          ++cleanup_it;
+      }
+  }
 }
 
 } // namespace HTTPServer
