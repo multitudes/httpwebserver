@@ -3,6 +3,7 @@
 
 #include <string>
 #include <sys/stat.h>
+#include "Config.hpp" // For Location type
 
 // Forward declarations
 struct HTTPConnxData;
@@ -21,6 +22,12 @@ namespace URLMatcher
   void updateWithLocationBlockConfig(HTTPConnxData &conn);
   bool handleChunkedData(HTTPConnxData &conn);
   bool handleCookieUpdateRequest(HTTPConnxData &conn);
+  bool handleGETRequest(HTTPConnxData &conn);
+  bool handlePOSTRequest(HTTPConnxData &conn);
+  bool handleDELETERequest(HTTPConnxData &conn);
+  bool applyLocationBlockSettings(HTTPConnxData &conn, const Location& location);
+  void updatePathsFromLocation(HTTPConnxData &conn, const Location& location, 
+                               const std::string& locationPath);
 }
 
 #endif // URL_MATCHER_HPP
