@@ -10,7 +10,6 @@ def handle_sigterm(signum, frame):
     print(f"PID {os.getpid()}: Received SIGTERM ({signum}), exiting gracefully.", file=sys.stderr)
     sys.exit(0) # Exit with success code
 
-
 def main():
     # Register the signal handler for SIGTERM
     signal.signal(signal.SIGTERM, handle_sigterm)

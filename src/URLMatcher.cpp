@@ -214,7 +214,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   debug("checking the request");
   char buffer[Constants::BUFFER_SIZE + 1];
 
-  ssize_t bytes_read = ::recv(conn.client_fd, buffer, Constants::BUFFER_SIZE, MSG_DONTWAIT);
+  ssize_t bytes_read = ::recv(conn.client_fd, buffer, Constants::BUFFER_SIZE, 0);
 
   if (bytes_read <= 0) {
     if (bytes_read == 0) {
@@ -226,12 +226,9 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
       conn.client_fd = -1; // Mark as closed
       return false;
     } else {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        debug("No data available yet - keep in reading state");
-        return false;
-      }
       debug("%s", strerror(errno));
-	  HTTPServer::send_critical_error(conn.client_fd, 500);
+      Responses::htmlErrorResponse(conn, 500); // Internal Server Error
+      conn.closeConnection = true;
 	  return false;
     }
   }
@@ -258,11 +255,8 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   case HEADERS_PARSE_ERROR:
     debuglog(RED, "Error parsing headers");
     debug("Error parsing headers");
-    HTTPServer::send_critical_error(conn.client_fd, 400);
-    conn.reset();
-    SocketUtils::remove_from_poll(conn.client_fd);
-    close(conn.client_fd);
-    conn.client_fd = -1; // Mark as closed
+    Responses::htmlErrorResponse(conn, 500); // Internal Server Error
+    conn.closeConnection = true;
     return false;
   }
 
