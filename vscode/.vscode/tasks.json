@@ -1,0 +1,45 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-debug",
+            "type": "shell",
+            "command": "make",
+            "args": ["re"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "build-release",
+            "type": "shell",
+            "command": "make",
+            "args": ["re", "CFLAGS=-DNDEBUG"],
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "clean",
+            "type": "shell",
+            "command": "make",
+            "args": ["fclean"],
+            "problemMatcher": []
+        },
+        {
+            "label": "run-tests",
+            "type": "shell",
+            "command": "make",
+            "args": ["test"],
+            "problemMatcher": [],
+            "dependsOn": ["build-debug"]
+        },
+        {
+            "label": "run-valgrind",
+            "type": "shell",
+            "command": "make",
+            "args": ["valrun"],
+            "problemMatcher": []
+        }
+    ]
+}
