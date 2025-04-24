@@ -213,4 +213,17 @@ struct HTTPConnxData {
   bool retrieveSession();
  // void dechunkDataCGI();
   string dechunkData(string chunked_string);
+  bool uploadComplete(); 
+  bool writingFirstPayloadCompletesUpload();
+  bool readFromClientForUpload();
+  bool writeUploadToFile();
+  bool finishedSendingSimpleResponse();
+  bool settingHeadersIfNeeded(); 
+  bool readNewDataFromFile();
+  bool sendNewDataFromFileToClient();
+  void checkCompletionConditions();
+  void read_from_client_into_buffer(); 
+  void write_to_client_from_cgi();
+  void check_for_client_timeout();
+  bool check_for_child_timeout();
 };

@@ -151,7 +151,7 @@ Interestingly the script above has 3 details that often are overlooked.
 2 - The Content-Type header is set to text/html, which tells the browser how to interpret the response. But more importantly, the first header is missing, the HTTP version and the status code. The server will add it automatically. But how does the server know which status code to add? The server will add a 200 OK status code if the script exits with a 0 status code. If the script exits with a non-zero status code, the server will add a 500 Internal Server Error status code.  
 3 - The script must output a blank line after the headers to indicate the end of the headers and the beginning of the response body.  
 
-If the shebang path is not correct, the server will return a 500 error.  If the content length is not present the server might try to chunk the response (better) or return BUFFER_SIZE and truncate it (less ideal but depends of the project requirements).  
+If the shebang path is not correct, the server will return a 500 error.  If the content length is not present the server might try to chunk the response (better) or return Constants::BUFFER_SIZE and truncate it (less ideal but depends of the project requirements).  
 
 # Testing 
 See the testing.md file here: [testing.md](testing.md) and also how we use siege here [siege.md](siege.md)

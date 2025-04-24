@@ -257,9 +257,9 @@ string urlDecode(const string& encoded) {
  */
 bool receiveAndParseRequest(HTTPConnxData &conn) {
   debug("checking the request");
-  char buffer[BUFFER_SIZE + 1];
+  char buffer[Constants::BUFFER_SIZE + 1];
 
-  ssize_t bytes_read = ::recv(conn.client_fd, buffer, BUFFER_SIZE, MSG_DONTWAIT);
+  ssize_t bytes_read = ::recv(conn.client_fd, buffer, Constants::BUFFER_SIZE, MSG_DONTWAIT);
 
   if (bytes_read <= 0) {
     if (bytes_read == 0) {

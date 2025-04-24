@@ -9,7 +9,6 @@
 #include "Utils.hpp"
 #include "debug.h"
 #include <algorithm>
-#include <cassert>
 #include <ctime>
 #include <poll.h>
 #include <sys/stat.h>
@@ -194,7 +193,7 @@ int run(std::string configFile) {
         debug("CONN_SIMPLE_RESPONSE fd %d", conn.client_fd);
         debuglog(YELLOW, "Connection fd %d in state SIMPLE_RESPONSE",
                  conn.client_fd);
-        if (!finishedSendingSimpleResponse(conn)) {
+        if (!conn.finishedSendingSimpleResponse()) {
           continue;
         }
       }
@@ -204,18 +203,18 @@ int run(std::string configFile) {
         debug("CONN_FILE_REQUEST client fd %d POLLOUT", conn.client_fd);
         debuglog(YELLOW, "CONN_FILE_REQUEST client fd %d POLLOUT",
                  conn.client_fd);
-        if (!settingHeadersIfNeeded(conn)) {
+        if (!conn.settingHeadersIfNeeded()) {
           debug("Failed to set headers for connection %d", conn.client_fd);
           debuglog(RED, "Failed to send headers for connection %d",
                    conn.client_fd);
           continue;
         }
-        if (!readNewDataFromFile(conn) || !sendNewDataFromFileToClient(conn)) {
+        if (!conn.readNewDataFromFile() || !conn.sendNewDataFromFileToClient()) {
           debuglog(YELLOW, "cound not send data to client for connection %d",
                    conn.client_fd);
           continue;
         }
-        checkCompletionConditions(conn);
+        conn.checkCompletionConditions();
         continue;
       }
 
@@ -223,7 +222,7 @@ int run(std::string configFile) {
       if (conn.state == CONN_UPLOAD) {
         debuglog(YELLOW, "Connection fd %d in state UPLOAD", conn.client_fd);
         debug("CONN_UPLOAD fd %d", conn.client_fd);
-        if (writingFirstPayloadCompletesUpload(conn)) {
+        if (conn.writingFirstPayloadCompletesUpload()) {
           continue;
         }
         uploadLoop(conn, pollfds[i]);
@@ -269,7 +268,7 @@ int run(std::string configFile) {
               // found! reset the timeout
               conn.cgiData.child_timeout = 0;
               // read from client
-              read_from_client_into_buffer(conn);
+              conn.read_from_client_into_buffer();
               break;
             }
           }
@@ -334,7 +333,7 @@ int run(std::string configFile) {
           debug("cgiData is sending  and client fd %d is POLLOUT",
                 conn.client_fd);
           // before to read from child i check if i have a buffer leftover
-          write_to_client_from_cgi(conn);
+          conn.write_to_client_from_cgi();
 
           // after writing the excess buffer i need to read from the cgi
           for (size_t j = 0; j < pollfds.size(); j++) {
@@ -346,7 +345,7 @@ int run(std::string configFile) {
               // reset timeout
               conn.cgiData.child_timeout = 0;
               // read-write to client from cgi
-              conn.cgiData.buffer.resize(BUFFER_SIZE);
+              conn.cgiData.buffer.resize(Constants::BUFFER_SIZE);
               ssize_t bytes_read =
                   ::read(conn.cgiData.cgi_stdout_fd, &conn.cgiData.buffer[0],
                          conn.cgiData.buffer.size());
@@ -382,7 +381,7 @@ int run(std::string configFile) {
                 break;
               }
               debug("Sent %ld bytes to client", bytes_written);
-              if (bytes_written < BUFFER_SIZE) {
+              if (bytes_written < Constants::BUFFER_SIZE) {
                 // i finished sending the data to the client
                 // close the read end of the pipe to signal EOF to the CGI
                 debuglog(YELLOW, "Closing read end of pipe");
@@ -395,14 +394,14 @@ int run(std::string configFile) {
             }
           }
 
-          if (check_for_child_timeout(conn)) {
+          if (conn.check_for_child_timeout()) {
             break;
           }
         }
 
       } // end of the state cgi check
 
-      check_for_client_timeout(conn);
+      conn.check_for_client_timeout();
 
     } // end of the main for loop in pollfds
 
@@ -426,128 +425,6 @@ int run(std::string configFile) {
   // Cleanup
   // TODO
   return 0;
-}
-
-bool check_for_child_timeout(HTTPConnxData& conn) {
-  debug("checking for child timeout");
-  
-  if (conn.cgiData.child_timeout == 0) {
-    conn.cgiData.child_timeout = std::time(NULL);
-
-  } else {
-    // check if the timeout is reached
-    debug("child timeout %ld", conn.cgiData.child_timeout);
-    if (std::time(NULL) - conn.cgiData.child_timeout >
-        Constants::cgi_child_timeout) {
-      debug("CGI timeout reached");
-      send_critical_error(conn.client_fd, 504);
-      conn.state = CONN_CGI_FINISHED;
-
-    }
-  }
-  return true;
-}
-
-/**
- * @brief Check for client timeout
- *
- * @param conn The connection data
- * @param current_fd The current file descriptor
- */
-void check_for_client_timeout(HTTPConnxData &conn) {
-  // check for timeouts
-  if (conn.data.client_timeout == 0) {
-    // first time exiting ther loop without finding the fd
-    conn.data.client_timeout = std::time(NULL);
-  } else {
-    // check if the timeout is reached
-    if (std::time(NULL) - conn.data.client_timeout >
-        Constants::cgi_child_timeout) {
-      debug("Client timeout reached");
-      // conn.reset();
-
-      conn.reset(); // reset the connection data
-      // When detecting a client timeout
-      debuglog(YELLOW, "Closing the connection (fd %d)", conn.client_fd);
-      // here I am in a state where typically the client remains
-      // in POLLOUT and state incoming... I just close the connection
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      // will be erased later
-      conn.client_fd = -1; // Mark as closed
-    }
-  }
-}
-
-/**
- * @brief Write the buffer to the client from CGI
- *
- * @param conn The connection data
- * @param current_fd The current file descriptor
- */
-void write_to_client_from_cgi(HTTPConnxData &conn) {
-  if (!conn.cgiData.buffer.empty()) {
-    debug("leftover buffer from cgiData");
-    // write to cgi the buffer if any remaining from the
-    // initialisation
-    ssize_t bytes_written = ::send(conn.client_fd, conn.cgiData.buffer.c_str(),
-                                    conn.cgiData.buffer.size(), MSG_NOSIGNAL);
-    debug("Wrote %ld bytes to client", bytes_written);
-
-    if (bytes_written < 0) {
-      perror("Failed to write to client");
-      debug("Failed to write to client");
-      conn.state = CONN_CGI_FINISHED;
-    } else if (bytes_written == 0) {
-      // Should not happen with blocking write unless size was 0
-      debuglog(YELLOW, "Wrote 0 bytes to client (buffer size: %zu)",
-               conn.cgiData.buffer.size());
-      debuglog(RED, "Wrote 0 bytes to client unexpectedly.");
-      conn.state = CONN_CGI_FINISHED;
-    } else if (static_cast<size_t>(bytes_written) <
-               conn.cgiData.buffer.size()) {
-      // Partial write: Remove written data and wait for next POLLOUT
-      debug("Partial write: Wrote %ld bytes to client (buffer size: %zu)",
-            bytes_written, conn.cgiData.buffer.size());
-      conn.cgiData.buffer.erase(
-          0, static_cast<std::string::size_type>(bytes_written));
-      // stay in the same state, poll will trigger again
-    } else {
-      // Full write (bytes_written == conn.cgiData.buffer.size())
-      debugcolor(MAGENTA, "wrote request buffer to client: %s",
-                 conn.cgiData.buffer.c_str()); // Log data before clearing
-      // TODO check the bytes received
-      conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
-      if (conn.cgiData.bytes_received >= conn.data.content_length) {
-        debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
-        // If we have written all data, clear the buffer
-        conn.cgiData.buffer.clear();
-      }
-    }
-  }
-}
-
-/**
- * @brief Read data from the client into the buffer
- *
- * @param conn The connection data
- * @param current_fd The current file descriptor
- */
-void read_from_client_into_buffer(HTTPConnxData &conn) {
-  conn.cgiData.buffer.resize(BUFFER_SIZE);
-  ssize_t bytes_read =
-      ::recv(conn.client_fd, &conn.cgiData.buffer[0], BUFFER_SIZE, 0);
-  if (bytes_read < 0) {
-    perror("Failed to read from client");
-    conn.state = CONN_CGI_FINISHED;
-  } else if (bytes_read == 0) {
-    debug("Client closed connection - giving EOF to CGI stdin");
-    close(conn.cgiData.cgi_stdin_fd);
-    SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-    conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-    conn.state = CONN_CGI_SENDING;
-  }
-  debug("Received %ld bytes from client", bytes_read);
 }
 
 /**
@@ -835,267 +712,22 @@ bool maxConnectionsCheck(int clientfd) {
   return true;
 }
 
-/**
- * @brief Check if the upload is complete
- *
- * @param conn The connection data
- * @return true if the upload is complete, false otherwise
- *
- * This function checks if the number of bytes sent is greater than or equal to
- * the content length. If so, it resets the connection and sends a response to
- * the client.
+/** 
+ * @brief Upload loop for handling file uploads
+ * 
+ * This function is called when the connection is in the UPLOAD state.
+ * It checks for incoming data from the client and writes it to the file.
+ * If the upload is complete, it calls the uploadComplete function.
  */
-bool uploadComplete(HTTPConnxData &conn) {
-  if (conn.data.bytes_sent >= conn.data.content_length) {
-    debug("Upload complete");
-    conn.reset();
-    Responses::createResponse(conn, "text/plain", "File uploaded successfully.",
-                              201);
-    conn.state = CONN_SIMPLE_RESPONSE;
-    return true;
-  }
-  return false;
-}
-
-/**
- * @brief Check if writing the first payload completes the upload
- *
- * @param conn The connection data
- * @return true if the upload is complete, false otherwise
- *
- * This function checks if there is any leftover payload data from the header
- * parsing. If so, it writes that data to the file and checks if the upload is
- * complete.
- */
-bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn) {
-  if (!conn.data.response.empty()) {
-    debug("Writing leftover payload for connection %d", conn.client_fd);
-    debuglog(YELLOW, "writing leftover payload for client %d", conn.client_fd);
-    ssize_t bytes_written = write(conn.file_fd, conn.data.response.c_str(),
-                                  conn.data.response.size());
-    if (bytes_written <= 0) {
-      perror(bytes_written < 0 ? "Failed to write to file"
-                               : "No data written to file");
-      conn.reset();
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.client_fd = -1; // Mark as closed
-      return true;
-    }
-    conn.data.bytes_sent += static_cast<size_t>(bytes_written);
-    conn.data.response.clear();
-
-    if (uploadComplete(conn)) {
-      return true;
-      ;
-    }
-  }
-  return false;
-}
-
-bool readFromClientForUpload(HTTPConnxData &conn) {
-  conn.data.buffer.resize(BUFFER_SIZE);
-  ssize_t bytes_read = ::recv(conn.client_fd, conn.data.buffer.data(),
-                              conn.data.buffer.size(), MSG_DONTWAIT);
-  if (bytes_read <= 0) {
-    if (bytes_read == 0) {
-      debug("Client disconnected during upload");
-    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      debug("No data available yet - keep in reading state");
-      return false;
-    }
-    debug("%s", strerror(errno));
-    perror("recv failed during upload");
-    conn.reset();
-    close(conn.client_fd);
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.client_fd = -1; // Mark as closed
-    return false;
-  }
-  // Resize the buffer to the actual amount of data read
-  conn.data.buffer.resize(static_cast<size_t>(bytes_read));
-
-  debug("Received %ld bytes from client", bytes_read);
-  return true;
-}
-
-bool writeUploadToFile(HTTPConnxData &conn) {
-  ssize_t bytes_written =
-      write(conn.file_fd, conn.data.buffer.data(), conn.data.buffer.size());
-  if (bytes_written <= 0) {
-    perror(bytes_written < 0 ? "Failed to write to file"
-                             : "No data written to file");
-    conn.reset();
-    close(conn.client_fd);
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.client_fd = -1; // Mark as closed
-    return false;
-  }
-  conn.data.bytes_sent += static_cast<size_t>(bytes_written);
-  debug("Wrote %ld bytes to file", bytes_written);
-  debug("total bytes sent %zu/%zu", conn.data.bytes_sent,
-        conn.data.content_length);
-  conn.data.buffer.clear();
-  return true;
-}
-
-bool finishedSendingSimpleResponse(HTTPConnxData &conn) {
-  conn.data.response.reserve(BUFFER_SIZE);
-  ssize_t bytes_sent = ::send(conn.client_fd, conn.data.response.c_str(),
-                              conn.data.response.size(), 0);
-  if (bytes_sent < 0) {
-    perror("Failed to send simple response");
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.reset();
-    close(conn.client_fd);
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.client_fd = -1; // Mark as closed
-    return false;
-  } else if (bytes_sent == 0) {
-    debug("No data sent to client %d", conn.client_fd);
-  } else {
-    debug("Sent %ld bytes to client %d", bytes_sent, conn.client_fd);
-    // defensive programming - handle partial send
-    // Remove sent bytes from buffer
-    conn.data.response.erase(conn.data.response.begin(),
-                             conn.data.response.begin() + bytes_sent);
-    debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
-          conn.data.buffer.size());
-    if (!conn.data.response.empty()) {
-      debug("Still data in response buffer %zu", conn.data.response.size());
-      return false;
-    } else {
-      debug("Finished sending response to client %d", conn.client_fd);
-      conn.state = CONN_INCOMING;
-      conn.reset();
-    }
-  }
-  return true;
-}
-
-bool settingHeadersIfNeeded(HTTPConnxData &conn) {
-  if (!conn.headers_set) {
-    if (!conn.data.response.empty()) {
-      assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 &&
-             "Headers must start with 'HTTP/1.1 ");
-      conn.data.buffer.assign(conn.data.response.begin(),
-                              conn.data.response.end());
-      conn.data.response.clear();
-      conn.headers_set = true;
-      debug("Added headers for connection %d", conn.client_fd);
-    } else {
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.reset();
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.client_fd = -1; // Mark as closed
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * @brief Read new data from the file if the buffer is empty
- *
- */
-bool readNewDataFromFile(HTTPConnxData &conn) {
-  // 1. Read new data if buffer is empty (and file not fully read)
-  if (conn.data.buffer.empty() && conn.file_fd != -1) {
-    char read_buf[BUFFER_SIZE];
-    ssize_t bytes_read = read(conn.file_fd, read_buf, sizeof(read_buf));
-
-    if (bytes_read < 0) {
-      perror("Failed to read file");
-      SocketUtils::remove_from_poll(conn.client_fd);
-      close(conn.client_fd);
-      conn.reset();
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.client_fd = -1; // Mark as closed
-      return false;
-    } else if (bytes_read == 0) {
-      debug("End of file reached for connection %d", conn.client_fd);
-      close(conn.file_fd);
-      conn.file_fd = -1;
-      // keep going, there might be more data in the buffer to send to
-      // client
-    } else {
-      // Append new data to buffer
-      conn.data.buffer.insert(conn.data.buffer.end(), read_buf,
-                              read_buf + bytes_read);
-    }
-  }
-  return true;
-}
-
-bool sendNewDataFromFileToClient(HTTPConnxData &conn) {
-  // 2. Send data from buffer (if any)
-  if (!conn.data.buffer.empty()) {
-    ssize_t bytes_sent = ::send(conn.client_fd, conn.data.buffer.data(),
-                                conn.data.buffer.size(), 0);
-
-    if (bytes_sent < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        debug("Send would block, retrying later");
-        return false; // Poll will retry
-      }
-      perror("Failed to send data");
-      debuglog(RED, "Error during file transfer for connection %d",
-               conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.reset();
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.client_fd = -1; // Mark as closed
-      return false;
-    } else if (bytes_sent == 0) {
-      debug("No data sent to client %d", conn.client_fd);
-    }
-    // Remove sent bytes from buffer
-    if (bytes_sent > 0) {
-      conn.data.bytes_sent += static_cast<size_t>(bytes_sent);
-      conn.data.buffer.erase(conn.data.buffer.begin(),
-                             conn.data.buffer.begin() + bytes_sent);
-      debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
-            conn.data.buffer.size());
-    }
-  }
-  return true;
-}
-
-/**
- * @brief Check completion conditions for file transfer
- *
- * @param conn The connection data
- *
- * This function checks if the file transfer is complete. If the file
- * descriptor is -1 and the buffer is empty, it means the file has been
- * sent completely. In this case, it resets the connection and
- * updates the state to INCOMING.
- */
-void checkCompletionConditions(HTTPConnxData &conn) {
-  if (conn.file_fd == -1 && conn.data.buffer.empty()) {
-    debug("File sent completely for connection %d", conn.client_fd);
-    debug("File transfer complete for connection %d sent %lu bytes",
-          conn.client_fd, conn.data.bytes_sent);
-    debuglog(YELLOW,
-             "Back to state INCOMING - File transfer complete for "
-             "connection %d",
-             conn.client_fd);
-    conn.reset();
-  }
-}
-
 void uploadLoop(HTTPConnxData &conn, pollfd currentfd) {
   if (currentfd.revents & POLLIN) {
     debug("POLLIN event on upload connection %d", conn.client_fd);
     debuglog(YELLOW, "Handling upload event for connection %d", conn.client_fd);
 
-    if (!readFromClientForUpload(conn) || !writeUploadToFile(conn)) {
+    if (!conn.readFromClientForUpload() || !conn.writeUploadToFile()) {
       return;
     }
-    uploadComplete(conn);
+    conn.uploadComplete();
   }
 }
 
