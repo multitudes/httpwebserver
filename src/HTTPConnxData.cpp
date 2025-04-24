@@ -10,6 +10,11 @@
 #include <sstream>
 #include "Utils.hpp"
 #include <signal.h>
+#include "SocketUtils.hpp"
+#include "HTTPServer.hpp"
+#include "Constants.hpp"
+#include <cassert>
+#include "Responses.hpp"
 
 using std::map;
 using std::string;
@@ -60,6 +65,78 @@ string HTTPConnxData::dechunkData(string chunked_string) {
   data.headers["Content-Length"] = Utils::to_string(cgiData.buffer.size());
   data.headers.erase("Transfer-Encoding");  // Remove chunked header
   return dechunked;
+}
+
+
+/**
+ * @brief Read data from the client into the buffer
+ *
+ * @param conn The connection data
+ * @param current_fd The current file descriptor
+ */
+void HTTPConnxData::read_from_client_into_buffer() {
+  cgiData.buffer.resize(Constants::BUFFER_SIZE);
+  ssize_t bytes_read =
+      ::recv(client_fd, &cgiData.buffer[0], Constants::BUFFER_SIZE, 0);
+  if (bytes_read < 0) {
+    perror("Failed to read from client");
+    state = CONN_CGI_FINISHED;
+  } else if (bytes_read == 0) {
+    debug("Client closed connection - giving EOF to CGI stdin");
+    close(cgiData.cgi_stdin_fd);
+    SocketUtils::remove_from_poll(cgiData.cgi_stdin_fd);
+    cgiData.cgi_stdin_fd = -1; // Mark as closed
+    state = CONN_CGI_SENDING;
+  }
+  debug("Received %ld bytes from client", bytes_read);
+}
+
+/**
+ * @brief Write the buffer to the client from CGI
+ *
+ * @param conn The connection data
+ * @param current_fd The current file descriptor
+ */
+void HTTPConnxData::write_to_client_from_cgi() {
+  if (!cgiData.buffer.empty()) {
+    debug("leftover buffer from cgiData");
+    // write to cgi the buffer if any remaining from the
+    // initialisation
+    ssize_t bytes_written = ::send(client_fd, cgiData.buffer.c_str(),
+                                    cgiData.buffer.size(), MSG_NOSIGNAL);
+    debug("Wrote %ld bytes to client", bytes_written);
+
+    if (bytes_written < 0) {
+      perror("Failed to write to client");
+      debug("Failed to write to client");
+      state = CONN_CGI_FINISHED;
+    } else if (bytes_written == 0) {
+      // Should not happen with blocking write unless size was 0
+      debuglog(YELLOW, "Wrote 0 bytes to client (buffer size: %zu)",
+               cgiData.buffer.size());
+      debuglog(RED, "Wrote 0 bytes to client unexpectedly.");
+      state = CONN_CGI_FINISHED;
+    } else if (static_cast<size_t>(bytes_written) <
+               cgiData.buffer.size()) {
+      // Partial write: Remove written data and wait for next POLLOUT
+      debug("Partial write: Wrote %ld bytes to client (buffer size: %zu)",
+            bytes_written, cgiData.buffer.size());
+      cgiData.buffer.erase(
+          0, static_cast<std::string::size_type>(bytes_written));
+      // stay in the same state, poll will trigger again
+    } else {
+      // Full write (bytes_written == cgiData.buffer.size())
+      debugcolor(MAGENTA, "wrote request buffer to client: %s",
+                 cgiData.buffer.c_str()); // Log data before clearing
+      // TODO check the bytes received
+      cgiData.bytes_received += static_cast<size_t>(bytes_written);
+      if (cgiData.bytes_received >= data.content_length) {
+        debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+        // If we have written all data, clear the buffer
+        cgiData.buffer.clear();
+      }
+    }
+  }
 }
 
 /**
@@ -406,7 +483,7 @@ string trunc(const string s) {
  * I asked deepseek for a pretty printing of the connection data for
  * debugging purposes.
  */
-string HTTPConnxData::formatConnectionData(const ConnectionData &data) {
+string HTTPConnxData::formatConnectionData() {
   std::ostringstream oss;
 
   // Core request info
@@ -445,7 +522,7 @@ string HTTPConnxData::formatConnectionData(const ConnectionData &data) {
 /**
  * @brief Format the connection data for logging - long version
  */
-string HTTPConnxData::formatConnectionDataLong(const ConnectionData &data) {
+string HTTPConnxData::formatConnectionDataLong() {
   std::ostringstream oss;
 
   oss << "ConnectionData { "
@@ -601,3 +678,311 @@ bool HTTPConnxData::retrieveSession() {
   return false;
 }
 // end SESSION MANAGEMENT FUNCTIONS---------------------------------Rufus
+
+/**
+ * @brief Check if the upload is complete
+ *
+ * @param conn The connection data
+ * @return true if the upload is complete, false otherwise
+ *
+ * This function checks if the number of bytes sent is greater than or equal to
+ * the content length. If so, it resets the connection and sends a response to
+ * the client.
+ */
+bool HTTPConnxData::uploadComplete() {
+  if (data.bytes_sent >= data.content_length) {
+    debug("Upload complete");
+    reset();
+    Responses::createResponse(*this, "text/plain", "File uploaded successfully.",
+                              201);
+    state = CONN_SIMPLE_RESPONSE;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Check if writing the first payload completes the upload
+ *
+ * @param conn The connection data
+ * @return true if the upload is complete, false otherwise
+ *
+ * This function checks if there is any leftover payload data from the header
+ * parsing. If so, it writes that data to the file and checks if the upload is
+ * complete.
+ */
+bool HTTPConnxData::writingFirstPayloadCompletesUpload() {
+  if (!data.response.empty()) {
+    debug("Writing leftover payload for connection %d", client_fd);
+    debuglog(YELLOW, "writing leftover payload for client %d", client_fd);
+    ssize_t bytes_written = write(file_fd, data.response.c_str(),
+                                  data.response.size());
+    if (bytes_written <= 0) {
+      perror(bytes_written < 0 ? "Failed to write to file"
+                               : "No data written to file");
+      reset();
+      close(client_fd);
+      SocketUtils::remove_from_poll(client_fd);
+      client_fd = -1; // Mark as closed
+      return true;
+    }
+    data.bytes_sent += static_cast<size_t>(bytes_written);
+    data.response.clear();
+
+    if (uploadComplete()) {
+      return true;
+      ;
+    }
+  }
+  return false;
+}
+
+bool HTTPConnxData::readFromClientForUpload() {
+  data.buffer.resize(Constants::BUFFER_SIZE);
+  ssize_t bytes_read = ::recv(client_fd, data.buffer.data(),
+                              data.buffer.size(), MSG_DONTWAIT);
+  if (bytes_read <= 0) {
+    if (bytes_read == 0) {
+      debug("Client disconnected during upload");
+    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      debug("No data available yet - keep in reading state");
+      return false;
+    }
+    debug("%s", strerror(errno));
+    perror("recv failed during upload");
+    reset();
+    close(client_fd);
+    SocketUtils::remove_from_poll(client_fd);
+    client_fd = -1; // Mark as closed
+    return false;
+  }
+  // Resize the buffer to the actual amount of data read
+  data.buffer.resize(static_cast<size_t>(bytes_read));
+
+  debug("Received %ld bytes from client", bytes_read);
+  return true;
+}
+
+bool HTTPConnxData::writeUploadToFile() {
+  ssize_t bytes_written =
+      write(file_fd, data.buffer.data(), data.buffer.size());
+  if (bytes_written <= 0) {
+    perror(bytes_written < 0 ? "Failed to write to file"
+                             : "No data written to file");
+    reset();
+    close(client_fd);
+    SocketUtils::remove_from_poll(client_fd);
+    client_fd = -1; // Mark as closed
+    return false;
+  }
+  data.bytes_sent += static_cast<size_t>(bytes_written);
+  debug("Wrote %ld bytes to file", bytes_written);
+  debug("total bytes sent %zu/%zu", data.bytes_sent,
+        data.content_length);
+  data.buffer.clear();
+  return true;
+}
+
+bool HTTPConnxData::finishedSendingSimpleResponse() {
+  data.response.reserve(Constants::BUFFER_SIZE);
+  ssize_t bytes_sent = ::send(client_fd, data.response.c_str(),
+                              data.response.size(), 0);
+  if (bytes_sent < 0) {
+    perror("Failed to send simple response");
+    SocketUtils::remove_from_poll(client_fd);
+    reset();
+    close(client_fd);
+    SocketUtils::remove_from_poll(client_fd);
+    client_fd = -1; // Mark as closed
+    return false;
+  } else if (bytes_sent == 0) {
+    debug("No data sent to client %d", client_fd);
+  } else {
+    debug("Sent %ld bytes to client %d", bytes_sent, client_fd);
+    // defensive programming - handle partial send
+    // Remove sent bytes from buffer
+    data.response.erase(data.response.begin(),
+                             data.response.begin() + bytes_sent);
+    debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
+          data.buffer.size());
+    if (!data.response.empty()) {
+      debug("Still data in response buffer %zu", data.response.size());
+      return false;
+    } else {
+      debug("Finished sending response to client %d", client_fd);
+      state = CONN_INCOMING;
+      reset();
+    }
+  }
+  return true;
+}
+
+bool HTTPConnxData::settingHeadersIfNeeded() {
+  if (!headers_set) {
+    if (!data.response.empty()) {
+      assert(data.response.rfind("HTTP/1.1 ", 0) == 0 &&
+             "Headers must start with 'HTTP/1.1 ");
+      data.buffer.assign(data.response.begin(),
+                              data.response.end());
+      data.response.clear();
+      headers_set = true;
+      debug("Added headers for connection %d", client_fd);
+    } else {
+      SocketUtils::remove_from_poll(client_fd);
+      reset();
+      close(client_fd);
+      SocketUtils::remove_from_poll(client_fd);
+      client_fd = -1; // Mark as closed
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @brief Read new data from the file if the buffer is empty
+ *
+ */
+bool HTTPConnxData::readNewDataFromFile() {
+  // 1. Read new data if buffer is empty (and file not fully read)
+  if (data.buffer.empty() && file_fd != -1) {
+    char read_buf[Constants::BUFFER_SIZE];
+    ssize_t bytes_read = read(file_fd, read_buf, sizeof(read_buf));
+
+    if (bytes_read < 0) {
+      perror("Failed to read file");
+      SocketUtils::remove_from_poll(client_fd);
+      close(client_fd);
+      reset();
+      close(client_fd);
+      SocketUtils::remove_from_poll(client_fd);
+      client_fd = -1; // Mark as closed
+      return false;
+    } else if (bytes_read == 0) {
+      debug("End of file reached for connection %d", client_fd);
+      close(file_fd);
+      file_fd = -1;
+      // keep going, there might be more data in the buffer to send to
+      // client
+    } else {
+      // Append new data to buffer
+      data.buffer.insert(data.buffer.end(), read_buf,
+                              read_buf + bytes_read);
+    }
+  }
+  return true;
+}
+
+bool HTTPConnxData::sendNewDataFromFileToClient() {
+  // 2. Send data from buffer (if any)
+  if (!data.buffer.empty()) {
+    ssize_t bytes_sent = ::send(client_fd, data.buffer.data(),
+                                data.buffer.size(), 0);
+
+    if (bytes_sent < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        debug("Send would block, retrying later");
+        return false; // Poll will retry
+      }
+      perror("Failed to send data");
+      debuglog(RED, "Error during file transfer for connection %d",
+               client_fd);
+      SocketUtils::remove_from_poll(client_fd);
+      reset();
+      close(client_fd);
+      SocketUtils::remove_from_poll(client_fd);
+      client_fd = -1; // Mark as closed
+      return false;
+    } else if (bytes_sent == 0) {
+      debug("No data sent to client %d", client_fd);
+    }
+    // Remove sent bytes from buffer
+    if (bytes_sent > 0) {
+      data.bytes_sent += static_cast<size_t>(bytes_sent);
+      data.buffer.erase(data.buffer.begin(),
+                             data.buffer.begin() + bytes_sent);
+      debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
+            data.buffer.size());
+    }
+  }
+  return true;
+}
+
+/**
+ * @brief Check completion conditions for file transfer
+ *
+ * @param conn The connection data
+ *
+ * This function checks if the file transfer is complete. If the file
+ * descriptor is -1 and the buffer is empty, it means the file has been
+ * sent completely. In this case, it resets the connection and
+ * updates the state to INCOMING.
+ */
+void HTTPConnxData::checkCompletionConditions() {
+  if (file_fd == -1 && data.buffer.empty()) {
+    debug("File sent completely for connection %d", client_fd);
+    debug("File transfer complete for connection %d sent %lu bytes",
+          client_fd, data.bytes_sent);
+    debuglog(YELLOW,
+             "Back to state INCOMING - File transfer complete for "
+             "connection %d",
+             client_fd);
+    reset();
+  }
+}
+
+
+/**
+ * @brief Check for client timeout
+ *
+ * @param conn The connection data
+ * @param current_fd The current file descriptor
+ * 
+ * Since it is  the client that is hanging i thnk it is 
+ * not necessary to send a error message. I just close the connection
+ */
+void HTTPConnxData::check_for_client_timeout() {
+  // check for timeouts
+  if (data.client_timeout == 0) {
+    // first time exiting ther loop without finding the fd
+    data.client_timeout = std::time(NULL);
+  } else {
+    // check if the timeout is reached
+    if (std::time(NULL) - data.client_timeout >
+        Constants::cgi_child_timeout) {
+      debug("Client timeout reached");
+      reset(); // reset the connection data
+      // When detecting a client timeout
+      debuglog(YELLOW, "Closing the connection (fd %d)", client_fd);
+      // here I am in a state where typically the client remains
+      // in POLLOUT and state incoming... I just close the connection
+      close(client_fd);
+      SocketUtils::remove_from_poll(client_fd);
+      client_fd = -1; // Mark as closed
+    }
+  }
+}
+
+/**
+ * @brief Check for child process timeout
+ *
+ * The child timeout is the cgi process timeout. 
+ */
+bool HTTPConnxData::check_for_child_timeout() {
+  debug("checking for child timeout");
+  
+  if (cgiData.child_timeout == 0) {
+    cgiData.child_timeout = std::time(NULL);
+
+  } else {
+    // check if the timeout is reached
+    debug("child timeout %ld", cgiData.child_timeout);
+    if (std::time(NULL) - cgiData.child_timeout >
+        Constants::cgi_child_timeout) {
+      debug("CGI timeout reached");
+      errorStatus = 504;
+      state = CONN_CGI_FINISHED;
+    }
+  }
+  return true;
+}

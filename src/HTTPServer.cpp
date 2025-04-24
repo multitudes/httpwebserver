@@ -9,7 +9,6 @@
 #include "Utils.hpp"
 #include "debug.h"
 #include <algorithm>
-#include <cassert>
 #include <ctime>
 #include <poll.h>
 #include <sys/stat.h>
@@ -99,22 +98,7 @@ int run(std::string configFile) {
     } else if (poll_result == 0) {
       // also a good place to check
       SocketUtils::checkForIdleConnections();
-
-      // ---> Add cleanup here too, after idle check <---
-      std::map<int, HTTPConnxData>::iterator cleanup_it = HTTPServer::connections.begin();
-      while (cleanup_it != HTTPServer::connections.end()) {
-          if (cleanup_it->second.client_fd == -1) {
-              debuglog(YELLOW, "Cleaning up connection object (idle timeout) for originally fd %d", cleanup_it->first);
-              // Assuming reset() was called in checkForIdleConnections before setting fd = -1
-               // C++98 way to erase from map while iterating:
-            std::map<int, HTTPConnxData>::iterator to_erase = cleanup_it; // Store iterator to erase
-            ++cleanup_it; // Advance the main iterator FIRST
-            HTTPServer::connections.erase(to_erase); // Erase the old position
-          } else {
-              ++cleanup_it;
-          }
-      }
-            
+      cleanupClosedConnections();
       continue;
     }
 
@@ -142,37 +126,26 @@ int run(std::string configFile) {
       // Now safely get reference - the connection data is in a map
       // and it has been added in accept. the fd could be an fd cgi and
       // it will return the parent connection data -
-      // debug("getting connection data for fd %d", current_fd);
-      // Now safely get reference to the connection data
-      bool found = false;
-      std::map<int, HTTPConnxData>::iterator conn_it =
-          HTTPServer::connections.find(current_fd);
-      if (conn_it == HTTPServer::connections.end()) {
-        for (std::map<int, HTTPConnxData>::iterator it =
-                 HTTPServer::connections.begin();
-             it != HTTPServer::connections.end(); ++it) {
-          if (it->second.cgiData.cgi_stdin_fd == current_fd ||
-              it->second.cgiData.cgi_stdout_fd == current_fd) {
-            conn_it = it;
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          // Still not found? should not happen
+      // Now safely get reference to the connection data using the new function
+      debug("getting connection data for fd %d", current_fd);
+      HTTPConnxData* conn_ptr = NULL; // Initialize pointer to NULL
+      if (!getConnectionDataByFD(current_fd, conn_ptr)) {
+          // Connection not found for this fd, handle error/cleanup
           debug("FD %d not found in connections - removing", current_fd);
           SocketUtils::remove_from_poll(current_fd);
           close(current_fd);
-          continue; // break to outer loop
-        }
+          continue; // Continue to the next fd in pollfds
       }
-      // debug("found connection data for fd %d", current_fd);
-      HTTPConnxData &conn = conn_it->second;
-      // debug("conn fd %d state %d", conn.client_fd, conn.state);
-      // debug("------ current fd %d and is %s", current_fd,
-      //       (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
-      // debug("poll size %ld", pollfds.size());
-      // debug("number of connections %ld", HTTPServer::connections.size());
+      // If we reach here, conn_ptr is valid and points to the connection data
+      HTTPConnxData &conn = *conn_ptr; // Get a reference for convenience
+
+
+
+      debug("conn fd %d state %d", conn.client_fd, conn.state);
+      debug("------ current fd %d and is %s", current_fd,
+            (pollfds[i].revents & POLLOUT) ? "POLLOUT" : "POLLIN");
+      debug("poll size %ld", pollfds.size());
+      debug("number of connections %ld", HTTPServer::connections.size());
       // Update activity time ONLY when I/O actually happens
       if (pollfds[i].revents & (POLLIN | POLLOUT)) {
         conn.data.lastActivityTime = std::time(NULL);
@@ -205,28 +178,28 @@ int run(std::string configFile) {
         debug("CONN_SIMPLE_RESPONSE fd %d", conn.client_fd);
         debuglog(YELLOW, "Connection fd %d in state SIMPLE_RESPONSE",
                  conn.client_fd);
-        if (!finishedSendingSimpleResponse(conn)) {
+        if (!conn.finishedSendingSimpleResponse()) {
           continue;
         }
       }
 
       /*    -------- FILE REQUEST -----------      */
       if (pollfds[i].revents & POLLOUT && conn.state == CONN_FILE_REQUEST) {
-        // debug("CONN_FILE_REQUEST client fd %d POLLOUT", conn.client_fd);
-        // debuglog(YELLOW, "CONN_FILE_REQUEST client fd %d POLLOUT",
-                //  conn.client_fd);
-        if (!settingHeadersIfNeeded(conn)) {
+        debug("CONN_FILE_REQUEST client fd %d POLLOUT", conn.client_fd);
+        debuglog(YELLOW, "CONN_FILE_REQUEST client fd %d POLLOUT",
+                 conn.client_fd);
+        if (!conn.settingHeadersIfNeeded()) {
           debug("Failed to set headers for connection %d", conn.client_fd);
           debuglog(RED, "Failed to send headers for connection %d",
                    conn.client_fd);
           continue;
         }
-        if (!readNewDataFromFile(conn) || !sendNewDataFromFileToClient(conn)) {
+        if (!conn.readNewDataFromFile() || !conn.sendNewDataFromFileToClient()) {
           debuglog(YELLOW, "cound not send data to client for connection %d",
                    conn.client_fd);
           continue;
         }
-        checkCompletionConditions(conn);
+        conn.checkCompletionConditions();
         continue;
       }
 
@@ -234,7 +207,7 @@ int run(std::string configFile) {
       if (conn.state == CONN_UPLOAD) {
         debuglog(YELLOW, "Connection fd %d in state UPLOAD", conn.client_fd);
         debug("CONN_UPLOAD fd %d", conn.client_fd);
-        if (writingFirstPayloadCompletesUpload(conn)) {
+        if (conn.writingFirstPayloadCompletesUpload()) {
           continue;
         }
         uploadLoop(conn, pollfds[i]);
@@ -242,10 +215,8 @@ int run(std::string configFile) {
 
       /*    -------- CGI FINISHED -----------      */
       if (conn.state == CONN_CGI_FINISHED) {
-        // sanity check
-        if (!conn.cgiData.buffer.empty()) {
-          debug("Buffer not empty! Size: %zu", conn.cgiData.buffer.size());
-        }
+        conn.cgiData.buffer.clear();
+        conn.cgiData.buffer.resize(0);
         if (conn.cgiData.cgi_stdin_fd != -1) {
           SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
         }
@@ -254,6 +225,10 @@ int run(std::string configFile) {
         }
         conn.reset(); // todo check if pid not reset
         // SocketUtils::remove_from_poll(conn.client_fd);
+        if (conn.errorStatus != 0) {
+          Responses::htmlErrorResponse(conn, conn.errorStatus);
+          conn.errorStatus = 0;
+        }
         debug("CGI finished but kept alive %d", conn.client_fd);
         break;
       }
@@ -280,22 +255,14 @@ int run(std::string configFile) {
               // found! reset the timeout
               conn.cgiData.child_timeout = 0;
               // read from client
-              read_from_client_into_buffer(conn);
+              conn.read_from_client_into_buffer();
               break;
             }
           }
           // set the timeout because not found
           //              conn.cgiData.child_timeout = 0;
-          if (conn.cgiData.child_timeout == 0) {
-            conn.cgiData.child_timeout = std::time(NULL);
-          } else {
-            // check if the timeout is reached
-            if (std::time(NULL) - conn.cgiData.child_timeout >
-                Constants::cgi_child_timeout) {
-              debug("CGI timeout reached");
-              conn.state = CONN_CGI_FINISHED;
-              break;
-            }
+          if (conn.check_for_child_timeout()) {
+            break;
           }
         }
 
@@ -306,6 +273,8 @@ int run(std::string configFile) {
           for (size_t j = 0; j < pollfds.size(); j++) {
             if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
                 (pollfds[j].revents & POLLOUT)) {
+              // found! reset the timeout
+              conn.cgiData.child_timeout = 0;
               debug("POLLOUT event on CGI stdin fd %d",
                     conn.cgiData.cgi_stdin_fd);
               conn.cgiData.child_timeout = 0;
@@ -315,20 +284,10 @@ int run(std::string configFile) {
                      // because we found the fd we were looking for
             } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
               // set the timeout because not found
-            if (conn.cgiData.child_timeout == 0) {
-              conn.cgiData.child_timeout = std::time(NULL);
-            } else {
-              // check if the timeout is reached
-              if (std::time(NULL) - conn.cgiData.child_timeout >
-                  Constants::cgi_child_timeout) {
-                debug("CGI timeout reached");
-                conn.state = CONN_CGI_FINISHED;
-                send_critical_error(conn.client_fd, 504);
-                break;
-              }
-            }
           } // end for loop
-
+          if (conn.check_for_child_timeout()) {
+            break;
+          }
           // TODO -cgi timeout - if the loop doesnt find the fd after a while
           // i should break the loop and close the connection
         }
@@ -345,7 +304,7 @@ int run(std::string configFile) {
           debug("cgiData is sending  and client fd %d is POLLOUT",
                 conn.client_fd);
           // before to read from child i check if i have a buffer leftover
-          write_to_client_from_cgi(conn);
+          conn.write_to_client_from_cgi();
 
           // after writing the excess buffer i need to read from the cgi
           for (size_t j = 0; j < pollfds.size(); j++) {
@@ -357,7 +316,7 @@ int run(std::string configFile) {
               // reset timeout
               conn.cgiData.child_timeout = 0;
               // read-write to client from cgi
-              conn.cgiData.buffer.resize(BUFFER_SIZE);
+              conn.cgiData.buffer.resize(Constants::BUFFER_SIZE);
               ssize_t bytes_read =
                   ::read(conn.cgiData.cgi_stdout_fd, &conn.cgiData.buffer[0],
                          conn.cgiData.buffer.size());
@@ -372,8 +331,6 @@ int run(std::string configFile) {
                          conn.cgiData.buffer.c_str());
               if (bytes_read == 0) {
                 debug("CGI process finished");
-                conn.cgiData.buffer.clear();
-                conn.cgiData.buffer.resize(0);
                 conn.state = CONN_CGI_FINISHED;
                 break;
               }
@@ -384,181 +341,38 @@ int run(std::string configFile) {
               if (bytes_written < 0) {
                 perror("Failed to send data to client");
                 conn.state = CONN_CGI_FINISHED;
-                conn.cgiData.buffer.clear();
                 continue;
               } else if (bytes_written == 0) {
                 debuglog(YELLOW, "Wrote 0 bytes to client");
                 conn.state = CONN_CGI_FINISHED;
-                conn.cgiData.buffer.clear();
                 break;
               }
               debug("Sent %ld bytes to client", bytes_written);
-              if (bytes_written < BUFFER_SIZE) {
+              if (bytes_written < Constants::BUFFER_SIZE) {
                 // i finished sending the data to the client
                 // close the read end of the pipe to signal EOF to the CGI
-                debuglog(YELLOW, "Closing read end of pipe");
-                SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-                SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
-
+                debuglog(YELLOW, "Finished sending data to client");
+                debug("Closing read end of pipe");
                 conn.state = CONN_CGI_FINISHED;
               }
               break;
             }
           }
-
-          if (check_for_child_timeout(conn)) {
+          if (conn.check_for_child_timeout()) {
             break;
           }
         }
-
-      } // end of the state cgi check
-
-      check_for_client_timeout(conn);
+      } // end of the state cgi_sending check
+      
+      conn.check_for_client_timeout();
 
     } // end of the main for loop in pollfds
-
-    // ---> Add cleanup here too, after idle check <---
-    std::map<int, HTTPConnxData>::iterator cleanup_it = HTTPServer::connections.begin();
-    while (cleanup_it != HTTPServer::connections.end()) {
-        if (cleanup_it->second.client_fd == -1) {
-            debuglog(YELLOW, "Cleaning up connection object (idle timeout) for originally fd %d", cleanup_it->first);
-            // Assuming reset() was called in checkForIdleConnections before setting fd = -1
-             // C++98 way to erase from map while iterating:
-             std::map<int, HTTPConnxData>::iterator to_erase = cleanup_it; // Store iterator to erase
-             ++cleanup_it; // Advance the main iterator FIRST
-             HTTPServer::connections.erase(to_erase); // Erase the old position
-        } else {
-            ++cleanup_it;
-        }
-    }
-    continue; // Continue to next poll() cycle
+    cleanupClosedConnections();
   }
 
   // Cleanup
   // TODO
   return 0;
-}
-
-bool check_for_child_timeout(HTTPConnxData& conn) {
-  debug("checking for child timeout");
-  
-  if (conn.cgiData.child_timeout == 0) {
-    conn.cgiData.child_timeout = std::time(NULL);
-
-  } else {
-    // check if the timeout is reached
-    debug("child timeout %ld", conn.cgiData.child_timeout);
-    if (std::time(NULL) - conn.cgiData.child_timeout >
-        Constants::cgi_child_timeout) {
-      debug("CGI timeout reached");
-      send_critical_error(conn.client_fd, 504);
-      conn.state = CONN_CGI_FINISHED;
-
-    }
-  }
-  return true;
-}
-
-/**
- * @brief Check for client timeout
- *
- * @param conn The connection data
- * @param current_fd The current file descriptor
- */
-void check_for_client_timeout(HTTPConnxData &conn) {
-  // check for timeouts
-  if (conn.data.client_timeout == 0) {
-    // first time exiting ther loop without finding the fd
-    conn.data.client_timeout = std::time(NULL);
-  } else {
-    // check if the timeout is reached
-    if (std::time(NULL) - conn.data.client_timeout >
-        Constants::cgi_child_timeout) {
-      debug("Client timeout reached");
-      // conn.reset();
-
-      conn.reset(); // reset the connection data
-      // When detecting a client timeout
-      debuglog(YELLOW, "Closing the connection (fd %d)", conn.client_fd);
-      // here I am in a state where typically the client remains
-      // in POLLOUT and state incoming... I just close the connection
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      // will be erased later
-      conn.client_fd = -1; // Mark as closed
-    }
-  }
-}
-
-/**
- * @brief Write the buffer to the client from CGI
- *
- * @param conn The connection data
- * @param current_fd The current file descriptor
- */
-void write_to_client_from_cgi(HTTPConnxData &conn) {
-  if (!conn.cgiData.buffer.empty()) {
-    debug("leftover buffer from cgiData");
-    // write to cgi the buffer if any remaining from the
-    // initialisation
-    ssize_t bytes_written = ::send(conn.client_fd, conn.cgiData.buffer.c_str(),
-                                    conn.cgiData.buffer.size(), MSG_NOSIGNAL);
-    debug("Wrote %ld bytes to client", bytes_written);
-
-    if (bytes_written < 0) {
-      perror("Failed to write to client");
-      debug("Failed to write to client");
-      conn.state = CONN_CGI_FINISHED;
-    } else if (bytes_written == 0) {
-      // Should not happen with blocking write unless size was 0
-      debuglog(YELLOW, "Wrote 0 bytes to client (buffer size: %zu)",
-               conn.cgiData.buffer.size());
-      debuglog(RED, "Wrote 0 bytes to client unexpectedly.");
-      conn.state = CONN_CGI_FINISHED;
-    } else if (static_cast<size_t>(bytes_written) <
-               conn.cgiData.buffer.size()) {
-      // Partial write: Remove written data and wait for next POLLOUT
-      debug("Partial write: Wrote %ld bytes to client (buffer size: %zu)",
-            bytes_written, conn.cgiData.buffer.size());
-      conn.cgiData.buffer.erase(
-          0, static_cast<std::string::size_type>(bytes_written));
-      // stay in the same state, poll will trigger again
-    } else {
-      // Full write (bytes_written == conn.cgiData.buffer.size())
-      debugcolor(MAGENTA, "wrote request buffer to client: %s",
-                 conn.cgiData.buffer.c_str()); // Log data before clearing
-      // TODO check the bytes received
-      conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
-      if (conn.cgiData.bytes_received >= conn.data.content_length) {
-        debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
-        // If we have written all data, clear the buffer
-        conn.cgiData.buffer.clear();
-      }
-    }
-  }
-}
-
-/**
- * @brief Read data from the client into the buffer
- *
- * @param conn The connection data
- * @param current_fd The current file descriptor
- */
-void read_from_client_into_buffer(HTTPConnxData &conn) {
-  conn.cgiData.buffer.resize(BUFFER_SIZE);
-  ssize_t bytes_read =
-      ::recv(conn.client_fd, &conn.cgiData.buffer[0], BUFFER_SIZE, 0);
-  if (bytes_read < 0) {
-    perror("Failed to read from client");
-    conn.state = CONN_CGI_FINISHED;
-  } else if (bytes_read == 0) {
-    debug("Client closed connection - giving EOF to CGI stdin");
-    close(conn.cgiData.cgi_stdin_fd);
-    SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-    conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-    conn.state = CONN_CGI_SENDING;
-  }
-  debug("Received %ld bytes from client", bytes_read);
 }
 
 /**
@@ -846,267 +660,84 @@ bool maxConnectionsCheck(int clientfd) {
   return true;
 }
 
-/**
- * @brief Check if the upload is complete
- *
- * @param conn The connection data
- * @return true if the upload is complete, false otherwise
- *
- * This function checks if the number of bytes sent is greater than or equal to
- * the content length. If so, it resets the connection and sends a response to
- * the client.
+/** 
+ * @brief Upload loop for handling file uploads
+ * 
+ * This function is called when the connection is in the UPLOAD state.
+ * It checks for incoming data from the client and writes it to the file.
+ * If the upload is complete, it calls the uploadComplete function.
  */
-bool uploadComplete(HTTPConnxData &conn) {
-  if (conn.data.bytes_sent >= conn.data.content_length) {
-    debug("Upload complete");
-    conn.reset();
-    Responses::createResponse(conn, "text/plain", "File uploaded successfully.",
-                              201);
-    conn.state = CONN_SIMPLE_RESPONSE;
-    return true;
-  }
-  return false;
-}
-
-/**
- * @brief Check if writing the first payload completes the upload
- *
- * @param conn The connection data
- * @return true if the upload is complete, false otherwise
- *
- * This function checks if there is any leftover payload data from the header
- * parsing. If so, it writes that data to the file and checks if the upload is
- * complete.
- */
-bool writingFirstPayloadCompletesUpload(HTTPConnxData &conn) {
-  if (!conn.data.response.empty()) {
-    debug("Writing leftover payload for connection %d", conn.client_fd);
-    debuglog(YELLOW, "writing leftover payload for client %d", conn.client_fd);
-    ssize_t bytes_written = write(conn.file_fd, conn.data.response.c_str(),
-                                  conn.data.response.size());
-    if (bytes_written <= 0) {
-      perror(bytes_written < 0 ? "Failed to write to file"
-                               : "No data written to file");
-      conn.reset();
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.client_fd = -1; // Mark as closed
-      return true;
-    }
-    conn.data.bytes_sent += static_cast<size_t>(bytes_written);
-    conn.data.response.clear();
-
-    if (uploadComplete(conn)) {
-      return true;
-      ;
-    }
-  }
-  return false;
-}
-
-bool readFromClientForUpload(HTTPConnxData &conn) {
-  conn.data.buffer.resize(BUFFER_SIZE);
-  ssize_t bytes_read = ::recv(conn.client_fd, conn.data.buffer.data(),
-                              conn.data.buffer.size(), MSG_DONTWAIT);
-  if (bytes_read <= 0) {
-    if (bytes_read == 0) {
-      debug("Client disconnected during upload");
-    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      debug("No data available yet - keep in reading state");
-      return false;
-    }
-    debug("%s", strerror(errno));
-    perror("recv failed during upload");
-    conn.reset();
-    close(conn.client_fd);
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.client_fd = -1; // Mark as closed
-    return false;
-  }
-  // Resize the buffer to the actual amount of data read
-  conn.data.buffer.resize(static_cast<size_t>(bytes_read));
-
-  debug("Received %ld bytes from client", bytes_read);
-  return true;
-}
-
-bool writeUploadToFile(HTTPConnxData &conn) {
-  ssize_t bytes_written =
-      write(conn.file_fd, conn.data.buffer.data(), conn.data.buffer.size());
-  if (bytes_written <= 0) {
-    perror(bytes_written < 0 ? "Failed to write to file"
-                             : "No data written to file");
-    conn.reset();
-    close(conn.client_fd);
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.client_fd = -1; // Mark as closed
-    return false;
-  }
-  conn.data.bytes_sent += static_cast<size_t>(bytes_written);
-  debug("Wrote %ld bytes to file", bytes_written);
-  debug("total bytes sent %zu/%zu", conn.data.bytes_sent,
-        conn.data.content_length);
-  conn.data.buffer.clear();
-  return true;
-}
-
-bool finishedSendingSimpleResponse(HTTPConnxData &conn) {
-  conn.data.response.reserve(BUFFER_SIZE);
-  ssize_t bytes_sent = ::send(conn.client_fd, conn.data.response.c_str(),
-                              conn.data.response.size(), 0);
-  if (bytes_sent < 0) {
-    perror("Failed to send simple response");
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.reset();
-    close(conn.client_fd);
-    SocketUtils::remove_from_poll(conn.client_fd);
-    conn.client_fd = -1; // Mark as closed
-    return false;
-  } else if (bytes_sent == 0) {
-    debug("No data sent to client %d", conn.client_fd);
-  } else {
-    debug("Sent %ld bytes to client %d", bytes_sent, conn.client_fd);
-    // defensive programming - handle partial send
-    // Remove sent bytes from buffer
-    conn.data.response.erase(conn.data.response.begin(),
-                             conn.data.response.begin() + bytes_sent);
-    debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
-          conn.data.buffer.size());
-    if (!conn.data.response.empty()) {
-      debug("Still data in response buffer %zu", conn.data.response.size());
-      return false;
-    } else {
-      debug("Finished sending response to client %d", conn.client_fd);
-      conn.state = CONN_INCOMING;
-      conn.reset();
-    }
-  }
-  return true;
-}
-
-bool settingHeadersIfNeeded(HTTPConnxData &conn) {
-  if (!conn.headers_set) {
-    if (!conn.data.response.empty()) {
-      assert(conn.data.response.rfind("HTTP/1.1 ", 0) == 0 &&
-             "Headers must start with 'HTTP/1.1 ");
-      conn.data.buffer.assign(conn.data.response.begin(),
-                              conn.data.response.end());
-      conn.data.response.clear();
-      conn.headers_set = true;
-      debug("Added headers for connection %d", conn.client_fd);
-    } else {
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.reset();
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.client_fd = -1; // Mark as closed
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * @brief Read new data from the file if the buffer is empty
- *
- */
-bool readNewDataFromFile(HTTPConnxData &conn) {
-  // 1. Read new data if buffer is empty (and file not fully read)
-  if (conn.data.buffer.empty() && conn.file_fd != -1) {
-    char read_buf[BUFFER_SIZE];
-    ssize_t bytes_read = read(conn.file_fd, read_buf, sizeof(read_buf));
-
-    if (bytes_read < 0) {
-      perror("Failed to read file");
-      SocketUtils::remove_from_poll(conn.client_fd);
-      close(conn.client_fd);
-      conn.reset();
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.client_fd = -1; // Mark as closed
-      return false;
-    } else if (bytes_read == 0) {
-      debug("End of file reached for connection %d", conn.client_fd);
-      close(conn.file_fd);
-      conn.file_fd = -1;
-      // keep going, there might be more data in the buffer to send to
-      // client
-    } else {
-      // Append new data to buffer
-      conn.data.buffer.insert(conn.data.buffer.end(), read_buf,
-                              read_buf + bytes_read);
-    }
-  }
-  return true;
-}
-
-bool sendNewDataFromFileToClient(HTTPConnxData &conn) {
-  // 2. Send data from buffer (if any)
-  if (!conn.data.buffer.empty()) {
-    ssize_t bytes_sent = ::send(conn.client_fd, conn.data.buffer.data(),
-                                conn.data.buffer.size(), 0);
-
-    if (bytes_sent < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        debug("Send would block, retrying later");
-        return false; // Poll will retry
-      }
-      perror("Failed to send data");
-      debuglog(RED, "Error during file transfer for connection %d",
-               conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.reset();
-      close(conn.client_fd);
-      SocketUtils::remove_from_poll(conn.client_fd);
-      conn.client_fd = -1; // Mark as closed
-      return false;
-    } else if (bytes_sent == 0) {
-      debug("No data sent to client %d", conn.client_fd);
-    }
-    // Remove sent bytes from buffer
-    if (bytes_sent > 0) {
-      conn.data.bytes_sent += static_cast<size_t>(bytes_sent);
-      conn.data.buffer.erase(conn.data.buffer.begin(),
-                             conn.data.buffer.begin() + bytes_sent);
-      // debug("Sent %zd bytes (%zu remaining in buffer)", bytes_sent,
-            // conn.data.buffer.size());
-    }
-  }
-  return true;
-}
-
-/**
- * @brief Check completion conditions for file transfer
- *
- * @param conn The connection data
- *
- * This function checks if the file transfer is complete. If the file
- * descriptor is -1 and the buffer is empty, it means the file has been
- * sent completely. In this case, it resets the connection and
- * updates the state to INCOMING.
- */
-void checkCompletionConditions(HTTPConnxData &conn) {
-  if (conn.file_fd == -1 && conn.data.buffer.empty()) {
-    debug("File sent completely for connection %d", conn.client_fd);
-    debug("File transfer complete for connection %d sent %lu bytes",
-          conn.client_fd, conn.data.bytes_sent);
-    debuglog(YELLOW,
-             "Back to state INCOMING - File transfer complete for "
-             "connection %d",
-             conn.client_fd);
-    conn.reset();
-  }
-}
-
 void uploadLoop(HTTPConnxData &conn, pollfd currentfd) {
   if (currentfd.revents & POLLIN) {
     debug("POLLIN event on upload connection %d", conn.client_fd);
     debuglog(YELLOW, "Handling upload event for connection %d", conn.client_fd);
 
-    if (!readFromClientForUpload(conn) || !writeUploadToFile(conn)) {
+    if (!conn.readFromClientForUpload() || !conn.writeUploadToFile()) {
       return;
     }
-    uploadComplete(conn);
+    conn.uploadComplete();
+  }
+}
+
+
+/**
+ * @brief Finds the connection data associated with a given file descriptor.
+ *
+ * Searches the connections map first by client_fd (the map key).
+ * If not found, iterates through all connections to check if the fd
+ * matches a CGI pipe fd (stdin or stdout).
+ *
+ * @param fd The file descriptor to search for.
+ * @param out_conn_ptr A reference to a pointer. If the connection is found,
+ *                     this pointer will be set to point to the found
+ *                     HTTPConnxData object. Otherwise, it might be NULL.
+ * @return true if a connection associated with the fd was found, false otherwise.
+ */
+bool getConnectionDataByFD(int fd, HTTPConnxData*& out_conn_ptr) {
+  // Try finding by client_fd (map key) first
+  std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(fd);
+  if (conn_it != HTTPServer::connections.end()) {
+      out_conn_ptr = &(conn_it->second); // Set the output pointer
+      return true;                       // Found
+  }
+
+  // If not found by client_fd, check CGI pipe fds
+  for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+       it != HTTPServer::connections.end(); ++it) {
+      if (it->second.cgiData.cgi_stdin_fd == fd ||
+          it->second.cgiData.cgi_stdout_fd == fd) {
+          out_conn_ptr = &(it->second); // Set the output pointer
+          return true;                  // Found
+      }
+  }
+
+  // Not found anywhere
+  out_conn_ptr = NULL; // Explicitly set to NULL if not found
+  return false;
+}
+
+/**
+ * @brief Iterates through the connections map and erases entries marked for removal.
+ *
+ * Connections are marked for removal by setting their client_fd member to -1.
+ * This function safely removes such entries from the global connections map.
+ */
+void cleanupClosedConnections() {
+  std::map<int, HTTPConnxData>::iterator cleanup_it = HTTPServer::connections.begin();
+  while (cleanup_it != HTTPServer::connections.end()) {
+      // Check if the connection is marked for removal
+      if (cleanup_it->second.client_fd == -1) {
+          int original_fd = cleanup_it->first; // Get original fd for logging before erase
+          debuglog(YELLOW, "Erasing connection object marked for removal (originally fd %d)", original_fd);
+          // Ensure reset() was called before setting client_fd = -1
+          // C++98 way to erase from map while iterating:
+          std::map<int, HTTPConnxData>::iterator to_erase = cleanup_it; // Store iterator to erase
+          ++cleanup_it; // Advance the main iterator FIRST
+          HTTPServer::connections.erase(to_erase); // Erase the old position
+      } else {
+          // Move to the next element if not erasing
+          ++cleanup_it;
+      }
   }
 }
 
