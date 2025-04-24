@@ -517,133 +517,48 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
 }
 
 bool findCGIPathAlias(HTTPConnxData &conn) {
-  string cgi_path_alias =
-      conn.config->cgiData.cgi_path_alias.first;
-  string cgi_path = conn.config->cgiData.cgi_path_alias.second;
-
-  // First check if a CGI alias is defined
-  if (cgi_path_alias.empty()) {
-    debuglog(BLUE, "URLMatcher: No CGI alias defined in config.");
-    return false;
-  }
-
-  // here i need to make sure cgi alias is not being substituted incorrectly
-  // ex if the alias is "cgi" -> cgi-bin and i pass cgicgi i will check that it includes the end / 
-  if (conn.data.target == cgi_path_alias || 
-    (conn.data.target.find(CGI::ensureTrailinSlash(cgi_path_alias)) == 0)) { // found CGI alias
-    debuglog(BLUE, "URLMatcher: CGI path alias: '%s' -> '%s'",
-             cgi_path_alias.c_str(), cgi_path.c_str());
-    debuglog(BLUE, "URLMatcher: CGI alias found. Target: %s",
-             conn.data.target.c_str());
-    // TODO, use cgi path
-    conn.urlMatcherData.full_path =
-        cgi_path + conn.data.target.substr(cgi_path_alias.length());
-    conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
-
-    // Simple check - just use the direct mapped path
-    string check_path = conn.config->root + conn.urlMatcherData.full_path;
-    
-    // Debug the paths
-    debuglog(YELLOW, "URLMatcher: Checking CGI paths:");
-    debuglog(YELLOW, "  Target: %s", conn.data.target.c_str());
-    debuglog(YELLOW, "  Mapped: %s", conn.urlMatcherData.full_path.c_str());
-    debuglog(YELLOW, "  Full check path: %s", check_path.c_str());
-    
-    struct stat script_stat;
-    if (stat(check_path.c_str(), &script_stat) != 0 || !S_ISREG(script_stat.st_mode)) {
-        debuglog(RED, "URLMatcher: CGI script not found: %s", check_path.c_str());
-        Responses::htmlErrorResponse(conn, 404);
-        return true;
-    }
-
-    conn.cgiData.script_name = conn.urlMatcherData.full_path;
-    conn.state = CONN_CGI_INCOMING;
-    debug("CGI request detected");
-    // Start CGI process for this connection
-    if (CGI::prepareCGI(conn) < 0) {
-      conn.reset();
-      Responses::createResponse(
-          conn, "text/plain",
-          "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
-       
-      return false;
-    }
-    return true;
-  } else {
-    debuglog(BLUE, "URLMatcher: No CGI alias found.");
-    return false;
-  }
-}
-
-bool findCGIPathAlias(HTTPConnxData &conn) {
-    string cgi_path_alias =
-        conn.config->cgiData.cgi_path_alias.first;
+    // Get CGI path mappings from config
+    string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
     string cgi_path = conn.config->cgiData.cgi_path_alias.second;
 
-    // First check if a CGI alias is defined
     if (cgi_path_alias.empty()) {
-        debuglog(BLUE, "URLMatcher: No CGI alias defined in config.");
         return false;
     }
 
-    // here i need to make sure cgi alias is not being substituted incorrectly
-    // ex if the alias is "cgi" -> cgi-bin and i pass cgicgi i will check that it includes the end / 
     if (conn.data.target == cgi_path_alias || 
-        (conn.data.target.find(CGI::ensureTrailinSlash(cgi_path_alias)) == 0)) { // found CGI alias
-        debuglog(BLUE, "URLMatcher: CGI path alias: '%s' -> '%s'",
-                 cgi_path_alias.c_str(), cgi_path.c_str());
-        debuglog(BLUE, "URLMatcher: CGI alias found. Target: %s",
-                 conn.data.target.c_str());
-        // TODO, use cgi path
-        conn.urlMatcherData.full_path =
-            cgi_path + conn.data.target.substr(cgi_path_alias.length());
-        conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
-
-        // Set clean paths without double slashes
-        string root_path = conn.config->root;
-        if (root_path[root_path.length() - 1] == '/') {
-            root_path = root_path.substr(0, root_path.length() - 1);
-        }
-
-        // Debug path components
-        debuglog(YELLOW, "URLMatcher: Path components:");
-        debuglog(YELLOW, "  Root: %s", root_path.c_str());
-        debuglog(YELLOW, "  CGI path: %s", cgi_path.c_str());
-        debuglog(YELLOW, "  Target: %s", conn.data.target.c_str());
-
-        // Construct paths
-        conn.urlMatcherData.full_path = cgi_path + conn.data.target.substr(cgi_path_alias.length());
-        conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
-        string check_path = root_path + "/" + conn.urlMatcherData.full_path;
-
-        // Debug final path
-        debuglog(YELLOW, "  Final check path: %s", check_path.c_str());
+        (conn.data.target.find(CGI::ensureTrailinSlash(cgi_path_alias)) == 0)) {
         
+        // Map URL path to CGI path
+        string relative_path = conn.data.target.substr(cgi_path_alias.length());
+        conn.urlMatcherData.full_path = cgi_path + relative_path;
+        conn.cgiData.script_name = conn.urlMatcherData.full_path;
+
+        // Build filesystem path for stat check
+        string check_path = conn.config->root;
+        if (!check_path.empty() && check_path[check_path.length() - 1] == '/') {
+            check_path = check_path.substr(0, check_path.length() - 1);
+        }
+        check_path += "/" + conn.urlMatcherData.full_path;
+
+        // Verify script exists and is regular file
         struct stat script_stat;
         if (stat(check_path.c_str(), &script_stat) != 0 || !S_ISREG(script_stat.st_mode)) {
-            debuglog(RED, "URLMatcher: CGI script not found: %s", check_path.c_str());
             Responses::htmlErrorResponse(conn, 404);
             return true;
         }
 
-        conn.cgiData.script_name = conn.urlMatcherData.full_path;
+        // Script exists, execute it
         conn.state = CONN_CGI_INCOMING;
-        debug("CGI request detected");
-        // Start CGI process for this connection
         if (CGI::prepareCGI(conn) < 0) {
             conn.reset();
-            Responses::createResponse(
-                conn, "text/plain",
-                "TODO: Should Call CGI from: " + conn.urlMatcherData.full_path, 200);
-             
-            return false;
+            Responses::createResponse(conn, "text/plain", "Failed to execute CGI script", 500);
+            return true;
         }
         return true;
-    } else {
-        debuglog(BLUE, "URLMatcher: No CGI alias found.");
-        return false;
     }
+    return false;
 }
+
 
 void updateWithLocationBlockConfig(HTTPConnxData &conn) {
   // Check if the server config has any location blocks defined
