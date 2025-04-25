@@ -1046,7 +1046,7 @@ bool HTTPConnxData::sendCgiDataToClient(ssize_t bytes_read) {
 
   debug("Sent %ld bytes to client fd %d", bytes_written, client_fd);
 
-  // TODO might be placed here to revisit this logic.
+  // TODO revisit this logic. without it works on mac... but at school?
   if (static_cast<size_t>(bytes_written) < Constants::BUFFER_SIZE) {
     debuglog(YELLOW, "Finished sending data chunk to client fd %d (based on original logic)", client_fd);
     state = CONN_CGI_FINISHED;
@@ -1062,4 +1062,55 @@ bool HTTPConnxData::sendCgiDataToClient(ssize_t bytes_read) {
   //     // For now, returning true, but this is incomplete for robust partial sends.
   // }
   return true; // Indicate send occurred, state remains CONN_CGI_SENDING
+}
+
+
+/**
+ * @brief Write data to the child process stdin
+ */
+void HTTPConnxData::write_to_child_stdin(int current_fd, int pollfd) {
+  ssize_t bytes_written =
+      ::write(cgiData.cgi_stdin_fd, cgiData.buffer.c_str(),
+              cgiData.buffer.size());
+  debug("Wrote %ld bytes to CGI stdin", bytes_written);
+
+  if (bytes_written < 0) {
+    perror("Failed to write to CGI stdin");
+    debug("Failed to write to CGI stdin");
+    state = CONN_CGI_FINISHED;
+  } else if (bytes_written == 0) {
+    // Should not happen with blocking write unless size was 0
+    debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)",
+             cgiData.buffer.size());
+    debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
+    state = CONN_CGI_FINISHED;
+    cgiData.buffer.clear();
+  } else if (bytes_written < cgiData.buffer.size()) {
+    // Partial write: Remove written data and wait for next POLLOUT
+    debug("Partial write: Wrote %ld bytes to CGI stdin (buffer size: %zu)",
+          bytes_written, cgiData.buffer.size());
+    cgiData.buffer.erase(
+        0, static_cast<std::string::size_type>(bytes_written));
+    cgiData.bytes_received += static_cast<size_t>(bytes_written);
+    // stay in the same state, poll will trigger again
+  } else if (bytes_written == cgiData.buffer.size()) {
+    // Full write (bytes_written == cgiData.buffer.size())
+    debugcolor(MAGENTA, "wrote request buffer to CGI: %s",
+               cgiData.buffer.c_str()); // Log data before clearing
+    cgiData.bytes_received += static_cast<size_t>(bytes_written);
+    cgiData.buffer.clear();
+    debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+  }
+  if (cgiData.bytes_received >= data.content_length) {
+    debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+    // If we have written all data, clear the buffer
+    cgiData.buffer.clear();
+    cgiData.bytes_received = 0;
+    // close the write end of the pipe to signal EOF to the CGI
+    debuglog(YELLOW, "Closing write end of pipe");
+    SocketUtils::remove_from_poll(cgiData.cgi_stdin_fd);
+    close(cgiData.cgi_stdin_fd);
+    cgiData.cgi_stdin_fd = -1; // Mark as closed
+    state = CONN_CGI_SENDING;
+  }
 }

@@ -203,6 +203,7 @@ struct HTTPConnxData {
   bool readFromClientForUpload();
   bool writeUploadToFile();
   bool finishedSendingSimpleResponse();
+  void write_to_child_stdin(int current_fd, int pollfd);
   bool settingHeadersIfNeeded(); 
   bool readNewDataFromFile();
   bool sendNewDataFromFileToClient();

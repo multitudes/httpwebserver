@@ -2,9 +2,13 @@
 #include "Parser.hpp"
 #include "debug.h"
 #include <set>
+#include <string>
+#include <map>
+#include <vector>
 
 using std::vector;
 using std::string;
+using std::map;
 using std::stringstream;
 using std::ifstream;
 
@@ -13,7 +17,7 @@ namespace Parser {
 long starttime = 0;
 
 void parse(string filename, vector<ServerData> &servers,
-           std::map<uint16_t, ServerData *> &port_map_) {
+           map<uint16_t, ServerData *> &port_map_) {
   servers.clear();
   port_map_.clear();
   long starttime = getCurrentTimeMillis();
@@ -730,7 +734,7 @@ long getCurrentTimeMillis() {
 }
 
 void debugprintConfigs(vector<ServerData> &servers,
-                       std::map<uint16_t, ServerData *> port_map_) {
+                       map<uint16_t, ServerData *> port_map_) {
   debuglog(BLUE, "==== Configuration Summary ====");
   debuglog(BLUE, "Total servers: %zu", servers.size());
 
@@ -778,7 +782,7 @@ void debugprintConfigs(vector<ServerData> &servers,
     // Print error pages
     if (!server.error_pages.empty()) {
       debuglog(BLUE, "Error Pages:");
-      std::map<int, string>::const_iterator it;
+      map<int, string>::const_iterator it;
       for (it = server.error_pages.begin(); it != server.error_pages.end();
            ++it) {
         debuglog(BLUE, "  %d: %s", it->first, it->second.c_str());
@@ -788,7 +792,7 @@ void debugprintConfigs(vector<ServerData> &servers,
     // Print location blocks
     if (server.has_locations && !server.location_blocks.empty()) {
       debuglog(BLUE, "Location Blocks (%zu):", server.location_blocks.size());
-      std::map<string, Location>::const_iterator it;
+      map<string, Location>::const_iterator it;
       for (it = server.location_blocks.begin();
            it != server.location_blocks.end(); ++it) {
         const string &path = it->first;
@@ -826,7 +830,7 @@ void debugprintConfigs(vector<ServerData> &servers,
         //  debuglog(BLUE, "    Index: %s", loc.index.c_str());
         // }
         debuglog(BLUE, " PRINTING ERROR PAGES");
-        std::map<int, string>::const_iterator it;
+        map<int, string>::const_iterator it;
         for (it = loc.error_pages.begin(); it != loc.error_pages.end(); ++it) {
           debuglog(BLUE, "    Error Page: %d %s", it->first,
                    it->second.c_str());
@@ -866,7 +870,7 @@ void debugprintConfigs(vector<ServerData> &servers,
   }
 
   debuglog(BLUE, "\nPort Mapping:");
-  std::map<uint16_t, ServerData *>::const_iterator it;
+  map<uint16_t, ServerData *>::const_iterator it;
   for (it = port_map_.begin(); it != port_map_.end(); ++it) {
     size_t serverIndex = static_cast<size_t>(it->second - &servers[0]);
     // Calculate server index
