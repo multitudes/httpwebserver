@@ -48,6 +48,7 @@ SRCS 			+= $(addprefix $(SRC_DIR), Constants.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), URLMatcher.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), Responses.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), Parser.cpp)
+SRCS 			+= $(addprefix $(SRC_DIR), Utils.cpp)
 
 OBJS 			= $(patsubst $(SRC_DIR)%.cpp,$(OBJ_DIR)%.o,$(SRCS))
 HDRS 			= $(addprefix $(INCLUDE_DIR), debug.h )

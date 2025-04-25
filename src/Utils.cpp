@@ -61,4 +61,18 @@ string trim(const string &str) {
   return trimmed.substr(start, end - start + 1);
 }
 
+string ensureTrailinSlash(string path) {
+  if (!path.empty() && *path.rbegin() != '/') {
+    path += '/';
+  }
+  return path;
+}
+
+string removeLeadingSlash(string path) {
+  if (!path.empty() && *path.begin() == '/') {
+    path.erase(0, 1);
+  }
+  return path;
+}
+
 } // namespace Utils

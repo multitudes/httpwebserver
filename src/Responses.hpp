@@ -2,7 +2,6 @@
 
 #include "HTTPConnxData.hpp"
 
-
 using std::string;
 
 namespace Responses {
