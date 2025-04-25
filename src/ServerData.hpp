@@ -6,6 +6,13 @@
 #include <utility>
 #include <vector>
 
+/* ---- All data structs here are used to contain the parsed config */
+
+/**
+ * @brief CGIData struct for the cgi location in the server block
+ * 
+ * It defaults the accepted methods to GET, POST, DELETE, and PUT
+ */
 struct CGIData {
   std::pair<std::string, std::string> cgi_path_alias;
   std::string upload_dir;
@@ -20,6 +27,13 @@ struct CGIData {
   }
 };
 
+/**
+ * @brief Location struct for the location blocks in the server block
+ * 
+ * We can have a location block used as uplod directory, autoindex, with a different root,
+ * accepted methods, return directive.
+ * CGI is handles separately. 
+ */
 struct Location {
   std::string upload_dir;
   bool autoindex;
