@@ -6,6 +6,10 @@
 #include "Utils.hpp"
 #include "debug.h"
 
+using std::string;
+using std::vector;
+using std::map;
+
 namespace CGI {
 
 // Start a CGI process for a connection
@@ -30,6 +34,11 @@ int prepareCGI(HTTPConnxData &conn) {
       ::close(conn.cgiData.child_stdout_pipe[1]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[1]);
       conn.cgiData.child_stdout_pipe[1] = -1;
+  }
+  // kill the previous child process if it exists
+  if (conn.cgiData.child_pid != -1) {
+    HTTPServer::terminatedPids.insert(conn.cgiData.child_pid);
+    conn.cgiData.child_pid = -1;
   }
 
   setCGIEnv(conn);
@@ -80,22 +89,22 @@ int prepareCGI(HTTPConnxData &conn) {
     // not use the const_cast in the same way
     char **envArray = new char *[conn.cgiData.env.size() + 1];
     int i = 0;
-    for (std::map<std::string, std::string>::const_iterator it =
+    for (map<string, string>::const_iterator it =
              conn.cgiData.env.begin();
          it != conn.cgiData.env.end(); ++it, ++i) {
-      std::string envEntry = it->first + "=" + it->second;
+      string envEntry = it->first + "=" + it->second;
       envArray[i] = new char[envEntry.size() + 1];
       std::strcpy(envArray[i], envEntry.c_str());
     }
     envArray[i] = NULL;
 
-    std::string script_path = removeLeadingSlash(ensureTrailinSlash(
-                                  conn.urlMatcherData.config->root)) +
-                              removeLeadingSlash(conn.urlMatcherData.full_path);
+    string script_path = Utils::removeLeadingSlash(Utils::ensureTrailinSlash(
+                                  conn.config->root)) +
+                              Utils::removeLeadingSlash(conn.urlMatcherData.full_path);
     debug("CGI script_path: %s", script_path.c_str());
 
     // Prepare arguments
-    std::vector<char *> args;
+    vector<char *> args;
     args.push_back(const_cast<char *>(script_path.c_str()));
     args.push_back(NULL);
 
@@ -121,6 +130,8 @@ int prepareCGI(HTTPConnxData &conn) {
     // for clarity I will assign the fds to the connection data cgi
     conn.cgiData.cgi_stdin_fd = conn.cgiData.child_stdin_pipe[1];
     conn.cgiData.cgi_stdout_fd = conn.cgiData.child_stdout_pipe[0];
+    debug("CGI stdin fd: %d", conn.cgiData.cgi_stdin_fd);
+    debug("CGI stdout fd: %d", conn.cgiData.cgi_stdout_fd);
     // assign the fds to the connection data
     if (conn.data.method == "GET" || (conn.data.content_length == 0)) {
       // No data to send to CGI stdin, close the write end of the pipe
@@ -179,8 +190,8 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set query string to %s", conn.cgiData.env["QUERY_STRING"].c_str());
 
   string path_translated =
-      ensureTrailinSlash(conn.urlMatcherData.config->root) +
-      removeLeadingSlash(conn.cgiData.path_info);
+      Utils::ensureTrailinSlash(conn.config->root) +
+      Utils::removeLeadingSlash(conn.cgiData.path_info);
   conn.cgiData.env["PATH_TRANSLATED"] = path_translated;
   debug("set path translated to %s",
         conn.cgiData.env["PATH_TRANSLATED"].c_str());
@@ -214,20 +225,6 @@ void setCGIEnv(HTTPConnxData &conn) {
   debug("set remote user to %s", conn.cgiData.env["REMOTE_USER"].c_str());
   conn.cgiData.env["AUTH_TYPE"] = "N/A";
   debug("set auth type to %s", conn.cgiData.env["AUTH_TYPE"].c_str());
-}
-
-std::string ensureTrailinSlash(std::string path) {
-  if (!path.empty() && *path.rbegin() != '/') {
-    path += '/';
-  }
-  return path;
-}
-
-std::string removeLeadingSlash(std::string path) {
-  if (!path.empty() && *path.begin() == '/') {
-    path.erase(0, 1);
-  }
-  return path;
 }
 
 } // namespace CGI

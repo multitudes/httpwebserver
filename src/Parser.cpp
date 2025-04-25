@@ -2,6 +2,15 @@
 #include "Parser.hpp"
 #include "debug.h"
 #include <set>
+#include <string>
+#include <map>
+#include <vector>
+
+using std::vector;
+using std::string;
+using std::map;
+using std::stringstream;
+using std::ifstream;
 
 namespace Parser {
 
@@ -37,9 +46,9 @@ std::string OpenReadConfigFile(std::string filename)
   }
 
   // Read entire file into a string
-  std::stringstream buffer;
+  stringstream buffer;
   buffer << configFile.rdbuf();
-  std::string content = buffer.str();
+  string content = buffer.str();
   configFile.close();
   return content;
 }
@@ -47,17 +56,17 @@ std::string OpenReadConfigFile(std::string filename)
 std::string abstratHttpContent(std::string content)
 {
   size_t httpStart = content.find("http {");
-  if (httpStart == std::string::npos) {
+  if (httpStart == string::npos) {
     throw std::runtime_error("No http block found in configuration");
   }
 
   size_t httpEnd =
       findClosingBrace(content, httpStart + 6); // +6 to skip "http {"
-  if (httpEnd == std::string::npos) {
+  if (httpEnd == string::npos) {
     throw std::runtime_error("Unclosed http block in configuration");
   }
   // Extract HTTP block content
-  std::string httpContent =
+  string httpContent =
       content.substr(httpStart + 6, httpEnd - (httpStart + 6));
       return httpContent; 
 }
@@ -192,7 +201,7 @@ std::string abstractErrorPageBlock(std::string &trimmedLine, const std::string &
 void parseErrorPageBlock(const std::string &blockContent,
                          BaseConf &baseConfig) {
   std::istringstream iss(blockContent);
-  std::string line;
+  string line;
 
   while (std::getline(iss, line)) {
     std::string trimmedLine = trimLine(line);
@@ -201,11 +210,11 @@ void parseErrorPageBlock(const std::string &blockContent,
     }
     // Extract the first part as the error code (3-digit number)
     size_t spacePos = trimmedLine.find_first_of(" \t");
-    if (spacePos == std::string::npos)
+    if (spacePos == string::npos)
       continue;
 
     // Get the error code (should be 3 digits)
-    std::string errorCodeStr = trimmedLine.substr(0, spacePos);
+    string errorCodeStr = trimmedLine.substr(0, spacePos);
     if (errorCodeStr.length() != 3 || !isdigit(errorCodeStr[0]) ||
         !isdigit(errorCodeStr[1]) || !isdigit(errorCodeStr[2])) {
       debuglog(RED, "Invalid error code format: %s", errorCodeStr.c_str());
@@ -322,7 +331,7 @@ void addServerIfValid(std::vector<ServerData> &servers, ServerData &serverData, 
 void parseServerBlock(const std::string &serverBlockContent,
   ServerData &serverData, std::set<int> &portset) {
   std::istringstream iss(serverBlockContent);
-  std::string line;
+  string line;
 
   while (std::getline(iss, line)) {
     std::string trimmedLine = trimLine(line);
@@ -406,12 +415,12 @@ void parseServerName(std::string &trimmedLine, ServerData &serverData){
   size_t nameStart = trimmedLine.find_first_not_of(" \t", 11);
       size_t nameEnd = trimmedLine.find(';', nameStart);
 
-      if (nameEnd != std::string::npos) {
-        std::string serverNames =
+      if (nameEnd != string::npos) {
+        string serverNames =
             trimmedLine.substr(nameStart, nameEnd - nameStart);
 
         std::istringstream nameStream(serverNames);
-        std::string name;
+        string name;
 
         // Read each name separated by whitespace
         while (nameStream >> name) {
@@ -425,8 +434,8 @@ void parseServerIndax(std::string &trimmedLine, ServerData &serverData){
   size_t valueStart = trimmedLine.find_first_not_of(" \t", 5);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         if (value == "on") {
           serverData.autoindex = true;
@@ -532,7 +541,7 @@ std::string extractLocationContent(const std::string &serverBlockContent,
 void parseLocationBlock(const std::string &locationContent, Location &location,
                         ServerData &serverData) {
   std::istringstream iss(locationContent);
-  std::string line;
+  string line;
 
   initBasicVariables(location, serverData);
   
@@ -626,8 +635,8 @@ void parseLocationFileUpload(std::string &trimmedLine, Location &location) {
   size_t valueStart = trimmedLine.find_first_not_of(" \t", 11);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         if (value == "on") {
           location.file_upload = true;
@@ -640,8 +649,8 @@ void parseLocationUploadDir(std::string trimmedLine, Location &location){
   size_t valueStart = trimmedLine.find_first_not_of(" \t", 10);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         if (value[value.length() - 1] != '/') {
           value += '/';
@@ -724,7 +733,7 @@ std::string extractCgiBlockContent(const std::string &line,
 
 void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
   std::istringstream iss(cgiContent);
-  std::string line;
+  string line;
 
   while (std::getline(iss, line)) {
     std::string trimmedLine = trimLine(line);
@@ -747,15 +756,15 @@ void parseCgiPathAlias(std::string &trimmedLine, CGIData &cgiConfig){
   size_t valueStart = trimmedLine.find_first_not_of(" \t", 14);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      std::string value;
-      if (valueEnd != std::string::npos) {
+      string value;
+      if (valueEnd != string::npos) {
         value = trimmedLine.substr(valueStart, valueEnd - valueStart);
       } else {
         value = trimmedLine.substr(valueStart);
       }
 
       std::istringstream pathStream(value);
-      std::string path, alias;
+      string path, alias;
 
       pathStream >> path >> alias;
       if (!alias.empty() && alias[0] == '"' && alias[alias.size() - 1] == '"') {
@@ -770,8 +779,8 @@ void parseCgiUploadDir(std::string &trimmedLine, CGIData &cgiConfig){
   size_t valueStart = trimmedLine.find_first_not_of(" \t", 10);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      std::string value;
-      if (valueEnd != std::string::npos) {
+      string value;
+      if (valueEnd != string::npos) {
         value = trimmedLine.substr(valueStart, valueEnd - valueStart);
       } else {
         value = trimmedLine.substr(valueStart);
@@ -832,7 +841,7 @@ void parseCGIAcceptedMethods(std::string &trimmedLine,CGIData &cgiConfig){
 }
 
 
-size_t findClosingBrace(const std::string &content, size_t start) {
+size_t findClosingBrace(const string &content, size_t start) {
   int braceCount = 1;
   for (size_t i = start; i < content.length(); ++i) {
     if (content[i] == '{') {
@@ -844,7 +853,7 @@ size_t findClosingBrace(const std::string &content, size_t start) {
       }
     }
   }
-  return std::string::npos;
+  return string::npos;
 }
 
 template <typename T>

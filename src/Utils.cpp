@@ -40,6 +40,16 @@ char *binToHex(const unsigned char *input, size_t len) {
   return (result);
 }
 
+/**
+ * @brief Trim leading and trailing whitespace from a string
+ *
+ * @param str The string to trim
+ * @return A new string with leading and trailing whitespace removed
+ *
+ * This function removes leading and trailing whitespace characters from the
+ * input string. It uses find_first_not_of and find_last_not_of to locate the
+ * first and last non-whitespace characters, respectively.
+ */
 string trim(const string &str) {
   string trimmed = str;
   string whitespaces = " \r\n\t";
@@ -49,6 +59,20 @@ string trim(const string &str) {
   }
   size_t end = trimmed.find_last_not_of(whitespaces);
   return trimmed.substr(start, end - start + 1);
+}
+
+string ensureTrailinSlash(string path) {
+  if (!path.empty() && *path.rbegin() != '/') {
+    path += '/';
+  }
+  return path;
+}
+
+string removeLeadingSlash(string path) {
+  if (!path.empty() && *path.begin() == '/') {
+    path.erase(0, 1);
+  }
+  return path;
 }
 
 } // namespace Utils
