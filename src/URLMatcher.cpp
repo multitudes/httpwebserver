@@ -468,7 +468,16 @@ bool isAllowedCGIExtension(const HTTPConnxData &conn, const string &path) {
         return false;
     }
 
-    string extension = path.substr(dot_pos);
+    // Find the next slash or question mark after the dot
+    size_t end_pos = path.find_first_of("/?", dot_pos);
+    // If no slash or question mark found, use the whole remaining string
+    string extension;
+    if (end_pos == string::npos) {
+        extension = path.substr(dot_pos);
+    } else {
+        extension = path.substr(dot_pos, end_pos - dot_pos);
+    }
+
     for (std::vector<std::string>::const_iterator it = conn.config->cgiData.cgi_extensions.begin();
          it != conn.config->cgiData.cgi_extensions.end(); ++it) {
         if (*it == extension) {
