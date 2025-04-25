@@ -23,7 +23,7 @@ namespace Parser {
 
 extern long starttime;
 
-void parse(string filename, vector<ServerData> &servers,
+void parse(std::string filename, std::vector<ServerData> &servers,
            std::map<uint16_t, ServerData *> &port_map_);
            
 std::string OpenReadConfigFile(std::string filename);
