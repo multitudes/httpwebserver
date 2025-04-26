@@ -268,28 +268,38 @@ ParseStatus HTTPConnxData::parseRequestLine(const string &line) {
       data.target = data.target.substr(0, slash_after_ext);
     }
   }
-
   return HEADERS_PARSE_SUCCESS;
 }
 
+/**
+ * @brief Parse a single header line
+ *
+ * @param line The header line to parse
+ * @return ParseStatus indicating success or failure
+ * 
+ * This is assuming that the header line is in the format "Key: Value"
+ */
 ParseStatus HTTPConnxData::parseHeaderLine(const string &line) {
   size_t delimiter = line.find(":");
   if (delimiter == string::npos) {
     debugcolor(RED, "Invalid header line: %s", line.c_str());
     return HEADERS_PARSE_ERROR;
   }
-
   string key = trim(line.substr(0, delimiter));
   string value = trim(line.substr(delimiter + 1));
-
   if (key == "Cookie") {
     return parseCookies(value);
   }
-
   data.headers[key] = value;
   return HEADERS_PARSE_SUCCESS;
 }
 
+/**
+ * @brief Parse cookies from the Cookie header
+ *
+ * @param cookieHeader The Cookie header string
+ * @return ParseStatus indicating success or failure
+ */
 ParseStatus HTTPConnxData::parseCookies(const string &cookieHeader) {
   std::istringstream cookieStream(cookieHeader);
   string cookiePair;
@@ -307,6 +317,9 @@ ParseStatus HTTPConnxData::parseCookies(const string &cookieHeader) {
   return HEADERS_PARSE_SUCCESS;
 }
 
+/**
+ * * @brief Extract the port from the Host header
+ */
 ParseStatus HTTPConnxData::extractPortFromHost(string &host,
                                                uint16_t &port) {
   size_t colon_pos = host.find(':');
@@ -315,21 +328,17 @@ ParseStatus HTTPConnxData::extractPortFromHost(string &host,
     debuglog(RED, "No port specified in Host header");
     return HEADERS_PARSE_ERROR;
   }
-
   // Extract port substring
   string port_str = host.substr(colon_pos + 1);
   host = host.substr(0, colon_pos); // Remove port from host string
-
   // Convert port
   char *endptr;
-  long port_long = strtol(port_str.c_str(), &endptr, 10);
-
+  long port_long = ::strtol(port_str.c_str(), &endptr, 10);
   // Validate conversion
   if (*endptr != '\0') {
     debuglog(RED, "Port contains non-numeric characters: %s", port_str.c_str());
     return HEADERS_PARSE_ERROR;
   }
-
   // Validate range
   if (port_long < 1 || port_long > 65535) { // Port 0 is reserved
     debuglog(RED, "Port out of range (1-65535): %ld", port_long);
@@ -341,6 +350,9 @@ ParseStatus HTTPConnxData::extractPortFromHost(string &host,
   return HEADERS_PARSE_SUCCESS;
 }
 
+/**
+ * @brief Process content-related headers
+ */
 ParseStatus HTTPConnxData::processContentHeaders() {
   // Process Host header
   if (!checkHeader("Host", data.host)) {
@@ -428,6 +440,9 @@ ParseStatus HTTPConnxData::processContentHeaders() {
   return HEADERS_PARSE_SUCCESS;
 }
 
+/**
+ * * @brief Parse the headers of the HTTP request
+ */
 ParseStatus HTTPConnxData::parseHeaders() {
   if (data.request.empty()) {
     debug("Empty request received");
@@ -507,12 +522,10 @@ string HTTPConnxData::formatConnectionData() {
   oss << " hdrs=" << data.headers.size() << " cookies=" << data.cookies.size();
 
   // Response state
-  oss << " status=" << data.response_status << " sent=" << data.bytes_sent
-      << "/" << (data.response_body.empty() ? 0 : data.response_body.length());
+  oss << " status=" << data.response_status << " sent=" << data.bytes_sent;
 
   // Flags at the end
   oss << (data.headers_received ? " HDRS_RCVD" : "")
-      << (data.headers_set ? " HDRS_SENT" : "")
       << (data.response_sent ? " RESP_SENT" : "");
 
   oss << "}";
@@ -584,7 +597,6 @@ string HTTPConnxData::formatConnectionDataLong() {
   // Response info
   oss << ", response_status=" << data.response_status;
   oss << ", bytes_sent=" << data.bytes_sent;
-  oss << ", headers_set=" << (data.headers_set ? "true" : "false");
   oss << ", sending_response=" << (data.sending_response ? "true" : "false");
   oss << ", response_sent=" << (data.response_sent ? "true" : "false");
 
@@ -617,7 +629,9 @@ string HTTPConnxData::formatConnectionDataLong() {
 
 // SESSION MANAGEMENT FUNCTIONS---------------------------------Rufus
 
-// Generate a unique session ID using timestamp
+/**
+ * @brief Generate a unique session ID using timestamp and process ID
+ */
 string HTTPConnxData::generateSessionId() {
   // Get current time
   time_t now = time(NULL);
@@ -630,7 +644,9 @@ string HTTPConnxData::generateSessionId() {
   return ss.str();
 }
 
-// Create a new session for the current connection
+/**
+ * * @brief Create a new session for the current connection
+ */
 void HTTPConnxData::createSession() {
   data.session_id = generateSessionId();
   data.has_session = true;
@@ -644,7 +660,9 @@ void HTTPConnxData::createSession() {
   data.response_headers += cookie;
 }
 
-// Try to retrieve session from cookies
+/**
+ * @brief Try to retrieve session from cookies
+ */
 bool HTTPConnxData::retrieveSession() {
   // Check if we already have a session for this connection
   if (data.has_session && !data.session_id.empty()) {
@@ -737,6 +755,9 @@ bool HTTPConnxData::writingFirstPayloadCompletesUpload() {
   return false;
 }
 
+/**
+ * @brief Read data from the client for upload
+ */
 bool HTTPConnxData::readFromClientForUpload() {
   data.buffer.resize(Constants::BUFFER_SIZE);
   ssize_t bytes_read = ::recv(client_fd, data.buffer.data(),
@@ -763,6 +784,9 @@ bool HTTPConnxData::readFromClientForUpload() {
   return true;
 }
 
+/**
+ * @brief Write the upload data to the file
+ */
 bool HTTPConnxData::writeUploadToFile() {
   ssize_t bytes_written =
       write(file_fd, data.buffer.data(), data.buffer.size());
@@ -783,17 +807,18 @@ bool HTTPConnxData::writeUploadToFile() {
   return true;
 }
 
+/**
+ * @brief Send a simple response to the client
+ *
+ * @return true if the response was sent successfully, false otherwise
+ */
 bool HTTPConnxData::finishedSendingSimpleResponse() {
   data.response.reserve(Constants::BUFFER_SIZE);
   ssize_t bytes_sent = ::send(client_fd, data.response.c_str(),
                               data.response.size(), 0);
   if (bytes_sent < 0) {
     perror("Failed to send simple response");
-    SocketUtils::remove_from_poll(client_fd);
-    reset();
-    close(client_fd);
-    SocketUtils::remove_from_poll(client_fd);
-    client_fd = -1; // Mark as closed
+    close_conn_after_error();
     return false;
   } else if (bytes_sent == 0) {
     debug("No data sent to client %d", client_fd);
@@ -817,6 +842,23 @@ bool HTTPConnxData::finishedSendingSimpleResponse() {
   return true;
 }
 
+/**
+ * @brief Util function to close the connection after an error
+ * mostly used in case of failed send or read
+ */
+void HTTPConnxData::close_conn_after_error() {
+  SocketUtils::remove_from_poll(client_fd);
+  reset();
+  close(client_fd);
+  SocketUtils::remove_from_poll(client_fd);
+  client_fd = -1; // Mark as closed
+}
+
+/**
+ * @brief Response headers are set if not already in place
+ * 
+ * Also checks for the presence of the HTTP/1.1 header
+ */
 bool HTTPConnxData::settingHeadersIfNeeded() {
   if (!headers_set) {
     if (!data.response.empty()) {
@@ -828,11 +870,7 @@ bool HTTPConnxData::settingHeadersIfNeeded() {
       headers_set = true;
       debug("Added headers for connection %d", client_fd);
     } else {
-      SocketUtils::remove_from_poll(client_fd);
-      reset();
-      close(client_fd);
-      SocketUtils::remove_from_poll(client_fd);
-      client_fd = -1; // Mark as closed
+      close_conn_after_error();
       return false;
     }
   }
@@ -851,12 +889,7 @@ bool HTTPConnxData::readNewDataFromFile() {
 
     if (bytes_read < 0) {
       perror("Failed to read file");
-      SocketUtils::remove_from_poll(client_fd);
-      close(client_fd);
-      reset();
-      close(client_fd);
-      SocketUtils::remove_from_poll(client_fd);
-      client_fd = -1; // Mark as closed
+      close_conn_after_error();
       return false;
     } else if (bytes_read == 0) {
       debug("End of file reached for connection %d", client_fd);
@@ -880,18 +913,10 @@ bool HTTPConnxData::sendNewDataFromFileToClient() {
                                 data.buffer.size(), 0);
 
     if (bytes_sent < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        debug("Send would block, retrying later");
-        return false; // Poll will retry
-      }
       perror("Failed to send data");
       debuglog(RED, "Error during file transfer for connection %d",
                client_fd);
-      SocketUtils::remove_from_poll(client_fd);
-      reset();
-      close(client_fd);
-      SocketUtils::remove_from_poll(client_fd);
-      client_fd = -1; // Mark as closed
+      close_conn_after_error();
       return false;
     } else if (bytes_sent == 0) {
       debug("No data sent to client %d", client_fd);
@@ -951,14 +976,11 @@ void HTTPConnxData::check_for_client_timeout() {
     if (std::time(NULL) - data.client_timeout >
         Constants::cgi_child_timeout) {
       debug("Client timeout reached");
-      reset(); // reset the connection data
       // When detecting a client timeout
       debuglog(YELLOW, "Closing the connection (fd %d)", client_fd);
       // here I am in a state where typically the client remains
       // in POLLOUT and state incoming... I just close the connection
-      close(client_fd);
-      SocketUtils::remove_from_poll(client_fd);
-      client_fd = -1; // Mark as closed
+      close_conn_after_error();
     }
   }
 }
@@ -1024,7 +1046,7 @@ bool HTTPConnxData::sendCgiDataToClient(ssize_t bytes_read) {
 
   debug("Sent %ld bytes to client fd %d", bytes_written, client_fd);
 
-  // TODO might be placed here to revisit this logic.
+  // TODO revisit this logic. without it works on mac... but at school?
   if (static_cast<size_t>(bytes_written) < Constants::BUFFER_SIZE) {
     debuglog(YELLOW, "Finished sending data chunk to client fd %d (based on original logic)", client_fd);
     state = CONN_CGI_FINISHED;
@@ -1040,4 +1062,55 @@ bool HTTPConnxData::sendCgiDataToClient(ssize_t bytes_read) {
   //     // For now, returning true, but this is incomplete for robust partial sends.
   // }
   return true; // Indicate send occurred, state remains CONN_CGI_SENDING
+}
+
+
+/**
+ * @brief Write data to the child process stdin
+ */
+void HTTPConnxData::write_to_child_stdin(int current_fd, int pollfd) {
+  ssize_t bytes_written =
+      ::write(cgiData.cgi_stdin_fd, cgiData.buffer.c_str(),
+              cgiData.buffer.size());
+  debug("Wrote %ld bytes to CGI stdin", bytes_written);
+
+  if (bytes_written < 0) {
+    perror("Failed to write to CGI stdin");
+    debug("Failed to write to CGI stdin");
+    state = CONN_CGI_FINISHED;
+  } else if (bytes_written == 0) {
+    // Should not happen with blocking write unless size was 0
+    debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)",
+             cgiData.buffer.size());
+    debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
+    state = CONN_CGI_FINISHED;
+    cgiData.buffer.clear();
+  } else if (bytes_written < cgiData.buffer.size()) {
+    // Partial write: Remove written data and wait for next POLLOUT
+    debug("Partial write: Wrote %ld bytes to CGI stdin (buffer size: %zu)",
+          bytes_written, cgiData.buffer.size());
+    cgiData.buffer.erase(
+        0, static_cast<std::string::size_type>(bytes_written));
+    cgiData.bytes_received += static_cast<size_t>(bytes_written);
+    // stay in the same state, poll will trigger again
+  } else if (bytes_written == cgiData.buffer.size()) {
+    // Full write (bytes_written == cgiData.buffer.size())
+    debugcolor(MAGENTA, "wrote request buffer to CGI: %s",
+               cgiData.buffer.c_str()); // Log data before clearing
+    cgiData.bytes_received += static_cast<size_t>(bytes_written);
+    cgiData.buffer.clear();
+    debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+  }
+  if (cgiData.bytes_received >= data.content_length) {
+    debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
+    // If we have written all data, clear the buffer
+    cgiData.buffer.clear();
+    cgiData.bytes_received = 0;
+    // close the write end of the pipe to signal EOF to the CGI
+    debuglog(YELLOW, "Closing write end of pipe");
+    SocketUtils::remove_from_poll(cgiData.cgi_stdin_fd);
+    close(cgiData.cgi_stdin_fd);
+    cgiData.cgi_stdin_fd = -1; // Mark as closed
+    state = CONN_CGI_SENDING;
+  }
 }

@@ -20,11 +20,10 @@
 #include "SocketUtils.hpp"
 #include "debug.h"
 
-
-
 using std::map;
 using std::string;
 using std::vector;
+using std::set;
 
 namespace HTTPServer {
 /**
@@ -42,19 +41,18 @@ namespace HTTPServer {
  * http://localhost:4244
  */
 
-typedef std::vector<struct pollfd> PollfdsVector;
+typedef vector<struct pollfd> PollfdsVector;
 
 extern PollfdsVector pollfds;
-extern std::vector<int> serverSockets;
-extern std::map<int, HTTPConnxData> connections;
+extern vector<int> serverSockets;
+extern map<int, HTTPConnxData> connections;
 extern vector<ServerData> configs_;
-extern std::set<pid_t> terminatedPids;
+extern set<pid_t> terminatedPids;
 
-int run(std::string configFile);
-bool not_found(int current_fd, bool found);
+int run(string configFile);
 void createServerSockets(const vector<ServerData> &configs,
                          vector<int> &serverSockets);
-void reloadConfigFile(std::string configFile, vector<int> &serverSockets,
+void reloadConfigFile(string configFile, vector<int> &serverSockets,
                       vector<ServerData> &configs_);
 bool reload(string configFile, long currentTime);
 bool checkPollErrors(pollfd fd);
@@ -64,7 +62,7 @@ void setSendRecTimeout(int clientfd);
 bool maxConnectionsCheck(int clientfd);
 void send_critical_error(int fd, int code); 
 void uploadLoop(HTTPConnxData &conn, pollfd currentfd);
-void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd);
 bool getConnectionDataByFD(int fd, HTTPConnxData*& out_conn_ptr);
 void cleanupClosedConnections();
+
 } // namespace HTTPServer

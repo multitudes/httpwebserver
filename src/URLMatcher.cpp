@@ -1,12 +1,12 @@
 #include "URLMatcher.hpp"
-#include "SocketUtils.hpp"
-#include "HTTPServer.hpp"
 #include "CGI.hpp"
 #include "Config.hpp" // For Config::getConfigByPort()
 #include "Constants.hpp"
 #include "DirectoryListing.hpp"
 #include "HTTPConnxData.hpp"
+#include "HTTPServer.hpp"
 #include "Responses.hpp"
+#include "SocketUtils.hpp"
 #include "Utils.hpp"
 #include "debug.h"
 #include <algorithm>
@@ -26,184 +26,187 @@ namespace URLMatcher {
  * @param conn The connection data structure.
  */
 void validateRequest(HTTPConnxData &conn) {
-    if (!receiveAndParseRequest(conn))
-        return;
-    
-    conn.config = Config::getConfigByPort(conn.data.port);
-    
-    if (!handleChunkedData(conn))
-        return;
+  if (!receiveAndParseRequest(conn))
+    return;
 
-    if (handleCookieUpdateRequest(conn))
-        return;
+  conn.config = Config::getConfigByPort(conn.data.port);
 
-    if (!getConfigSetURLMatcherData(conn))
-        return;
+  if (!handleChunkedData(conn))
+    return;
 
-    if (findCGIPathAlias(conn))
-        return;
+  if (handleCookieUpdateRequest(conn))
+    return;
 
-    updateWithLocationBlockConfig(conn);
-    if (conn.urlMatcherData.return_directive)
-        return;
+  if (!getConfigSetURLMatcherData(conn))
+    return;
 
-    // Validate method is allowed
-    if (std::find(conn.urlMatcherData.acceptedMethods.begin(),
-                  conn.urlMatcherData.acceptedMethods.end(),
-                  std::string(conn.data.method)) ==
-        conn.urlMatcherData.acceptedMethods.end()) {
-        debuglog(RED, "URLMatcher: Method '%s' not allowed", conn.data.method.c_str());
-        Responses::htmlErrorResponse(conn, 405);
-        return;
-    }
+  if (findCGIPathAlias(conn))
+    return;
 
-    // Route to appropriate handler
-    if (conn.data.method == "GET") {
-        handleGETRequest(conn);
-    } else if (conn.data.method == "POST") {
-        handlePOSTRequest(conn);
-    } else if (conn.data.method == "DELETE") {
-        handleDELETERequest(conn);
-    }
+  updateWithLocationBlockConfig(conn);
+  if (conn.urlMatcherData.return_directive)
+    return;
+
+  // Validate method is allowed
+  if (std::find(conn.urlMatcherData.acceptedMethods.begin(),
+                conn.urlMatcherData.acceptedMethods.end(),
+                std::string(conn.data.method)) ==
+      conn.urlMatcherData.acceptedMethods.end()) {
+    debuglog(RED, "URLMatcher: Method '%s' not allowed",
+             conn.data.method.c_str());
+    Responses::htmlErrorResponse(conn, 405);
+    return;
+  }
+
+  // Route to appropriate handler
+  if (conn.data.method == "GET") {
+    handleGETRequest(conn);
+  } else if (conn.data.method == "POST") {
+    handlePOSTRequest(conn);
+  } else if (conn.data.method == "DELETE") {
+    handleDELETERequest(conn);
+  }
 }
 
 bool handleGETRequest(HTTPConnxData &conn) {
-    struct stat path_stat;
-    if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0) {
-        Responses::htmlErrorResponse(conn, 404);
-        return false;
+  struct stat path_stat;
+  if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0) {
+    Responses::htmlErrorResponse(conn, 404);
+    return false;
+  }
+
+  if (S_ISREG(path_stat.st_mode)) {
+    return handleRegularFile(conn, conn.urlMatcherData.path_for_stat,
+                             path_stat);
+  } else if (S_ISDIR(path_stat.st_mode)) {
+    debuglog(YELLOW, "URLMatcher: Target is a directory '%s'",
+             conn.urlMatcherData.full_path.c_str());
+
+    // First check for an index file
+    string index_file_path = conn.urlMatcherData.full_path;
+    if (index_file_path.empty() ||
+        index_file_path[index_file_path.length() - 1] != '/') {
+      index_file_path += '/';
     }
+    index_file_path += conn.config->index;
 
-    if (S_ISREG(path_stat.st_mode)) {
-        return handleRegularFile(conn, conn.urlMatcherData.path_for_stat, path_stat);
-    } else if (S_ISDIR(path_stat.st_mode)) {
-        debuglog(YELLOW, "URLMatcher: Target is a directory '%s'",
-                 conn.urlMatcherData.full_path.c_str());
+    struct stat index_stat;
+    debuglog(YELLOW, "URLMatcher: Checking for index file at '%s'",
+             index_file_path.c_str());
 
-        // First check for an index file
-        string index_file_path = conn.urlMatcherData.full_path;
-        if (index_file_path.empty() ||
-            index_file_path[index_file_path.length() - 1] != '/') {
-          index_file_path += '/';
-        }
-        index_file_path += conn.config->index;
-
-        struct stat index_stat;
-        debuglog(YELLOW, "URLMatcher: Checking for index file at '%s'",
-                 index_file_path.c_str());
-
-        // If index file exists, serve it
-        if (stat(index_file_path.c_str(), &index_stat) == 0 &&
-            S_ISREG(index_stat.st_mode)) {
-          handleIndexFile(conn, index_file_path, index_stat);
-        }
-        // Otherwise, try directory listing
-        else {
-          debuglog(YELLOW,
-                   "URLMatcher: Index file '%s' not found or not regular. "
-                   "Checking autoindex.",
-                   conn.config->index.c_str());
-          handleDirectoryListing(conn);
-        }
-    } else {
-        Responses::htmlErrorResponse(conn, 415);
-        return false;
+    // If index file exists, serve it
+    if (stat(index_file_path.c_str(), &index_stat) == 0 &&
+        S_ISREG(index_stat.st_mode)) {
+      handleIndexFile(conn, index_file_path, index_stat);
     }
-    return true;
+    // Otherwise, try directory listing
+    else {
+      debuglog(YELLOW,
+               "URLMatcher: Index file '%s' not found or not regular. "
+               "Checking autoindex.",
+               conn.config->index.c_str());
+      handleDirectoryListing(conn);
+    }
+  } else {
+    Responses::htmlErrorResponse(conn, 415);
+    return false;
+  }
+  return true;
 }
 
 bool handlePOSTRequest(HTTPConnxData &conn) {
-    if (conn.data.content_length == 0)
-        return false;
+  if (conn.data.content_length == 0)
+    return false;
 
-    if (conn.data.content_length > conn.config->maxBodySize) {
-        Responses::htmlErrorResponse(conn, 413);
-        return false;
-    }
-    
-    // Check if upload allowed
-    if (!conn.urlMatcherData.file_upload) {
-        debug("file upload not allowed");
-        debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
-                 conn.urlMatcherData.full_path.c_str());
-        Responses::htmlErrorResponse(conn, 403); // Forbidden
-         
-        return false;
-    }
-    debugcolor(MAGENTA, "opening file for upload: %s",
-               conn.urlMatcherData.full_path.c_str());
-    conn.file_fd = open(conn.urlMatcherData.full_path.c_str(),
-                        O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (conn.file_fd < 0) {
-        perror("URLMatcher: Failed to open file for upload");
-        Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-         
-        return false;
-    }
+  if (conn.data.content_length > conn.config->maxBodySize) {
+    Responses::htmlErrorResponse(conn, 413);
+    return false;
+  }
 
-    std::string payload = conn.data.request.substr(conn.data.headers_end);
-    if (!payload.empty()) {
-        debug("payload found %s", payload.c_str());
-        conn.data.response = payload;
-        conn.data.bytes_sent = 0;
-    }
-    conn.state = CONN_UPLOAD;
-    debug("setting state to CONN_UPLOAD");
-    return true;
+  // Check if upload allowed
+  if (!conn.urlMatcherData.file_upload) {
+    debug("file upload not allowed");
+    debuglog(RED, "URLMatcher: File upload not allowed in location '%s'",
+             conn.urlMatcherData.full_path.c_str());
+    Responses::htmlErrorResponse(conn, 403); // Forbidden
+
+    return false;
+  }
+  debugcolor(MAGENTA, "opening file for upload: %s",
+             conn.urlMatcherData.full_path.c_str());
+  conn.file_fd = open(conn.urlMatcherData.full_path.c_str(),
+                      O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (conn.file_fd < 0) {
+    perror("URLMatcher: Failed to open file for upload");
+    Responses::htmlErrorResponse(conn, 500); // Internal Server Error
+
+    return false;
+  }
+
+  std::string payload = conn.data.request.substr(conn.data.headers_end);
+  if (!payload.empty()) {
+    debug("payload found %s", payload.c_str());
+    conn.data.response = payload;
+    conn.data.bytes_sent = 0;
+  }
+  conn.state = CONN_UPLOAD;
+  debug("setting state to CONN_UPLOAD");
+  return true;
 }
 
 bool handleDELETERequest(HTTPConnxData &conn) {
-    if (!conn.urlMatcherData.file_upload) {
-        Responses::htmlErrorResponse(conn, 403);
-        return false;
-    }
-
-    int result = unlink(conn.urlMatcherData.full_path.c_str());
-    if (result == 0) {
-        Responses::createResponse(conn, "text/plain", "File deleted", 200);
-        return true;
-    }
-
-    if (errno == ENOENT) {
-        Responses::htmlErrorResponse(conn, 404);
-    } else {
-        Responses::createResponse(conn, "text/plain",
-            "Failed to delete file: " + std::string(strerror(errno)), 500);
-    }
+  if (!conn.urlMatcherData.file_upload) {
+    Responses::htmlErrorResponse(conn, 403);
     return false;
+  }
+
+  int result = unlink(conn.urlMatcherData.full_path.c_str());
+  if (result == 0) {
+    Responses::createResponse(conn, "text/plain", "File deleted", 200);
+    return true;
+  }
+
+  if (errno == ENOENT) {
+    Responses::htmlErrorResponse(conn, 404);
+  } else {
+    Responses::createResponse(
+        conn, "text/plain",
+        "Failed to delete file: " + std::string(strerror(errno)), 500);
+  }
+  return false;
 }
 
 // handles %20 -> space, %2F -> /, $3F -> ?, +  -> space etc...
-string urlDecode(const string& encoded) {
-    string decoded;
-    for (size_t i = 0; i < encoded.length(); ++i) {
-        if (encoded[i] == '%' && i + 2 < encoded.length()) {
-            // Get the two hex characters after %
-            string hex = encoded.substr(i + 1, 2);
-            int value;
-            std::istringstream hex_chars(hex);
-            
-            // Convert hex to decimal
-            if (hex_chars >> std::hex >> value) {
-                // Common URL encodings:
-                // %20 = space (32)
-                // %2F = / (47)
-                // %3F = ? (63)
-                // %3D = = (61)
-                decoded += static_cast<char>(value);
-                i += 2;  // Skip the two hex chars
-            } else {
-                decoded += encoded[i];  // Invalid hex, keep the %
-            }
-        } else if (encoded[i] == '+') {
-            decoded += ' ';  // + in query strings means space
-        } else {
-            decoded += encoded[i];  // Normal character
-        }
+string urlDecode(const string &encoded) {
+  string decoded;
+  for (size_t i = 0; i < encoded.length(); ++i) {
+    if (encoded[i] == '%' && i + 2 < encoded.length()) {
+      // Get the two hex characters after %
+      string hex = encoded.substr(i + 1, 2);
+      int value;
+      std::istringstream hex_chars(hex);
+
+      // Convert hex to decimal
+      if (hex_chars >> std::hex >> value) {
+        // Common URL encodings:
+        // %20 = space (32)
+        // %2F = / (47)
+        // %3F = ? (63)
+        // %3D = = (61)
+        decoded += static_cast<char>(value);
+        i += 2; // Skip the two hex chars
+      } else {
+        decoded += encoded[i]; // Invalid hex, keep the %
+      }
+    } else if (encoded[i] == '+') {
+      decoded += ' '; // + in query strings means space
+    } else {
+      decoded += encoded[i]; // Normal character
     }
-    return decoded;
+  }
+  return decoded;
 }
-  
+
 /**
  * @brief Receives and processes initial request data
  * @param conn The connection data structure
@@ -214,7 +217,8 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   debug("checking the request");
   char buffer[Constants::BUFFER_SIZE + 1];
 
-  ssize_t bytes_read = ::recv(conn.client_fd, buffer, Constants::BUFFER_SIZE, MSG_DONTWAIT);
+  ssize_t bytes_read =
+      ::recv(conn.client_fd, buffer, Constants::BUFFER_SIZE, 0);
 
   if (bytes_read <= 0) {
     if (bytes_read == 0) {
@@ -226,13 +230,10 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
       conn.client_fd = -1; // Mark as closed
       return false;
     } else {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        debug("No data available yet - keep in reading state");
-        return false;
-      }
       debug("%s", strerror(errno));
-	  HTTPServer::send_critical_error(conn.client_fd, 500);
-	  return false;
+      Responses::htmlErrorResponse(conn, 500); // Internal Server Error
+      conn.closeConnection = true;
+      return false;
     }
   }
 
@@ -258,11 +259,8 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   case HEADERS_PARSE_ERROR:
     debuglog(RED, "Error parsing headers");
     debug("Error parsing headers");
-    HTTPServer::send_critical_error(conn.client_fd, 400);
-    conn.reset();
-    SocketUtils::remove_from_poll(conn.client_fd);
-    close(conn.client_fd);
-    conn.client_fd = -1; // Mark as closed
+    Responses::htmlErrorResponse(conn, 500); // Internal Server Error
+    conn.closeConnection = true;
     return false;
   }
 
@@ -294,17 +292,17 @@ bool getConfigSetURLMatcherData(HTTPConnxData &conn) {
     debuglog(RED, "URLMatcher: Directory traversal attempt detected: %s",
              conn.data.target.c_str());
     Responses::htmlErrorResponse(conn, 400); // Bad Request
-     
+
     return false;
   }
 
   // Construct the full path for the file or directory stat check
   conn.urlMatcherData.full_path = conn.config->root + target;
   conn.urlMatcherData.path_for_stat = conn.config->root;
-  conn.urlMatcherData.path_for_stat = CGI::ensureTrailinSlash(conn.urlMatcherData.path_for_stat) + target;
+  conn.urlMatcherData.path_for_stat =
+      Utils::ensureTrailinSlash(conn.urlMatcherData.path_for_stat) + target;
   conn.urlMatcherData.autoindex = conn.config->autoindex;
-  conn.urlMatcherData.acceptedMethods =
-      conn.config->acceptedMethods;
+  conn.urlMatcherData.acceptedMethods = conn.config->acceptedMethods;
 
   debuglog(YELLOW, "URLMatcher: Constructed path for stat: '%s'",
            conn.urlMatcherData.path_for_stat.c_str());
@@ -374,19 +372,19 @@ bool handleRegularFile(HTTPConnxData &conn, const string &path_for_stat,
   if (conn.file_fd < 0) {
     perror("URLMatcher: Failed to open file");
     Responses::htmlErrorResponse(conn, 403); // Forbidden is a common reason
-     
+
     return false;
   }
 
-  conn.file_size = path_stat.st_size;
+  conn.urlMatcherData.file_size = path_stat.st_size;
   conn.state = CONN_FILE_REQUEST;
 
-  Responses::prepareFileResponse(conn, conn.file_size);
+  Responses::prepareFileResponse(conn, conn.urlMatcherData.file_size);
 
   debuglog(GREEN,
            "URLMatcher: Set state to CONN_FILE_REQUEST for fd %d, size %ld",
-           conn.client_fd, conn.file_size);
-   
+           conn.client_fd, conn.urlMatcherData.file_size);
+
   return true;
 }
 
@@ -406,24 +404,24 @@ bool handleIndexFile(HTTPConnxData &conn, const string &index_file_path,
   if (conn.file_fd < 0) {
     perror("URLMatcher: Failed to open existing index file");
     Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-     
+
     return false;
   }
 
   // Set the content type in the connection
   determineContentType(conn, index_file_path);
 
-  conn.file_size = index_stat.st_size;
+  conn.urlMatcherData.file_size = index_stat.st_size;
   conn.state = CONN_FILE_REQUEST;
 
   // Use the overloaded version that doesn't need the content type parameter
-  Responses::prepareFileResponse(conn, conn.file_size);
+  Responses::prepareFileResponse(conn, conn.urlMatcherData.file_size);
 
   debuglog(
       GREEN,
       "URLMatcher: Set state to CONN_FILE_REQUEST for index fd %d, size %ld",
-      conn.client_fd, conn.file_size);
-   
+      conn.client_fd, conn.urlMatcherData.file_size);
+
   return true;
 }
 
@@ -436,7 +434,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
   if (!conn.urlMatcherData.autoindex) {
     debuglog(RED, "URLMatcher: Autoindex is disabled.");
     Responses::htmlErrorResponse(conn, 404); // index not found
-     
+
     return false;
   }
 
@@ -448,7 +446,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
     debuglog(GREEN,
              "URLMatcher: getDIRListing prepared listing response for fd %d.",
              conn.client_fd);
-     
+
     return true;
   } else {
     debuglog(RED,
@@ -456,7 +454,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
              "opendir error).",
              conn.client_fd);
     Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-     
+
     return false;
   }
 }
@@ -489,11 +487,36 @@ bool isAllowedCGIExtension(const HTTPConnxData &conn, const string &path) {
 }
 
 bool findCGIPathAlias(HTTPConnxData &conn) {
-    string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
-    string cgi_path = conn.config->cgiData.cgi_path_alias.second;
+  // Get CGI path mappings from config
+  string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
+  string cgi_path = conn.config->cgiData.cgi_path_alias.second;
 
-    if (cgi_path_alias.empty()) {
-        return false;
+
+  if (cgi_path_alias.empty()) {
+    return false;
+  }
+
+  if (conn.data.target == cgi_path_alias ||
+      (conn.data.target.find(Utils::ensureTrailinSlash(cgi_path_alias)) == 0)) {
+
+    // Map URL path to CGI path
+    string relative_path = conn.data.target.substr(cgi_path_alias.length());
+    conn.urlMatcherData.full_path = cgi_path + relative_path;
+    conn.cgiData.script_name = conn.urlMatcherData.full_path;
+
+    // Build filesystem path for stat check
+    string check_path = conn.config->root;
+    if (!check_path.empty() && check_path[check_path.length() - 1] == '/') {
+      check_path = check_path.substr(0, check_path.length() - 1);
+    }
+    check_path += "/" + conn.urlMatcherData.full_path;
+
+    // Verify script exists and is regular file
+    struct stat script_stat;
+    if (stat(check_path.c_str(), &script_stat) != 0 ||
+        !S_ISREG(script_stat.st_mode)) {
+      Responses::htmlErrorResponse(conn, 404);
+      return true;
     }
 
     // Check if this is a CGI path request
@@ -546,142 +569,143 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
     return true;
 }
 
-void updatePathsFromLocation(HTTPConnxData &conn, const Location& location, 
-                           const std::string& locationPath) {
-    if (location.root != conn.config->root) {
-        debuglog(RED, "URLMatcher: Overriding path with location block root");
-        conn.urlMatcherData.full_path = location.root + 
-            conn.data.target.substr(locationPath.length());
-        conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
-        debuglog(RED, "URLMatcher: Updated full path to '%s'",
-                conn.urlMatcherData.full_path.c_str());
-    }
+void updatePathsFromLocation(HTTPConnxData &conn, const Location &location,
+                             const std::string &locationPath) {
+  if (location.root != conn.config->root) {
+    debuglog(RED, "URLMatcher: Overriding path with location block root");
+    conn.urlMatcherData.full_path =
+        location.root + conn.data.target.substr(locationPath.length());
+    conn.urlMatcherData.path_for_stat = conn.urlMatcherData.full_path;
+    debuglog(RED, "URLMatcher: Updated full path to '%s'",
+             conn.urlMatcherData.full_path.c_str());
+  }
 }
 
-bool applyLocationBlockSettings(HTTPConnxData &conn, const Location& location) {
-    conn.urlMatcherData.autoindex = location.autoindex;
-    conn.urlMatcherData.acceptedMethods = location.acceptedMethods;
+bool applyLocationBlockSettings(HTTPConnxData &conn, const Location &location) {
+  conn.urlMatcherData.autoindex = location.autoindex;
+  conn.urlMatcherData.acceptedMethods = location.acceptedMethods;
 
-    if (location.return_directive.first != 0) {
-        conn.urlMatcherData.return_directive = true;
-        Responses::createResponse(conn, "text/plain",
-                                location.return_directive.second,
-                                location.return_directive.first);
-        return true;
-    }
+  if (location.return_directive.first != 0) {
+    conn.urlMatcherData.return_directive = true;
+    Responses::createResponse(conn, "text/plain",
+                              location.return_directive.second,
+                              location.return_directive.first);
+    return true;
+  }
 
-    if (location.file_upload) {
-        conn.urlMatcherData.file_upload = true;
-    }
-    return false;
+  if (location.file_upload) {
+    conn.urlMatcherData.file_upload = true;
+  }
+  return false;
 }
 
 void updateWithLocationBlockConfig(HTTPConnxData &conn) {
-    if (!conn.config->has_locations) {
-        debuglog(YELLOW, "URLMatcher: Server has no location blocks defined");
-        return;
-    }
+  if (!conn.config->has_locations) {
+    debuglog(YELLOW, "URLMatcher: Server has no location blocks defined");
+    return;
+  }
 
-    for (std::map<std::string, Location>::const_iterator location_pair =
-             conn.config->location_blocks.begin();
-         location_pair != conn.config->location_blocks.end();
-         ++location_pair) {
+  for (std::map<std::string, Location>::const_iterator location_pair =
+           conn.config->location_blocks.begin();
+       location_pair != conn.config->location_blocks.end(); ++location_pair) {
 
-        if (conn.data.target.find(location_pair->first) != 0)
-            continue;
+    if (conn.data.target.find(location_pair->first) != 0)
+      continue;
 
-        Location location = location_pair->second;
-        updatePathsFromLocation(conn, location, location_pair->first);
-        
-        if (applyLocationBlockSettings(conn, location))
-            return;
+    Location location = location_pair->second;
+    updatePathsFromLocation(conn, location, location_pair->first);
 
-        debuglog(GREEN, "URLMatcher: Applied configuration from location block '%s'",
-                location_pair->first.c_str());
-        return;
-    }
+    if (applyLocationBlockSettings(conn, location))
+      return;
 
-    debuglog(YELLOW, "URLMatcher: No matching location block found for '%s'",
-             conn.data.target.c_str());
+    debuglog(GREEN,
+             "URLMatcher: Applied configuration from location block '%s'",
+             location_pair->first.c_str());
+    return;
+  }
+
+  debuglog(YELLOW, "URLMatcher: No matching location block found for '%s'",
+           conn.data.target.c_str());
 }
 
-bool handleCookieUpdateRequest(HTTPConnxData &conn)
-{
-    if (conn.data.target.find("/api/update-cookie/") == 0)
-    {
-        debuglog(YELLOW, "Original target: '%s'", conn.data.target.c_str());
-        
-        // Skip past "/api/update-cookie/"
-        size_t prefixLength = strlen("/api/update-cookie/");
-        string fullPath = conn.data.target.substr(prefixLength);
-        debuglog(YELLOW, "After prefix removal: '%s'", fullPath.c_str());
-        
-        // Find the first forward slash after prefix
-        size_t separator = fullPath.find("/");
-        if (separator == string::npos) {
-            debuglog(RED, "Invalid cookie update request format");
-            Responses::simpleStatusResponse(conn, 400);
-            return true;
-        }
+bool handleCookieUpdateRequest(HTTPConnxData &conn) {
+  if (conn.data.target.find("/api/update-cookie/") == 0) {
+    debuglog(YELLOW, "Original target: '%s'", conn.data.target.c_str());
 
-        // Extract the name and value parts
-        string cookieName = fullPath.substr(0, separator);      // Get "buttonClicked"
-        string cookieValue = fullPath.substr(separator + 1);    // Get "true"
-        
-        debuglog(YELLOW, "Cookie components:");
-        debuglog(YELLOW, "  Name: '%s'", cookieName.c_str());
-        debuglog(YELLOW, "  Value: '%s'", cookieValue.c_str());
+    // Skip past "/api/update-cookie/"
+    size_t prefixLength = strlen("/api/update-cookie/");
+    string fullPath = conn.data.target.substr(prefixLength);
+    debuglog(YELLOW, "After prefix removal: '%s'", fullPath.c_str());
 
-        // Create session if needed
-        if (!conn.data.has_session) {
-            debuglog(MAGENTA, "Creating new session for cookie update request");
-            conn.createSession();
-        }
-
-        // Format cookie header with correct name=value format
-        string cookieHeader = "Set-Cookie: " + cookieName + "=" + cookieValue + "; Path=/\r\n";
-        debuglog(YELLOW, "Generated cookie header: '%s'", cookieHeader.c_str());
-        
-        conn.data.response_headers = cookieHeader;
-
-        // Create success response
-        Responses::createResponse(conn, "application/json", "{\"status\":\"success\"}", 200);
-        debuglog(GREEN, "Cookie update request completed successfully");
-        return true;
+    // Find the first forward slash after prefix
+    size_t separator = fullPath.find("/");
+    if (separator == string::npos) {
+      debuglog(RED, "Invalid cookie update request format");
+      Responses::simpleStatusResponse(conn, 400);
+      return true;
     }
-    return false;
+
+    // Extract the name and value parts
+    string cookieName = fullPath.substr(0, separator);   // Get "buttonClicked"
+    string cookieValue = fullPath.substr(separator + 1); // Get "true"
+
+    debuglog(YELLOW, "Cookie components:");
+    debuglog(YELLOW, "  Name: '%s'", cookieName.c_str());
+    debuglog(YELLOW, "  Value: '%s'", cookieValue.c_str());
+
+    // Create session if needed
+    if (!conn.data.has_session) {
+      debuglog(MAGENTA, "Creating new session for cookie update request");
+      conn.createSession();
+    }
+
+    // Format cookie header with correct name=value format
+    string cookieHeader =
+        "Set-Cookie: " + cookieName + "=" + cookieValue + "; Path=/\r\n";
+    debuglog(YELLOW, "Generated cookie header: '%s'", cookieHeader.c_str());
+
+    conn.data.response_headers = cookieHeader;
+
+    // Create success response
+    Responses::createResponse(conn, "application/json",
+                              "{\"status\":\"success\"}", 200);
+    debuglog(GREEN, "Cookie update request completed successfully");
+    return true;
+  }
+  return false;
 }
 
 bool handleChunkedData(HTTPConnxData &conn) {
   if (!conn.data.headers_received || !conn.data.chunked) {
-      return true;  // Not chunked, continue processing
+    return true; // Not chunked, continue processing
   }
 
   debuglog(YELLOW, "Processing chunked data...");
-  
+
   // Check for end marker
   if (conn.data.request.find("0\r\n\r\n") == string::npos) {
-      debuglog(YELLOW, "Still reading chunked data");
-      conn.state = CONN_RECV_CHUNKS;
-      return false;
+    debuglog(YELLOW, "Still reading chunked data");
+    conn.state = CONN_RECV_CHUNKS;
+    return false;
   }
 
   // Get data after headers
   string chunked_string = conn.data.request.substr(conn.data.headers_end);
   string dechunked = conn.dechunkData(chunked_string);
-  
+
   // Replace the request payload with dechunked data
-  conn.data.request = conn.data.request.substr(0, conn.data.headers_end) + dechunked;
-  
+  conn.data.request =
+      conn.data.request.substr(0, conn.data.headers_end) + dechunked;
+
   // Update headers and state
   conn.data.chunked = false;
   conn.data.headers["Content-Length"] = Utils::to_string(dechunked.length());
   conn.data.content_length = dechunked.length();
   conn.data.headers.erase("Transfer-Encoding");
-  
-  debuglog(GREEN, "Successfully dechunked data (size: %zu)", dechunked.length());
+
+  debuglog(GREEN, "Successfully dechunked data (size: %zu)",
+           dechunked.length());
   return true;
 }
-
 
 } // end of namespace URLMatcher
