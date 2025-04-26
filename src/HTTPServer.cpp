@@ -243,6 +243,7 @@ int run(std::string configFile) {
         conn.reset(); // todo check if pid not reset
         // SocketUtils::remove_from_poll(conn.client_fd);
         if (conn.errorStatus != 0) {
+          debug("Will send error response %d", conn.errorStatus);
           Responses::htmlErrorResponse(conn, conn.errorStatus);
           conn.errorStatus = 0;
           conn.closeConnection = true;
@@ -298,7 +299,7 @@ int run(std::string configFile) {
                     conn.cgiData.cgi_stdin_fd);
               conn.cgiData.child_timeout = 0;
               // write to cgi the buffer if not empty
-              write_to_child_stdin(conn, current_fd, pollfds[j].fd);
+              conn.write_to_child_stdin(current_fd, pollfds[j].fd);
               break; // whatever happens to the state we break the for loop
                      // because we found the fd we were looking for
             } // end -> if (pollfds[j].fd == conn.cgiData.cgi_stdin_fd &&
@@ -369,75 +370,6 @@ int run(std::string configFile) {
 }
 
 /**
- * @brief Write data to the child process stdin
- */
-void write_to_child_stdin(HTTPConnxData &conn, int current_fd, int pollfd) {
-  ssize_t bytes_written =
-      ::write(conn.cgiData.cgi_stdin_fd, conn.cgiData.buffer.c_str(),
-              conn.cgiData.buffer.size());
-  debug("Wrote %ld bytes to CGI stdin", bytes_written);
-
-  if (bytes_written < 0) {
-    perror("Failed to write to CGI stdin");
-    debug("Failed to write to CGI stdin");
-    conn.state = CONN_CGI_FINISHED;
-  } else if (bytes_written == 0) {
-    // Should not happen with blocking write unless size was 0
-    debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)",
-             conn.cgiData.buffer.size());
-    debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
-    conn.state = CONN_CGI_FINISHED;
-    conn.cgiData.buffer.clear();
-  } else if (bytes_written < conn.cgiData.buffer.size()) {
-    // Partial write: Remove written data and wait for next POLLOUT
-    debug("Partial write: Wrote %ld bytes to CGI stdin (buffer size: %zu)",
-          bytes_written, conn.cgiData.buffer.size());
-    conn.cgiData.buffer.erase(
-        0, static_cast<std::string::size_type>(bytes_written));
-    conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
-    // stay in the same state, poll will trigger again
-  } else if (bytes_written == conn.cgiData.buffer.size()) {
-    // Full write (bytes_written == conn.cgiData.buffer.size())
-    debugcolor(MAGENTA, "wrote request buffer to CGI: %s",
-               conn.cgiData.buffer.c_str()); // Log data before clearing
-    conn.cgiData.bytes_received += static_cast<size_t>(bytes_written);
-    conn.cgiData.buffer.clear();
-    debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
-  }
-  if (conn.cgiData.bytes_received >= conn.data.content_length) {
-    debug("Full write: Wrote %ld bytes to CGI stdin", bytes_written);
-    // If we have written all data, clear the buffer
-    conn.cgiData.buffer.clear();
-    conn.cgiData.bytes_received = 0;
-    // close the write end of the pipe to signal EOF to the CGI
-    debuglog(YELLOW, "Closing write end of pipe");
-    SocketUtils::remove_from_poll(conn.cgiData.cgi_stdin_fd);
-    close(conn.cgiData.cgi_stdin_fd);
-    conn.cgiData.cgi_stdin_fd = -1; // Mark as closed
-    conn.state = CONN_CGI_SENDING;
-  }
-}
-
-/**
- * @brief send error and close the connection
- *
- * include the Connection: close header in the response to inform the client.
- * This is when the headers are not yet received. In this case
- * I cannot send custom error pages. Example: malformed requests.
- */
-void send_critical_error(int fd, int code) {
-  std::string response = "HTTP/1.1 " + Utils::to_string(code) + " " +
-                         Constants::statusMessages[code] +
-                         "\r\n"
-                         "Connection: close\r\n"
-                         "Content-Length: 0\r\n"
-                         "\r\n";
-  debug("Sending the error response %s", response.c_str());
-  // i dont check for errors here because the connection will be closed
-  ::send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
-}
-
-/**
  * @brief create bind listen sockets for the server
  *
  * This function creates server sockets for each port in the configuration
@@ -466,6 +398,8 @@ void createServerSockets(const vector<ServerData> &configs,
     }
   }
 }
+
+
 
 /**
  * @brief Reload the configuration file called by reload
@@ -540,6 +474,13 @@ bool gotServerSocketAddNewConnx(int fd) {
   return false;
 }
 
+/**
+ * @brief Accept a new client connection
+ * 
+ * Sets the client socket to non-blocking mode and sets the timeout
+ * for the client socket on send and receive. It also checks for
+ * maximum connections and accepts the new connection.
+ */
 void acceptNewClient(int server_fd) {
   int client_fd;
   struct sockaddr_in client_addr;
@@ -559,8 +500,9 @@ void acceptNewClient(int server_fd) {
     }
     // max connection check!
     if (!maxConnectionsCheck(client_fd)) {
-      send_critical_error(client_fd, 503);
       debug("Max connections reached, rejecting new connection");
+      send_critical_error(client_fd, 500);
+      close(client_fd);
       continue;
     }
 
@@ -568,16 +510,18 @@ void acceptNewClient(int server_fd) {
     //   setSendRecTimeout(client_fd);
     if (!SocketUtils::setSendRecTimeout(client_fd)) {
       perror("Failed to set send/receive timeout");
-      send_critical_error(client_fd, 500);
       debug("Failed to set send/receive timeout");
+      send_critical_error(client_fd, 500);
+      close(client_fd);
       continue;
     }
 
     // Get the local address of the accepted socket and print it
     // for debugging purposes
     if (!SocketUtils::printLocalAddress(client_fd)) {
-      send_critical_error(client_fd, 500);
       debug("Failed to get local address");
+      send_critical_error(client_fd, 500);
+      close(client_fd);
       continue;
     }
     debug("New connection from %s:%d", inet_ntoa(client_addr.sin_addr),
@@ -672,6 +616,24 @@ void uploadLoop(HTTPConnxData &conn, pollfd currentfd) {
   }
 }
 
+/**
+ * @brief send error and close the connection
+ *
+ * include the Connection: close header in the response to inform the client.
+ * This is when the headers are not yet received. In this case
+ * I cannot send custom error pages. Example: malformed requests.
+ */
+void send_critical_error(int fd, int code) {
+  std::string response = "HTTP/1.1 " + Utils::to_string(code) + " " +
+                         Constants::statusMessages[code] +
+                         "\r\n"
+                         "Connection: close\r\n"
+                         "Content-Length: 0\r\n"
+                         "\r\n";
+  debug("Sending the error response %s", response.c_str());
+  // i dont check for errors here because the connection will be closed
+  ::send(fd, response.c_str(), response.size(), MSG_NOSIGNAL);
+}
 
 /**
  * @brief Finds the connection data associated with a given file descriptor.

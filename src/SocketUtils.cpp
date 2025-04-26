@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 using std::signal;
+
 namespace SocketUtils {
 
 // Add a file descriptor to the poll array
@@ -167,19 +168,18 @@ void handleAlarm(int signal) {
  * sockets.
  */
 void shutdownServer() {
-    // Close all server sockets first
+  // Close all server sockets first
   for (std::vector<int>::const_iterator it = HTTPServer::serverSockets.begin();
-    it != HTTPServer::serverSockets.end(); ++it) {
+       it != HTTPServer::serverSockets.end(); ++it) {
     debuglog(YELLOW, "Closing server socket %d\n", *it);
     shutdown(*it, SHUT_RDWR);
     close(*it);
-    remove_from_poll(*it); 
+    remove_from_poll(*it);
   }
   // Close all client connections but make a copy
-  HTTPServer::PollfdsVector pollfds_copy = HTTPServer::pollfds; 
+  HTTPServer::PollfdsVector pollfds_copy = HTTPServer::pollfds;
 
-  for (HTTPServer::PollfdsVector::const_iterator it =
-           pollfds_copy.begin();
+  for (HTTPServer::PollfdsVector::const_iterator it = pollfds_copy.begin();
        it != pollfds_copy.end(); ++it) {
     int fd = it->fd;
 
@@ -348,17 +348,17 @@ void checkForIdleConnections() {
   // only clientfds have to be in the lastActivityTime map
   // so we can safely? erase them
   while (it != HTTPServer::connections.end()) {
-    HTTPConnxData& conn = it->second;
+    HTTPConnxData &conn = it->second;
 
     // Check idle time
     if (now - conn.data.lastActivityTime > Constants::keepalive_timeout) {
-        debuglog(YELLOW, "Closing idle connection (fd %d)", conn.client_fd);
-        debug("Closing idle connection (fd %d)", conn.client_fd);
-        conn.reset();
-        SocketUtils::remove_from_poll(conn.client_fd);
-        close(conn.client_fd);
-        conn.client_fd = -1; // Mark as closed
-    } 
+      debuglog(YELLOW, "Closing idle connection (fd %d)", conn.client_fd);
+      debug("Closing idle connection (fd %d)", conn.client_fd);
+      conn.reset();
+      SocketUtils::remove_from_poll(conn.client_fd);
+      close(conn.client_fd);
+      conn.client_fd = -1; // Mark as closed
+    }
     ++it; // Move to next connection
   }
 }
@@ -380,16 +380,16 @@ void checkForIdleConnections() {
  * considering that we develop for linux and macos only.
  */
 const char *custom_inet_ntop(int af, const void *src, char *dst,
-	socklen_t size) {
-if (af == AF_INET) {
-const struct in_addr *addr = static_cast<const struct in_addr *>(src);
-unsigned char *bytes = (unsigned char *)&addr->s_addr;
-::snprintf(dst, size, "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2],
-bytes[3]);
-return dst;
-}
-errno = EAFNOSUPPORT;
-return NULL;
+                             socklen_t size) {
+  if (af == AF_INET) {
+    const struct in_addr *addr = static_cast<const struct in_addr *>(src);
+    unsigned char *bytes = (unsigned char *)&addr->s_addr;
+    ::snprintf(dst, size, "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2],
+               bytes[3]);
+    return dst;
+  }
+  errno = EAFNOSUPPORT;
+  return NULL;
 }
 
 /**
@@ -416,18 +416,19 @@ bool printLocalAddress(int clientfd) {
   return true;
 }
 
-
 bool gotPollhupShouldSkip(pollfd &currentfd) {
-    // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
+  // Exception: POLLERR, POLLHUP, and POLLNVAL can be returned even if not
   // requested
   if (currentfd.revents & POLLHUP) {
     debuglog(RED, "POLLHUP Connection on fd %d ", currentfd.fd);
     debug("POLLHUP Connection on fd %d ", currentfd.fd);
     // Now safely get reference to the connection data
-    std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(currentfd.fd);
+    std::map<int, HTTPConnxData>::iterator conn_it =
+        HTTPServer::connections.find(currentfd.fd);
 
     if (conn_it == HTTPServer::connections.end()) {
-      for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+      for (std::map<int, HTTPConnxData>::iterator it =
+               HTTPServer::connections.begin();
            it != HTTPServer::connections.end(); ++it) {
         if (it->second.cgiData.cgi_stdin_fd == currentfd.fd ||
             it->second.cgiData.cgi_stdout_fd == currentfd.fd) {
@@ -435,9 +436,10 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
           break;
         }
       }
-      // Still not found? Cannot happen
+      // Still not found in connections? remove it
       debug("FD %d not found in connections - removing", currentfd.fd);
-      
+      SocketUtils::remove_from_poll(currentfd.fd);
+      close(currentfd.fd);
       return true;
     }
 
@@ -445,8 +447,10 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
 
     if (currentfd.fd == conn.client_fd) {
       debug("Closing and erasing the connection %d from the map", currentfd.fd);
-      debug("POLLHUP on client fd %d - total number of connx %ld - size of pollfds %ld ", currentfd.fd, HTTPServer::connections.size(), 
-        HTTPServer::pollfds.size()); 
+      debug("POLLHUP on client fd %d - total number of connx %ld - size of "
+            "pollfds %ld ",
+            currentfd.fd, HTTPServer::connections.size(),
+            HTTPServer::pollfds.size());
       conn.reset();
       SocketUtils::remove_from_poll(conn.client_fd);
       close(conn.client_fd);
@@ -455,11 +459,10 @@ bool gotPollhupShouldSkip(pollfd &currentfd) {
     }
 
     // non fatal pollhups
-   if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
+    if (currentfd.fd == conn.cgiData.cgi_stdout_fd) {
       debug("POLLHUP on CGI stdout pipe %d", conn.cgiData.cgi_stdout_fd);
       close(conn.cgiData.cgi_stdout_fd);
       SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
-      conn.cgiData.cgi_stdout_closed = true;
       conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
     }
   }
@@ -473,10 +476,12 @@ bool gotPollerrShouldSkip(pollfd &currentfd) {
     socklen_t len = sizeof(error);
 
     // Now safely get reference to the connection data
-    std::map<int, HTTPConnxData>::iterator conn_it = HTTPServer::connections.find(currentfd.fd);
+    std::map<int, HTTPConnxData>::iterator conn_it =
+        HTTPServer::connections.find(currentfd.fd);
 
     if (conn_it == HTTPServer::connections.end()) {
-      for (std::map<int, HTTPConnxData>::iterator it = HTTPServer::connections.begin();
+      for (std::map<int, HTTPConnxData>::iterator it =
+               HTTPServer::connections.begin();
            it != HTTPServer::connections.end(); ++it) {
         if (it->second.cgiData.cgi_stdin_fd == currentfd.fd ||
             it->second.cgiData.cgi_stdout_fd == currentfd.fd) {
@@ -484,8 +489,7 @@ bool gotPollerrShouldSkip(pollfd &currentfd) {
           break;
         }
       }
-      // Still not found? Cannot happen - maybe throw an exception?
-            // Still not found? Cannot happen
+      // Still not found? remove it
       debug("FD %d not found in connections - removing", currentfd.fd);
       SocketUtils::remove_from_poll(currentfd.fd);
       close(currentfd.fd);
@@ -493,7 +497,7 @@ bool gotPollerrShouldSkip(pollfd &currentfd) {
     }
 
     HTTPConnxData &conn = conn_it->second;
-    
+
     if (currentfd.fd == conn.client_fd) {
       // unusable connection
       debug("Closing client fd %d", currentfd.fd);
@@ -512,12 +516,11 @@ bool gotPollerrShouldSkip(pollfd &currentfd) {
       close(conn.cgiData.cgi_stdout_fd);
       SocketUtils::remove_from_poll(conn.cgiData.cgi_stdout_fd);
       conn.cgiData.cgi_stdout_fd = -1; // Mark as closed
-    } 
-    
+    }
+
     return true;
   }
   return false;
 }
-
 
 } // namespace SocketUtils

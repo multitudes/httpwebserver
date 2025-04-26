@@ -2,42 +2,51 @@
 #include "Parser.hpp"
 #include "debug.h"
 #include <set>
+#include <string>
+#include <map>
+#include <vector>
+
+using std::vector;
+using std::string;
+using std::map;
+using std::stringstream;
+using std::ifstream;
 
 namespace Parser {
 
 long starttime = 0;
 
-void parse(std::string filename, std::vector<ServerData> &servers,
-           std::map<uint16_t, ServerData *> &port_map_) {
+void parse(string filename, vector<ServerData> &servers,
+           map<uint16_t, ServerData *> &port_map_) {
   servers.clear();
   port_map_.clear();
   long starttime = getCurrentTimeMillis();
   debuglog(GREEN, "Parsing configuration file at time: %ld", starttime);
-  std::ifstream configFile(filename.c_str());
+  ifstream configFile(filename.c_str());
   if (!configFile.is_open()) {
     throw std::runtime_error("Failed to open config file: " + filename);
   }
 
   // Read entire file into a string
-  std::stringstream buffer;
+  stringstream buffer;
   buffer << configFile.rdbuf();
-  std::string content = buffer.str();
+  string content = buffer.str();
   configFile.close();
 
   BaseConf baseConfig;
 
   size_t httpStart = content.find("http {");
-  if (httpStart == std::string::npos) {
+  if (httpStart == string::npos) {
     throw std::runtime_error("No http block found in configuration");
   }
 
   size_t httpEnd =
       findClosingBrace(content, httpStart + 6); // +6 to skip "http {"
-  if (httpEnd == std::string::npos) {
+  if (httpEnd == string::npos) {
     throw std::runtime_error("Unclosed http block in configuration");
   }
   // Extract HTTP block content
-  std::string httpContent =
+  string httpContent =
       content.substr(httpStart + 6, httpEnd - (httpStart + 6));
 
   parseGlobalSettings(httpContent, baseConfig);
@@ -52,16 +61,16 @@ void parse(std::string filename, std::vector<ServerData> &servers,
   return;
 }
 
-void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig) {
+void parseGlobalSettings(const string &httpContent, BaseConf &baseConfig) {
   std::istringstream iss(httpContent);
-  std::string line;
+  string line;
 
   while (std::getline(iss, line)) {
     size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
+    if (start == string::npos)
       continue; // Skip empty lines
     size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
+    string trimmedLine = line.substr(start, end - start + 1);
 
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
       continue; // Skip comments
@@ -91,8 +100,8 @@ void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig) {
       debuglog(GREEN, "autoindex: %s , time: %d", trimmedLine.c_str(),
                ++counts);
 
-      std::string autoindexValue;
-      if (valueEnd != std::string::npos) {
+      string autoindexValue;
+      if (valueEnd != string::npos) {
         autoindexValue = trimmedLine.substr(valueStart, valueEnd - valueStart);
       } else {
         autoindexValue = trimmedLine.substr(valueStart);
@@ -115,18 +124,18 @@ void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig) {
     }
 
     else if (trimmedLine.find("error_pages") == 0 &&
-             trimmedLine.find("{") != std::string::npos) {
+             trimmedLine.find("{") != string::npos) {
       // Handle error_page block
       size_t blockStart = trimmedLine.find("{");
       // Find the position of this line in the content
       size_t linePos = httpContent.find(trimmedLine);
-      if (linePos != std::string::npos) {
+      if (linePos != string::npos) {
         // Find the closing brace using proper brace counting
         size_t blockEnd =
             findClosingBrace(httpContent, linePos + blockStart + 1);
 
-        if (blockEnd != std::string::npos) {
-          std::string errorPageBlock = httpContent.substr(
+        if (blockEnd != string::npos) {
+          string errorPageBlock = httpContent.substr(
               linePos + blockStart + 1, blockEnd - (linePos + blockStart + 1));
           parseErrorPageBlock(errorPageBlock, baseConfig);
         }
@@ -136,18 +145,18 @@ void parseGlobalSettings(const std::string &httpContent, BaseConf &baseConfig) {
   debuglog(GREEN, "Parsed global settings\n\n");
 }
 
-void parseErrorPageBlock(const std::string &blockContent,
+void parseErrorPageBlock(const string &blockContent,
                          BaseConf &baseConfig) {
   std::istringstream iss(blockContent);
-  std::string line;
+  string line;
 
   while (std::getline(iss, line)) {
     // Trim whitespace
     size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
+    if (start == string::npos)
       continue;
     size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
+    string trimmedLine = line.substr(start, end - start + 1);
 
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
       continue;
@@ -155,11 +164,11 @@ void parseErrorPageBlock(const std::string &blockContent,
 
     // Extract the first part as the error code (3-digit number)
     size_t spacePos = trimmedLine.find_first_of(" \t");
-    if (spacePos == std::string::npos)
+    if (spacePos == string::npos)
       continue;
 
     // Get the error code (should be 3 digits)
-    std::string errorCodeStr = trimmedLine.substr(0, spacePos);
+    string errorCodeStr = trimmedLine.substr(0, spacePos);
     if (errorCodeStr.length() != 3 || !isdigit(errorCodeStr[0]) ||
         !isdigit(errorCodeStr[1]) || !isdigit(errorCodeStr[2])) {
       debuglog(RED, "Invalid error code format: %s", errorCodeStr.c_str());
@@ -171,11 +180,11 @@ void parseErrorPageBlock(const std::string &blockContent,
     // Extract the path (everything after the space until semicolon)
     size_t pathStart = trimmedLine.find_first_not_of(" \t", spacePos);
     size_t pathEnd = trimmedLine.find(';', pathStart);
-    if (pathStart == std::string::npos)
+    if (pathStart == string::npos)
       continue;
 
-    std::string path;
-    if (pathEnd != std::string::npos) {
+    string path;
+    if (pathEnd != string::npos) {
       path = trimmedLine.substr(pathStart, pathEnd - pathStart);
     } else {
       path = trimmedLine.substr(pathStart);
@@ -189,8 +198,8 @@ void parseErrorPageBlock(const std::string &blockContent,
   }
 }
 
-void parseServerBlocks(const std::string &httpContent,
-                       std::vector<ServerData> &servers, BaseConf &baseConfig) {
+void parseServerBlocks(const string &httpContent,
+                       vector<ServerData> &servers, BaseConf &baseConfig) {
   // Look for server blocks in the content
   size_t pos = 0;
   int serverBlockCount = 0;
@@ -199,7 +208,7 @@ void parseServerBlocks(const std::string &httpContent,
   while (true) {
     // Find the next server block
     pos = httpContent.find("server", pos);
-    if (pos == std::string::npos) {
+    if (pos == string::npos) {
       if (serverBlockCount == 0) {
         throw std::runtime_error("No server blocks found in configuration");
       }
@@ -207,11 +216,11 @@ void parseServerBlocks(const std::string &httpContent,
     }
 
     size_t lineStart = httpContent.rfind('\n', pos);
-    if (lineStart == std::string::npos)
+    if (lineStart == string::npos)
       lineStart = 0;
 
-    std::string beforeServer = httpContent.substr(lineStart, pos - lineStart);
-    if (beforeServer.find_first_not_of(" \t\n\r") != std::string::npos) {
+    string beforeServer = httpContent.substr(lineStart, pos - lineStart);
+    if (beforeServer.find_first_not_of(" \t\n\r") != string::npos) {
       // This "server" is part of something else, continue searching
       pos += 6; // Skip "server"
       continue;
@@ -219,12 +228,12 @@ void parseServerBlocks(const std::string &httpContent,
 
     // Find opening brace
     size_t openBrace = httpContent.find("{", pos);
-    if (openBrace == std::string::npos)
+    if (openBrace == string::npos)
       break;
 
     // Check if there's only whitespace between "server" and "{"
-    std::string between = httpContent.substr(pos + 6, openBrace - (pos + 6));
-    if (between.find_first_not_of(" \t\n\r") != std::string::npos) {
+    string between = httpContent.substr(pos + 6, openBrace - (pos + 6));
+    if (between.find_first_not_of(" \t\n\r") != string::npos) {
       // Not a valid server block, continue searching
       pos = pos + 6;
       continue;
@@ -234,13 +243,13 @@ void parseServerBlocks(const std::string &httpContent,
     size_t blockStart = openBrace + 1;
     size_t blockEnd = findClosingBrace(httpContent, blockStart);
 
-    if (blockEnd == std::string::npos) {
+    if (blockEnd == string::npos) {
       throw std::runtime_error("Unclosed server block");
       break;
     }
 
     // Extract the server block content
-    std::string serverBlockContent =
+    string serverBlockContent =
         httpContent.substr(blockStart, blockEnd - blockStart);
 
     // Parse this server block (create a new ServerData)
@@ -268,18 +277,18 @@ void parseServerBlocks(const std::string &httpContent,
   }
 }
 
-void parseServerBlock(const std::string &serverBlockContent,
+void parseServerBlock(const string &serverBlockContent,
                       ServerData &ServerData, std::set<int> &Portset) {
   std::istringstream iss(serverBlockContent);
-  std::string line;
+  string line;
 
   while (std::getline(iss, line)) {
     // Trim whitespace
     size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
+    if (start == string::npos)
       continue; // Skip empty lines
     size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
+    string trimmedLine = line.substr(start, end - start + 1);
 
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
       continue; // Skip comments
@@ -289,8 +298,8 @@ void parseServerBlock(const std::string &serverBlockContent,
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 19);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         ServerData.serverListenAddress = value;
       }
@@ -299,8 +308,8 @@ void parseServerBlock(const std::string &serverBlockContent,
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 4);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         ServerData.root = value;
         if (ServerData.root[ServerData.root.length() - 1] != '/') {
@@ -313,8 +322,8 @@ void parseServerBlock(const std::string &serverBlockContent,
     } else if (trimmedLine.find("listen") == 0) {
       size_t portStart = trimmedLine.find_first_not_of(" \t", 6);
       size_t portEnd = trimmedLine.find(';', portStart);
-      if (portEnd != std::string::npos) {
-        std::string portStr =
+      if (portEnd != string::npos) {
+        string portStr =
             trimmedLine.substr(portStart, portEnd - portStart);
         uint16_t port = static_cast<uint16_t>(atoi(portStr.c_str()));
 
@@ -335,12 +344,12 @@ void parseServerBlock(const std::string &serverBlockContent,
       size_t nameStart = trimmedLine.find_first_not_of(" \t", 11);
       size_t nameEnd = trimmedLine.find(';', nameStart);
 
-      if (nameEnd != std::string::npos) {
-        std::string serverNames =
+      if (nameEnd != string::npos) {
+        string serverNames =
             trimmedLine.substr(nameStart, nameEnd - nameStart);
 
         std::istringstream nameStream(serverNames);
-        std::string name;
+        string name;
 
         // Read each name separated by whitespace
         while (nameStream >> name) {
@@ -352,8 +361,8 @@ void parseServerBlock(const std::string &serverBlockContent,
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 5);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         if (value == "on") {
           ServerData.autoindex = true;
@@ -365,11 +374,11 @@ void parseServerBlock(const std::string &serverBlockContent,
       size_t openBrace = trimmedLine.find("{");
       size_t semiColon = trimmedLine.find(";");
 
-      if (methodsStart != std::string::npos && openBrace != std::string::npos) {
-        std::string methods =
+      if (methodsStart != string::npos && openBrace != string::npos) {
+        string methods =
             trimmedLine.substr(methodsStart, openBrace - methodsStart);
         std::istringstream methodStream(methods);
-        std::string method;
+        string method;
 
         while (methodStream >> method) {
           if (method != "{") {
@@ -379,12 +388,12 @@ void parseServerBlock(const std::string &serverBlockContent,
         }
       }
       // Check for the "accepted_methods METHOD1 METHOD2 METHOD3;" format
-      else if (methodsStart != std::string::npos &&
-               semiColon != std::string::npos) {
-        std::string methods =
+      else if (methodsStart != string::npos &&
+               semiColon != string::npos) {
+        string methods =
             trimmedLine.substr(methodsStart, semiColon - methodsStart);
         std::istringstream methodStream(methods);
-        std::string method;
+        string method;
 
         while (methodStream >> method) {
           ServerData.acceptedMethods.push_back(method);
@@ -394,26 +403,26 @@ void parseServerBlock(const std::string &serverBlockContent,
     } else if (trimmedLine.find("location") == 0) {
       ServerData.has_locations = true;
       size_t pathStart = trimmedLine.find_first_not_of(" \t", 8);
-      if (pathStart != std::string::npos) {
+      if (pathStart != string::npos) {
         size_t pathEnd;
         size_t openBrace = trimmedLine.find("{");
 
-        if (openBrace != std::string::npos) {
+        if (openBrace != string::npos) {
           pathEnd = trimmedLine.find_last_not_of(" \t", openBrace - 1);
 
-          std::string path =
+          string path =
               trimmedLine.substr(pathStart, pathEnd - pathStart + 1);
           debuglog(GREEN, "Found location block for path: %s", path.c_str());
 
           // Find location block content in the serverBlockContent
           size_t locationPos = serverBlockContent.find(trimmedLine);
 
-          if (locationPos != std::string::npos) {
+          if (locationPos != string::npos) {
             size_t blockStart = serverBlockContent.find("{", locationPos) + 1;
             size_t blockEnd = findClosingBrace(serverBlockContent, blockStart);
 
-            if (blockEnd != std::string::npos) {
-              std::string locationContent =
+            if (blockEnd != string::npos) {
+              string locationContent =
                   serverBlockContent.substr(blockStart, blockEnd - blockStart);
 
               Location location;
@@ -427,15 +436,15 @@ void parseServerBlock(const std::string &serverBlockContent,
       size_t openBrace = trimmedLine.find("{");
       ServerData.cgi_exists = true;
 
-      if (openBrace != std::string::npos) {
+      if (openBrace != string::npos) {
         size_t locationPos = serverBlockContent.find(trimmedLine);
 
-        if (locationPos != std::string::npos) {
+        if (locationPos != string::npos) {
           size_t blockStart = serverBlockContent.find("{", locationPos) + 1;
           size_t blockEnd = findClosingBrace(serverBlockContent, blockStart);
 
-          if (blockEnd != std::string::npos) {
-            std::string cgiContent =
+          if (blockEnd != string::npos) {
+            string cgiContent =
                 serverBlockContent.substr(blockStart, blockEnd - blockStart);
             parseCgiBlock(cgiContent, ServerData.cgiData);
           }
@@ -445,10 +454,10 @@ void parseServerBlock(const std::string &serverBlockContent,
   }
 }
 
-void parseLocationBlock(const std::string &locationContent, Location &location,
+void parseLocationBlock(const string &locationContent, Location &location,
                         ServerData &ServerData) {
   std::istringstream iss(locationContent);
-  std::string line;
+  string line;
 
   location.upload_dir = ServerData.upload_dir;
   location.acceptedMethods = ServerData.acceptedMethods;
@@ -458,10 +467,10 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
 
   while (std::getline(iss, line)) {
     size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
+    if (start == string::npos)
       continue; // Skip empty lines
     size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
+    string trimmedLine = line.substr(start, end - start + 1);
 
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
       continue; // Skip comments
@@ -472,8 +481,8 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 9);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         if (value == "on") {
           location.autoindex = true;
@@ -495,13 +504,13 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 6);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string redirectStr =
+      if (valueEnd != string::npos) {
+        string redirectStr =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         std::istringstream redirectStream(redirectStr);
 
         int code;
-        std::string url;
+        string url;
         redirectStream >> code;
 
         std::getline(redirectStream, url);
@@ -512,8 +521,8 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
     } else if (trimmedLine.find("root") == 0) {
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 4);
       size_t valueEnd = trimmedLine.find(';', valueStart);
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         if (value[value.length() - 1] != '/') {
           value += '/';
@@ -529,8 +538,8 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 11);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         if (value == "on") {
           location.file_upload = true;
@@ -541,8 +550,8 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 10);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      if (valueEnd != std::string::npos) {
-        std::string value =
+      if (valueEnd != string::npos) {
+        string value =
             trimmedLine.substr(valueStart, valueEnd - valueStart);
         if (value[value.length() - 1] != '/') {
           value += '/';
@@ -555,9 +564,9 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
       size_t methodsStart = trimmedLine.find_first_not_of(" \t", 15);
       size_t openBrace = trimmedLine.find("{");
 
-      if (methodsStart != std::string::npos) {
-        std::string methodsStr;
-        if (openBrace != std::string::npos) {
+      if (methodsStart != string::npos) {
+        string methodsStr;
+        if (openBrace != string::npos) {
           methodsStr =
               trimmedLine.substr(methodsStart, openBrace - methodsStart);
         } else {
@@ -565,12 +574,12 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
         }
 
         size_t lastNonSpace = methodsStr.find_last_not_of(" \t\n\r");
-        if (lastNonSpace != std::string::npos) {
+        if (lastNonSpace != string::npos) {
           methodsStr = methodsStr.substr(0, lastNonSpace + 1);
         }
 
         std::istringstream methodStream(methodsStr);
-        std::string method;
+        string method;
 
         if (location.acceptedMethods.size() > 0)
           location.acceptedMethods.clear();
@@ -586,16 +595,16 @@ void parseLocationBlock(const std::string &locationContent, Location &location,
   }
 }
 
-void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
+void parseCgiBlock(const string &cgiContent, CGIData &cgiConfig) {
   std::istringstream iss(cgiContent);
-  std::string line;
+  string line;
 
   while (std::getline(iss, line)) {
     size_t start = line.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos)
+    if (start == string::npos)
       continue; // Skip empty lines
     size_t end = line.find_last_not_of(" \t\n\r");
-    std::string trimmedLine = line.substr(start, end - start + 1);
+    string trimmedLine = line.substr(start, end - start + 1);
 
     if (trimmedLine.empty() || trimmedLine[0] == '#') {
       continue; // Skip comments
@@ -605,15 +614,15 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 14);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      std::string value;
-      if (valueEnd != std::string::npos) {
+      string value;
+      if (valueEnd != string::npos) {
         value = trimmedLine.substr(valueStart, valueEnd - valueStart);
       } else {
         value = trimmedLine.substr(valueStart);
       }
 
       std::istringstream pathStream(value);
-      std::string path, alias;
+      string path, alias;
 
       pathStream >> path >> alias;
       if (!alias.empty() && alias[0] == '"' && alias[alias.size() - 1] == '"') {
@@ -626,8 +635,8 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 10);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      std::string value;
-      if (valueEnd != std::string::npos) {
+      string value;
+      if (valueEnd != string::npos) {
         value = trimmedLine.substr(valueStart, valueEnd - valueStart);
       } else {
         value = trimmedLine.substr(valueStart);
@@ -639,15 +648,15 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
       size_t valueStart = trimmedLine.find_first_not_of(" \t", 14);
       size_t valueEnd = trimmedLine.find(';', valueStart);
 
-      std::string value;
-      if (valueEnd != std::string::npos) {
+      string value;
+      if (valueEnd != string::npos) {
         value = trimmedLine.substr(valueStart, valueEnd - valueStart);
       } else {
         value = trimmedLine.substr(valueStart);
       }
 
       std::istringstream extStream(value);
-      std::string ext;
+      string ext;
 
       while (extStream >> ext) {
         cgiConfig.cgi_extensions.push_back(ext);
@@ -657,9 +666,9 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
       size_t methodsStart = trimmedLine.find_first_not_of(" \t", 15);
       size_t openBrace = trimmedLine.find("{");
 
-      if (methodsStart != std::string::npos) {
-        std::string methodsStr;
-        if (openBrace != std::string::npos) {
+      if (methodsStart != string::npos) {
+        string methodsStr;
+        if (openBrace != string::npos) {
           methodsStr =
               trimmedLine.substr(methodsStart, openBrace - methodsStart);
         } else {
@@ -667,12 +676,12 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
         }
 
         size_t lastNonSpace = methodsStr.find_last_not_of(" \t\n\r");
-        if (lastNonSpace != std::string::npos) {
+        if (lastNonSpace != string::npos) {
           methodsStr = methodsStr.substr(0, lastNonSpace + 1);
         }
 
         std::istringstream methodStream(methodsStr);
-        std::string method;
+        string method;
 
         if (cgiConfig.acceptedMethods.size() > 0)
           cgiConfig.acceptedMethods.clear();
@@ -689,21 +698,21 @@ void parseCgiBlock(const std::string &cgiContent, CGIData &cgiConfig) {
 }
 
 template <typename T>
-bool parseNumericValue(const std::string &line, const std::string &param,
+bool parseNumericValue(const string &line, const string &param,
                        size_t paramLen, T &outValue) {
   (void)param; // TODO do we need ?
   size_t valueStart = line.find_first_not_of(" \t", paramLen);
   size_t valueEnd = line.find(';', valueStart);
 
-  if (valueEnd != std::string::npos) {
-    std::string valueStr = line.substr(valueStart, valueEnd - valueStart);
+  if (valueEnd != string::npos) {
+    string valueStr = line.substr(valueStart, valueEnd - valueStart);
     outValue = static_cast<T>(atoi(valueStr.c_str()));
     return true;
   }
   return false;
 }
 
-size_t findClosingBrace(const std::string &content, size_t start) {
+size_t findClosingBrace(const string &content, size_t start) {
   int braceCount = 1;
   for (size_t i = start; i < content.length(); ++i) {
     if (content[i] == '{') {
@@ -715,7 +724,7 @@ size_t findClosingBrace(const std::string &content, size_t start) {
       }
     }
   }
-  return std::string::npos;
+  return string::npos;
 }
 
 long getCurrentTimeMillis() {
@@ -724,8 +733,8 @@ long getCurrentTimeMillis() {
   return (long)(tv.tv_sec) * 1000 + (long)(tv.tv_usec) / 1000;
 }
 
-void debugprintConfigs(std::vector<ServerData> &servers,
-                       std::map<uint16_t, ServerData *> port_map_) {
+void debugprintConfigs(vector<ServerData> &servers,
+                       map<uint16_t, ServerData *> port_map_) {
   debuglog(BLUE, "==== Configuration Summary ====");
   debuglog(BLUE, "Total servers: %zu", servers.size());
 
@@ -736,7 +745,7 @@ void debugprintConfigs(std::vector<ServerData> &servers,
 
     // Print ports
     if (!server.ports.empty()) {
-      std::string portList;
+      string portList;
       for (size_t j = 0; j < server.ports.size(); ++j) {
         if (j > 0)
           portList += ", ";
@@ -751,7 +760,7 @@ void debugprintConfigs(std::vector<ServerData> &servers,
 
     // Print server names
     if (!server.server_names.empty()) {
-      std::string nameList;
+      string nameList;
       for (size_t j = 0; j < server.server_names.size(); ++j) {
         if (j > 0)
           nameList += ", ";
@@ -773,7 +782,7 @@ void debugprintConfigs(std::vector<ServerData> &servers,
     // Print error pages
     if (!server.error_pages.empty()) {
       debuglog(BLUE, "Error Pages:");
-      std::map<int, std::string>::const_iterator it;
+      map<int, string>::const_iterator it;
       for (it = server.error_pages.begin(); it != server.error_pages.end();
            ++it) {
         debuglog(BLUE, "  %d: %s", it->first, it->second.c_str());
@@ -783,10 +792,10 @@ void debugprintConfigs(std::vector<ServerData> &servers,
     // Print location blocks
     if (server.has_locations && !server.location_blocks.empty()) {
       debuglog(BLUE, "Location Blocks (%zu):", server.location_blocks.size());
-      std::map<std::string, Location>::const_iterator it;
+      map<string, Location>::const_iterator it;
       for (it = server.location_blocks.begin();
            it != server.location_blocks.end(); ++it) {
-        const std::string &path = it->first;
+        const string &path = it->first;
         const Location &loc = it->second;
 
         debuglog(BLUE, "  Location: %s", path.c_str());
@@ -809,7 +818,7 @@ void debugprintConfigs(std::vector<ServerData> &servers,
         }
 
         if (!loc.acceptedMethods.empty()) {
-          std::string methods;
+          string methods;
           for (size_t j = 0; j < loc.acceptedMethods.size(); ++j) {
             if (j > 0)
               methods += " ";
@@ -821,7 +830,7 @@ void debugprintConfigs(std::vector<ServerData> &servers,
         //  debuglog(BLUE, "    Index: %s", loc.index.c_str());
         // }
         debuglog(BLUE, " PRINTING ERROR PAGES");
-        std::map<int, std::string>::const_iterator it;
+        map<int, string>::const_iterator it;
         for (it = loc.error_pages.begin(); it != loc.error_pages.end(); ++it) {
           debuglog(BLUE, "    Error Page: %d %s", it->first,
                    it->second.c_str());
@@ -839,7 +848,7 @@ void debugprintConfigs(std::vector<ServerData> &servers,
       debuglog(BLUE, "  Upload Dir: %s", server.cgiData.upload_dir.c_str());
 
       if (!server.cgiData.cgi_extensions.empty()) {
-        std::string exts;
+        string exts;
         for (size_t j = 0; j < server.cgiData.cgi_extensions.size(); ++j) {
           if (j > 0)
             exts += " ";
@@ -849,7 +858,7 @@ void debugprintConfigs(std::vector<ServerData> &servers,
       }
 
       if (!server.cgiData.acceptedMethods.empty()) {
-        std::string methods;
+        string methods;
         for (size_t j = 0; j < server.cgiData.acceptedMethods.size(); ++j) {
           if (j > 0)
             methods += " ";
@@ -861,7 +870,7 @@ void debugprintConfigs(std::vector<ServerData> &servers,
   }
 
   debuglog(BLUE, "\nPort Mapping:");
-  std::map<uint16_t, ServerData *>::const_iterator it;
+  map<uint16_t, ServerData *>::const_iterator it;
   for (it = port_map_.begin(); it != port_map_.end(); ++it) {
     size_t serverIndex = static_cast<size_t>(it->second - &servers[0]);
     // Calculate server index
