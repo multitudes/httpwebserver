@@ -66,15 +66,15 @@ struct BaseConf {
   size_t maxBodySize;
   std::map<std::string, std::string> defaultheaders;
   bool autoindex;
-  bool parsedindex;
   bool file_server;
   std::vector<std::string> acceptedMethods;
   std::map<int, std::string> error_pages;
   std::string upload_dir;
 
   BaseConf()
-      : maxBodySize(10000000), autoindex(false), parsedindex(false),
-        file_server(true), upload_dir("./html/www1/upload") {
+      : maxBodySize(10000000), autoindex(false), 
+      file_server(true),
+       upload_dir("./html/www1/upload") {
     defaultheaders["Content-Type"] = "text/html";
     defaultheaders["Server"] = "webserv/1.0";
     defaultheaders["Connection"] = "keep-alive";
