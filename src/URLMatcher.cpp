@@ -540,6 +540,8 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
         return true;
     }
     return true;
+  }
+  return false;
 }
 
 void updatePathsFromLocation(HTTPConnxData &conn, const Location &location,
