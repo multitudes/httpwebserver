@@ -10,7 +10,7 @@ def start_webserver(config_path):
 
 @pytest.fixture(scope="function")
 def webserver_normal_config():
-    server = start_webserver("tests/config/test.conf")
+    server = start_webserver("tests/config/default.conf")
     yield
     server.terminate()
 

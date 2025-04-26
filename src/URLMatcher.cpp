@@ -459,6 +459,33 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
   }
 }
 
+bool isAllowedCGIExtension(const HTTPConnxData &conn, const string &path) {
+    size_t dot_pos = path.find_last_of('.');
+    if (dot_pos == string::npos) {
+        debuglog(RED, "URLMatcher: No file extension found for CGI script");
+        return false;
+    }
+
+    // Find the next slash or question mark after the dot
+    size_t end_pos = path.find_first_of("/?", dot_pos);
+    // If no slash or question mark found, use the whole remaining string
+    string extension;
+    if (end_pos == string::npos) {
+        extension = path.substr(dot_pos);
+    } else {
+        extension = path.substr(dot_pos, end_pos - dot_pos);
+    }
+
+    for (std::vector<std::string>::const_iterator it = conn.config->cgiData.cgi_extensions.begin();
+         it != conn.config->cgiData.cgi_extensions.end(); ++it) {
+        if (*it == extension) {
+            return true;
+        }
+    }
+    debuglog(RED, "URLMatcher: CGI extension '%s' not allowed", extension.c_str());
+    return false;
+}
+
 bool findCGIPathAlias(HTTPConnxData &conn) {
   // Get CGI path mappings from config
   string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
@@ -476,28 +503,41 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
     conn.urlMatcherData.full_path = cgi_path + relative_path;
     conn.cgiData.script_name = conn.urlMatcherData.full_path;
 
+    // Check extension is allowed
+    if (!isAllowedCGIExtension(conn, relative_path)) {
+        debuglog(RED, "URLMatcher: CGI extension forbidden");
+        Responses::htmlErrorResponse(conn, 403);
+        return true;
+    }
+
     // Build filesystem path for stat check
     string check_path = conn.config->root;
     if (!check_path.empty() && check_path[check_path.length() - 1] == '/') {
-      check_path = check_path.substr(0, check_path.length() - 1);
+        check_path = check_path.substr(0, check_path.length() - 1);
     }
     check_path += "/" + conn.urlMatcherData.full_path;
 
-    // Verify script exists and is regular file
+    // Check if file exists
     struct stat script_stat;
-    if (stat(check_path.c_str(), &script_stat) != 0 ||
-        !S_ISREG(script_stat.st_mode)) {
-      Responses::htmlErrorResponse(conn, 404);
-      return true;
+    if (stat(check_path.c_str(), &script_stat) != 0 || !S_ISREG(script_stat.st_mode)) {
+        debuglog(RED, "URLMatcher: CGI script not found");
+        Responses::htmlErrorResponse(conn, 404);
+        return true;
     }
 
-    // Script exists, execute it
+    // Check executable permissions
+    if (!(script_stat.st_mode & S_IXUSR)) {
+        debuglog(RED, "URLMatcher: CGI script not executable");
+        Responses::htmlErrorResponse(conn, 403);
+        return true;
+    }
+
+    // All checks passed, execute script
     conn.state = CONN_CGI_INCOMING;
     if (CGI::prepareCGI(conn) < 0) {
-      conn.reset();
-      Responses::createResponse(conn, "text/plain",
-                                "Failed to execute CGI script", 500);
-      return true;
+        conn.reset();
+        Responses::createResponse(conn, "text/plain", "Failed to execute CGI script", 500);
+        return true;
     }
     return true;
   }
