@@ -14,6 +14,7 @@
 #include "HTTPServer.hpp"
 #include "Constants.hpp"
 #include <cassert>
+#include <dirent.h> 
 #include "Responses.hpp"
 
 using std::map;
@@ -1113,4 +1114,58 @@ void HTTPConnxData::write_to_child_stdin(int current_fd, int pollfd) {
     cgiData.cgi_stdin_fd = -1; // Mark as closed
     state = CONN_CGI_SENDING;
   }
+}
+
+/**
+ * @brief Get the directory listing for a given path
+ * 
+ * It will check with the server config if the directory listing is enabled
+ * and if the path is valid. It will return false invalid
+ */
+bool HTTPConnxData::getDIRListing(string full_path) {
+  if (data.target.empty() || data.target[0] != '/') {
+    debuglog(RED, "Invalid target path: %s", data.target.c_str());
+    return false;
+  }
+  // Check if directory exists
+  DIR *dir = opendir(full_path.c_str());
+  if (dir == NULL)
+    return false;
+  std::string dirString;
+  // Read directory contents
+  struct dirent *entry;
+  // Ensure target path ends with a slash for proper URL construction
+  std::string target_path = data.target;
+  if (target_path.length() > 1 &&
+      target_path[target_path.length() - 1] != '/') {
+    target_path += '/';
+  }
+  debuglog(YELLOW, "Directory Listing using URL base: %s", target_path.c_str());
+  while ((entry = readdir(dir)) != NULL) {
+    dirString += "<li><a href=\"";
+    dirString += target_path;
+    // Skip adding target path if we're at root and it's already "/"
+    if (target_path != "/" || entry->d_name[0] != '\0') {
+      dirString += entry->d_name;
+    }
+    dirString += "\">";
+    dirString += entry->d_name;
+    dirString += "</a></li>\n";
+  }
+  closedir(dir);
+
+  std::string htmlCode;
+  htmlCode = "<html><head><title>Directory Listing</title>";
+  htmlCode += "<link rel=\"stylesheet\" type=\"text/css\" href=\"/css/style.css\">";
+  htmlCode += "</head><body><div style=\"text-align: left;\"><h1 style=\"margin: 0px;\">Index of " + data.target +
+              "</h1><ul>" + dirString + "</ul></div></body></html>";
+
+  debuglog(GREEN, "Directory contents: \n%s", dirString.c_str());
+  urlMatcherData.content_type = Constants::mimeTypes[".html"];
+  state = CONN_SIMPLE_RESPONSE;
+
+  // generate HTTP header and include html payload using the stored content type
+  Responses::createResponse(*this, urlMatcherData.content_type,
+                            htmlCode, 200);
+  return true;
 }

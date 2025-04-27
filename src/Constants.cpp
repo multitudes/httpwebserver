@@ -3,10 +3,10 @@
 #include <string>
 
 namespace Constants {
+  
 std::map<int, std::string> statusMessages;
 std::map<std::string, std::string> mimeTypes;
 const char *default_config_file = "config/default.conf";
-
 size_t BUFFER_SIZE = 8192; // 8KB buffer size
 int maxConnections = 200;
 int requestTimeout = 10;

@@ -2,7 +2,6 @@
 #include "CGI.hpp"
 #include "Config.hpp" // For Config::getConfigByPort()
 #include "Constants.hpp"
-#include "DirectoryListing.hpp"
 #include "HTTPConnxData.hpp"
 #include "HTTPServer.hpp"
 #include "Responses.hpp"
@@ -442,7 +441,7 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
            "URLMatcher: Autoindex is enabled. Calling getDIRListing for '%s'.",
            conn.urlMatcherData.full_path.c_str());
 
-  if (DirectoryListing::getDIRListing(conn, conn.urlMatcherData.full_path)) {
+  if (conn.getDIRListing(conn.urlMatcherData.full_path)) {
     debuglog(GREEN,
              "URLMatcher: getDIRListing prepared listing response for fd %d.",
              conn.client_fd);

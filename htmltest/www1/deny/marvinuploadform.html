@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv 200 OK</title>
+    <link rel="icon" href="/favicon/favicon.ico" type="image/x-icon">
+   <link rel="stylesheet" type="text/css" href="../css/style.css">
+</head>
+
+
+<body>
+    <h1>File Upload with Marvin</h1>
+    <div class="box">
+        <p><em>Go on then, upload something. Not that it matters. It'll probably just get lost or corrupted. Standard procedure.</em></p>
+        <form action="/cgi-bin/hello.py" method="POST" enctype="multipart/form-data">
+            <label for="cgi-file">Select file:</label>
+            <input type="file" id="cgi-file" name="file">
+            <button type="submit" disabled>Upload (If you must)</button> <!-- Added disabled -->
+        </form>
+        <p>Supported file types: .jpg, .png, .pdf, .txt (Allegedly)</p>
+    </div>
+
+    <h1>File Upload with standard upload</h1>
+    <div class="box">
+        <p><em>Or try this method. Different mechanism, same inevitable disappointment, I expect.</em></p>
+        <form action="/uploads" method="POST" enctype="multipart/form-data">
+            <label for="std-file">Select file:</label>
+            <input type="file" id="std-file" name="file">
+            <button type="submit" disabled>Upload (Again?)</button> <!-- Added disabled -->
+        </form>
+        <p>Supported file types: .jpg, .png, .pdf, .txt (Still allegedly)</p>
+    </div>
+
+   <div class="file-list">
+        <h2>Uploaded Files (Probably)</h2>
+        <p><em>Here are the files you've burdened the server with. Feel free to delete them. Or don't. The universe won't notice either way.</em></p>
+        <form action="/cgi-bin/delete.py" method="POST">
+            <ul>
+                <!-- Dynamically generated file list -->
+                <!-- Example static entry for demonstration -->
+                <li>
+                    <input type="checkbox" name="delete_files" value="file1.txt">
+                    <a href="/uploads/file1.txt" target="_blank">file1.txt</a> <em>(How utterly thrilling.)</em>
+                </li>
+                <li>
+                    <input type="checkbox" name="delete_files" value="file2.jpg">
+                    <a href="/uploads/file2.jpg" target="_blank">file2.jpg</a> <em>(Oh joy, an image.)</em>
+                </li>
+            </ul>
+            <button type="submit" disabled>Delete Selected Files (As if it makes a difference)</button> <!-- Added disabled -->
+        </form>
+    </div>
+    <hr>
+    <p><a href="deny.html">Back to the main page of despair...</a></p>
+</body>
+
+
+</html>

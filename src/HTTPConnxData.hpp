@@ -214,6 +214,7 @@ struct HTTPConnxData {
   bool check_for_child_timeout();
   bool sendCgiDataToClient(ssize_t bytes_read);
   void close_conn_after_error();
+  bool getDIRListing(string full_path);
   ParseStatus parseRequestLine(const string &line);
   ParseStatus parseHeaderLine(const string &line);
   ParseStatus parseCookies(const string &cookieHeader);
