@@ -347,7 +347,7 @@ int run(std::string configFile) {
                 break;
               }
               debug("Received %ld bytes from CGI stdout", bytes_read);
-              debugcolor(MAGENTA, "response from CGI: %s",
+              debuglog(MAGENTA, "response from CGI: %s",
                          conn.cgiData.buffer.c_str());
               
               if (conn.sendCgiDataToClient(bytes_read) == false) {

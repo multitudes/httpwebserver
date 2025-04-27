@@ -699,8 +699,6 @@ void parseCgiConfig(const std::string &trimmedLine, const std::string &serverBlo
 
   if (!cgiContent.empty()) {
       parseCgiBlock(cgiContent, serverData.cgiData);
-  } else {
-      debuglog(YELLOW, "Warning: Empty or invalid CGI block");
   }
 }
 

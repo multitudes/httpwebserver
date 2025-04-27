@@ -168,7 +168,7 @@ it will save the file hello.txt from directory uploads in the current directory
 # Siege & stress test
 
 ## siege test command
-```bash
+```bas
         siege -c180 -b -t1m http://localhost:4244/index.html
 ```
 Explanation of flags:

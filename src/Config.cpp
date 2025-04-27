@@ -36,7 +36,7 @@ Config::Config(std::string filename) {
     debuglog(RED, "Configuration validation failed");
     throw std::runtime_error("Invalid configuration");
   }
-  debuglog(GREEN, "\n\nConfig initialized with %zu servers\n\n",
+  debuglog(GREEN, "Config initialized with %zu servers\n\n",
            servers.size());
 }
 
@@ -114,6 +114,6 @@ bool Config::validate() {
       return false;
     }
   }
-  debuglog(GREEN, "Configuration validation passed");
+  debuglog(GREEN, "Configuration validation passed\n");
   return true;
 }

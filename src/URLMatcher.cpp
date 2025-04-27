@@ -263,7 +263,7 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     return false;
   }
 
-  debugcolor(MAGENTA, "Parsed whole connection data: %s",
+  debuglog(MAGENTA, "Parsed whole connection data: %s",
              conn.data.request.c_str());
   return true;
 }
