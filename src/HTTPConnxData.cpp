@@ -1079,12 +1079,14 @@ void HTTPConnxData::write_to_child_stdin(int current_fd, int pollfd) {
     perror("Failed to write to CGI stdin");
     debug("Failed to write to CGI stdin");
     state = CONN_CGI_FINISHED;
+    errorStatus = 500;
   } else if (bytes_written == 0) {
     // Should not happen with blocking write unless size was 0
     debuglog(YELLOW, "Wrote 0 bytes to CGI stdin (buffer size: %zu)",
              cgiData.buffer.size());
     debuglog(RED, "Wrote 0 bytes to CGI stdin unexpectedly.");
     state = CONN_CGI_FINISHED;
+    errorStatus = 500;
     cgiData.buffer.clear();
   } else if (bytes_written < cgiData.buffer.size()) {
     // Partial write: Remove written data and wait for next POLLOUT

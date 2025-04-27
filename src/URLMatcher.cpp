@@ -27,18 +27,13 @@ namespace URLMatcher {
 void validateRequest(HTTPConnxData &conn) {
   if (!receiveAndParseRequest(conn))
     return;
-
   conn.config = Config::getConfigByPort(conn.data.port);
-
   if (!handleChunkedData(conn))
     return;
-
   if (handleCookieUpdateRequest(conn))
     return;
-
   if (!getConfigSetURLMatcherData(conn))
     return;
-
   if (findCGIPathAlias(conn))
     return;
 
@@ -67,6 +62,11 @@ void validateRequest(HTTPConnxData &conn) {
   }
 }
 
+/**
+ * @brief Handles GET request for file serving
+ * @param conn The connection data structure
+ * @return true if the file was opened successfully, false otherwise
+ */
 bool handleGETRequest(HTTPConnxData &conn) {
   struct stat path_stat;
   if (stat(conn.urlMatcherData.path_for_stat.c_str(), &path_stat) != 0) {
@@ -113,6 +113,11 @@ bool handleGETRequest(HTTPConnxData &conn) {
   return true;
 }
 
+/**
+ * @brief Handles POST request for file upload
+ * @param conn The connection data structure
+ * @return true if the file was opened successfully, false otherwise
+ */
 bool handlePOSTRequest(HTTPConnxData &conn) {
   if (conn.data.content_length == 0)
     return false;
@@ -153,6 +158,11 @@ bool handlePOSTRequest(HTTPConnxData &conn) {
   return true;
 }
 
+/**
+ * @brief Handles DELETE request for file deletion
+ * @param conn The connection data structure
+ * @return true if the file was deleted successfully, false otherwise
+ */
 bool handleDELETERequest(HTTPConnxData &conn) {
   if (!conn.urlMatcherData.file_upload) {
     Responses::htmlErrorResponse(conn, 403);
@@ -176,6 +186,12 @@ bool handleDELETERequest(HTTPConnxData &conn) {
 }
 
 // handles %20 -> space, %2F -> /, $3F -> ?, +  -> space etc...
+/**
+ * @brief Decodes a URL-encoded string
+ * @param encoded The URL-encoded string
+ * @return The decoded string
+ * handles %20 -> space, %2F -> /, $3F -> ?, +  -> space etc...
+ */
 string urlDecode(const string &encoded) {
   string decoded;
   for (size_t i = 0; i < encoded.length(); ++i) {
@@ -223,21 +239,17 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     if (bytes_read == 0) {
       debuglog(YELLOW, "URLMatcher: Client fd %d disconnected.",
                conn.client_fd);
-      conn.reset();
-      SocketUtils::remove_from_poll(conn.client_fd);
-      close(conn.client_fd);
-      conn.client_fd = -1; // Mark as closed
-      return false;
+      perror("Client closed connection");
     } else {
-      debug("%s", strerror(errno));
-      Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-      conn.closeConnection = true;
-      return false;
+      perror("recv failed");
     }
+    conn.reset();
+    SocketUtils::remove_from_poll(conn.client_fd);
+    close(conn.client_fd);
+    conn.client_fd = -1; // Mark as closed
+    return false;
   }
 
-  // Null-terminate buffer safely
-  buffer[bytes_read] = '\0';
   conn.data.request.append(buffer,
                            static_cast<std::string::size_type>(bytes_read));
   debuglog(YELLOW, "URLMatcher: Received %lu bytes for fd %d", bytes_read,
@@ -262,7 +274,6 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
     conn.closeConnection = true;
     return false;
   }
-
   debuglog(MAGENTA, "Parsed whole connection data: %s",
              conn.data.request.c_str());
   return true;
@@ -458,6 +469,12 @@ bool handleDirectoryListing(HTTPConnxData &conn) {
   }
 }
 
+/**
+ * @brief Checks if the CGI extension is allowed
+ * @param conn The connection data structure
+ * @param path The path to check
+ * @return true if the extension is allowed, false otherwise
+ */
 bool isAllowedCGIExtension(const HTTPConnxData &conn, const string &path) {
     size_t dot_pos = path.find_last_of('.');
     if (dot_pos == string::npos) {
@@ -485,6 +502,11 @@ bool isAllowedCGIExtension(const HTTPConnxData &conn, const string &path) {
     return false;
 }
 
+/**
+ * @brief Checks if the target path matches the CGI path alias
+ * @param conn The connection data structure
+ * @return true if CGI path alias is found, false otherwise
+ */
 bool findCGIPathAlias(HTTPConnxData &conn) {
   // Get CGI path mappings from config
   string cgi_path_alias = conn.config->cgiData.cgi_path_alias.first;
@@ -543,6 +565,12 @@ bool findCGIPathAlias(HTTPConnxData &conn) {
   return false;
 }
 
+/**
+ * @brief Updates the connection paths based on the location block
+ * @param conn The connection data structure
+ * @param location The location block to apply
+ * @param locationPath The path of the location block
+ */
 void updatePathsFromLocation(HTTPConnxData &conn, const Location &location,
                              const std::string &locationPath) {
   if (location.root != conn.config->root) {
@@ -555,6 +583,12 @@ void updatePathsFromLocation(HTTPConnxData &conn, const Location &location,
   }
 }
 
+/**
+ * @brief Applies location block settings to the connection
+ * @param conn The connection data structure
+ * @param location The location block to apply
+ * @return true if a return directive was found, false otherwise
+ */
 bool applyLocationBlockSettings(HTTPConnxData &conn, const Location &location) {
   conn.urlMatcherData.autoindex = location.autoindex;
   conn.urlMatcherData.acceptedMethods = location.acceptedMethods;
@@ -573,6 +607,10 @@ bool applyLocationBlockSettings(HTTPConnxData &conn, const Location &location) {
   return false;
 }
 
+/**
+ * @brief Updates the connection with location block settings
+ * @param conn The connection data structure
+ */
 void updateWithLocationBlockConfig(HTTPConnxData &conn) {
   if (!conn.config->has_locations) {
     debuglog(YELLOW, "URLMatcher: Server has no location blocks defined");
@@ -602,6 +640,11 @@ void updateWithLocationBlockConfig(HTTPConnxData &conn) {
            conn.data.target.c_str());
 }
 
+/**
+ * @brief Handles cookie update requests
+ * @param conn The connection data structure
+ * @return true if the request was handled, false otherwise
+ */
 bool handleCookieUpdateRequest(HTTPConnxData &conn) {
   if (conn.data.target.find("/api/update-cookie/") == 0) {
     debuglog(YELLOW, "Original target: '%s'", conn.data.target.c_str());
@@ -649,6 +692,11 @@ bool handleCookieUpdateRequest(HTTPConnxData &conn) {
   return false;
 }
 
+/**
+ * @brief Handles chunked transfer encoding
+ * @param conn The connection data structure
+ * @return true if chunked data was processed successfully, false otherwise
+ */
 bool handleChunkedData(HTTPConnxData &conn) {
   if (!conn.data.headers_received || !conn.data.chunked) {
     return true; // Not chunked, continue processing

@@ -339,7 +339,8 @@ int run(std::string configFile) {
               if (bytes_read < 0) {
                 perror("Failed to read from CGI stdout");
                 conn.state = CONN_CGI_FINISHED;
-                // todo send the error to the client?
+                conn.errorStatus = 500;
+                conn.closeConnection = true;
                 break;
               } else if (bytes_read == 0) {
                 debug("CGI process finished");
