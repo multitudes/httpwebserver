@@ -110,7 +110,8 @@ test.txt will not be deleted, and return error page 405
 
 ```bash
         echo "name=ChatGPT&msg=Hello" > post_data.txt (create a file)
-        curl -v -X POST -d @post_data.txt http://localhost:4244/upload
+        curl -v -X POST -d @post_data.txt http://localhost:4244/upload/test.txt
+        
 ```
 ```bash
         telnet localhost 4244
