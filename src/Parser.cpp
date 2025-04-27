@@ -34,7 +34,7 @@ void parse(std::string filename, std::vector<ServerData> &servers,
   parseServerBlocks(httpContent, servers, baseConfig);
   parsePortToServer(servers, port_map_);
 
-  debugprintConfigs(servers, port_map_);
+  //debugprintConfigs(servers, port_map_);
   return;
 }
 
@@ -319,7 +319,7 @@ bool isOnlyWhitespace(const std::string &str) {
 
 void addServerIfValid(std::vector<ServerData> &servers, ServerData &serverData, int serverBlockCount) {
   if (serverData.ports.empty()) {
-    debuglog(RED, "No ports found in server block %d", serverBlockCount);
+    debuglog(GREEN, "No ports found in server block %d, ignore server %d", serverBlockCount, serverBlockCount);
   } else {
     // Valid server with at least one port
     servers.push_back(serverData);
@@ -397,7 +397,7 @@ void parseServerPort(std::string trimmedLine, ServerData &serverData, std::set<i
 
     if (port > 0 && port <= 65535) {
       if (portset.find(port) != portset.end()) {
-        debuglog(RED, "Port %u is already in use", port);
+        debuglog(GREEN, "Port %u is duplicated", port);
       } else {
         portset.insert(port);
         serverData.ports.push_back(port);
