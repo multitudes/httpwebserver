@@ -311,12 +311,12 @@ int run(std::string configFile) {
 
       /*    -------- CGI SENDING -----------      */
       if (conn.state == CONN_CGI_SENDING) {
-        debuglog(YELLOW, "Connection fd %d in state CGI SENDING",
-                 conn.client_fd);
-        debug("CONN_CGI_SENDING fd %d", conn.client_fd);
         // Handle data FROM CGI process (ready to write to client from cgi)
         // my client is ready to be written to
         if (current_fd == conn.client_fd && (pollfds[i].revents & POLLOUT)) {
+          debuglog(YELLOW, "Connection fd %d in state CGI SENDING",
+                   conn.client_fd);
+          debug("CONN_CGI_SENDING fd %d", conn.client_fd);
           debug("cgiData is sending  and client fd %d is POLLOUT",
                 conn.client_fd);
           // before to read from child i check if i have a buffer leftover

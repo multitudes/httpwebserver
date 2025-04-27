@@ -3,7 +3,7 @@
 #include <string>
 
 namespace Constants {
-  
+
 std::map<int, std::string> statusMessages;
 std::map<std::string, std::string> mimeTypes;
 const char *default_config_file = "config/default.conf";
@@ -14,7 +14,7 @@ int responseTimeout = 10;
 int keepalive_timeout = 15;
 bool autoReload = false;
 time_t cgi_child_timeout = 1; // this is in case of an endless loop - all our cgi are faster
-time_t client_timeout = 23;
+// time_t client_timeout = 3;
 
 void initStatusMessageMap() {
   debuglog(YELLOW, "Initializing status code to status text mapping");

@@ -991,13 +991,13 @@ bool HTTPConnxData::check_for_child_timeout() {
   
   if (cgiData.child_timeout == 0) {
     cgiData.child_timeout = std::time(NULL);
-
   } else {
     // check if the timeout is reached
     debug("child timeout %ld", cgiData.child_timeout);
     if (std::time(NULL) - cgiData.child_timeout >
         Constants::cgi_child_timeout) {
       debug("CGI timeout reached");
+      debuglog(YELLOW, "Child timeout reached for connection %d", client_fd);
       errorStatus = 504;
       closeConnection = true;
       state = CONN_CGI_FINISHED;
