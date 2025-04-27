@@ -110,7 +110,7 @@ test.txt will not be deleted, and return error page 405
 
 ```bash
         echo "name=ChatGPT&msg=Hello" > post_data.txt (create a file)
-        curl -v -X POST -d @post_data.txt http://localhost:4244/uploads
+        curl -v -X POST -d @post_data.txt http://localhost:4244/upload
 ```
 ```bash
         telnet localhost 4244
@@ -168,7 +168,7 @@ it will save the file hello.txt from directory uploads in the current directory
 # Siege & stress test
 
 ## siege test command
-```bas
+```bash
         siege -c180 -b -t1m http://localhost:4244/index.html
 ```
 Explanation of flags:
