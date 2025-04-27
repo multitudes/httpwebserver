@@ -1,7 +1,7 @@
 #ifndef DEBUG_H
 # define DEBUG_H
 
-# include <stdio.h>
+# include <cstdio>
 
 // #define NDEBUG 1
 
@@ -36,11 +36,11 @@ including the macro below which is not allowed by norminette.
 # define debugcolor(C, M, ...)
 # define debuglog(C, M, ...)
 # else
-# define debug(M, ...) fprintf(stderr, "\033[0;92mDEBUG %s:%s:%d: " M "\033[0m\n",\
+# define debug(M, ...) ::fprintf(stderr, "\033[0;92mDEBUG %s:%s:%d: " M "\033[0m\n",\
         __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
-# define debugcolor(C, M, ...) fprintf(stderr, "%sDEBUG %s:%s:%d: " M "\033[0m\n",\
+# define debugcolor(C, M, ...) ::fprintf(stderr, "%sDEBUG %s:%s:%d: " M "\033[0m\n",\
         C, __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
-# define debuglog(C, M, ...) fprintf(stderr, "%s[Server] : " M "\033[0m\n",\
+# define debuglog(C, M, ...) ::fprintf(stderr, "%s[Server] : " M "\033[0m\n",\
 		C, ##__VA_ARGS__)
 # endif
 #endif //DEBUG_H

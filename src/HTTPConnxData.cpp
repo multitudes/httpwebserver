@@ -1045,13 +1045,14 @@ bool HTTPConnxData::sendCgiDataToClient(ssize_t bytes_read) {
   }
 
   debug("Sent %ld bytes to client fd %d", bytes_written, client_fd);
-
-  // TODO revisit this logic. without it works on mac... but at school?
+  
+  // TODO revisit this logic. without it does not work properly at school?
   if (static_cast<size_t>(bytes_written) < Constants::BUFFER_SIZE) {
-    debuglog(YELLOW, "Finished sending data chunk to client fd %d (based on original logic)", client_fd);
+    debuglog(YELLOW, "Finished sending data chunk to client fd %d", client_fd);
     state = CONN_CGI_FINISHED;
-    return false; 
+    return false; // to mean we are done sending
   }
+  return true; // Indicate send occurred, state remains CONN_CGI_SENDING
   // TODO: Handle partial writes (bytes_written < bytes_read) if using non-blocking sockets
   // For now, assume full write or error based on original code structure.
   // if (static_cast<size_t>(bytes_written) < static_cast<size_t>(bytes_read)) {
@@ -1061,7 +1062,6 @@ bool HTTPConnxData::sendCgiDataToClient(ssize_t bytes_read) {
   //     // This requires more complex buffer management not present in original code.
   //     // For now, returning true, but this is incomplete for robust partial sends.
   // }
-  return true; // Indicate send occurred, state remains CONN_CGI_SENDING
 }
 
 

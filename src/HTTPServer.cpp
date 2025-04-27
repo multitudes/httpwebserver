@@ -350,10 +350,20 @@ int run(std::string configFile) {
               debug("Received %ld bytes from CGI stdout", bytes_read);
               debugcolor(MAGENTA, "response from CGI: %s",
                          conn.cgiData.buffer.c_str());
+              
               if (conn.sendCgiDataToClient(bytes_read) == false) {
-                debug("Failed to send data to client");
+                debug("Failed/finished to send data to client");
                 conn.state = CONN_CGI_FINISHED;
-              } 
+              }
+              // if (pollfds[j].fd == conn.cgiData.cgi_stdout_fd &&
+              //   (pollfds[j].revents & POLLHUP)) {
+              //     throw std::runtime_error(
+              //         "POLLHUP event on CGI stdout fd " +
+              //         Utils::to_string(conn.cgiData.cgi_stdout_fd));
+              //   debug("POLLHUP event on CGI stdout fd %d",
+              //         conn.cgiData.cgi_stdout_fd);
+              //     conn.state = CONN_CGI_FINISHED;
+              //   }
               break;
             }
           }
