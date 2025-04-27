@@ -975,7 +975,7 @@ void HTTPConnxData::check_for_client_timeout() {
   } else {
     // check if the timeout is reached
     if (std::time(NULL) - data.client_timeout >
-        Constants::cgi_child_timeout) {
+        Constants::client_timeout) {
       debug("Client timeout reached");
       // When detecting a client timeout
       debuglog(YELLOW, "Closing the connection (fd %d)", client_fd);

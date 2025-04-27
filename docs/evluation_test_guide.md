@@ -106,7 +106,7 @@ test.txt will not be deleted, and return error page 405
         Connection closed.
 ```
 
-## 2. POST Request
+## 2. POST Request need to be solved
 
 ```bash
         echo "name=ChatGPT&msg=Hello" > post_data.txt (create a file)
@@ -128,7 +128,7 @@ test.txt will not be deleted, and return error page 405
 the reponse should be 200 ok
 
 ## 3. DELETE Request
-add a file called delete-this.txt in the images directory
+add a file called delete_this.txt in the images directory
 ```bash
         curl -v -X DELETE http://localhost:4244/images/delete_this.txt
 ```
@@ -150,7 +150,7 @@ invalid request, return bad request
 
 ## 5. File download
 ```bash
-        curl -v http://localhost:4244/uploads/hello.txt -o hello.txt
+        curl -v http://localhost:4244/upload/hello.txt -o hello.txt
 ```
 it will save the file hello.txt from directory uploads in the current directory
 
@@ -197,7 +197,5 @@ While running the siege, open another terminal and run:
 If the number of open or stuck connections keeps growing and never drops, that’s a red flag for hanging connections or resource leaks.
 
 
-#  Check CGI 
- to do
+
 #  bonus part
-to do
