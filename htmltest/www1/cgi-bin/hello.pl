@@ -13,6 +13,7 @@ my @quotes = (
     "What separates man from machine is that machines cannot think for themselves. \nAlso they are made of metal, whereas man is made of skin.\n---\n",
     "Before you criticize someone, you should walk a mile in their shoes. \nThat way when you criticize them, you are a mile away from them and you have their shoes.\n---\n",
     "If you go flying back through time, and you see somebody else flying forward into the future, \nit's probably best to avoid eye contact.\n---\n",
+    
 );
 
 # Calculate content length first

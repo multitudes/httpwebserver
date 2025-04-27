@@ -48,7 +48,7 @@ def main():
     print(f"Content-Length: {len(html_content)}")
     print()  # End of headers
     # Print the HTML content
-    print(html_content)
+    print(html_content, end='')
 
 if __name__ == "__main__":
     main()

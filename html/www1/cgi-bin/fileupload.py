@@ -111,7 +111,7 @@ def main():
         print(f"Content-Length: {len(html_content)}")
         print()
         # Print the HTML content
-        print(html_content)
+        print(html_content, end='')
 
     except Exception as e:
         # Print error message
@@ -136,7 +136,7 @@ def main():
         print("Content-Type: text/html")
         print(f"Content-Length: {len(error_content)}")
         print()  # End of headers
-        print(error_content)
+        print(error_content, end='')
 
 if __name__ == "__main__":
     main()

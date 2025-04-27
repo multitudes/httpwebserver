@@ -15,7 +15,7 @@ def main():
         print("Content-Type: text/html")
         print(f"Content-Length: {len(error_content)}")
         print()  # End of headers
-        print(error_content)  # Send the HTML content
+        print(error_content, end='')  # Send the HTML content
     
     except Exception as e:
         # Fallback if file can't be read

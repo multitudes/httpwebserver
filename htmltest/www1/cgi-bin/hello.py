@@ -18,7 +18,10 @@ def main():
         body = sys.stdin.read(content_length)
 
     # Construct the HTML content
-    message = "<html><body>"
+    message = "<html><head>"
+    message += "<link rel=\"icon\" href=\"/favicon/favicon.ico\" type=\"image/x-icon\">"
+    message += "<link rel=\"stylesheet\" type=\"text/css\" href=\"/css/style.css\">"
+    message += "</head><body>"
     message += "<h1>Hello, CGI-World!</h1>"
     message += "<h2>Environment Variables</h2>"
     message += "<ul>"
@@ -38,7 +41,8 @@ def main():
     message += f"<li>REMOTE_USER: {os.environ.get('REMOTE_USER', 'N/A')}</li>"
     message += f"<li>GATEWAY_INTERFACE: {os.environ.get('GATEWAY_INTERFACE', 'N/A')}</li>"
     message += f"<li>AUTH_TYPE: {os.environ.get('AUTH_TYPE', 'N/A')}</li>"
-    
+    message += f"<li>UPLOAD_DIR: {os.environ.get('HTTP_UPLOAD_DIR', 'N/A')}</li>"
+    message += f"<li>SERVER_PORT: {os.environ.get('SERVER_PORT', 'N/A')}</li>"
     message += "</ul>"
 
     # Print the body if received
@@ -59,7 +63,7 @@ def main():
     print()
     
     # Print the HTML content
-    print(message)
+    print(message, end='')
 
 if __name__ == "__main__":
     main()

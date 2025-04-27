@@ -63,7 +63,7 @@ def main():
     print()
     
     # Print the HTML content
-    print(message)
+    print(message, end='')
 
 if __name__ == "__main__":
     main()

@@ -84,7 +84,7 @@ def main():
                     print("Content-Type: text/html")
                     print(f"Content-Length: {len(html_content)}")
                     print()
-                    print(html_content)
+                    print(html_content, end='')
                     return
 
                 # Define the full path to save the file
@@ -126,7 +126,7 @@ def main():
                 print("Content-Type: text/html")
                 print(f"Content-Length: {len(html_content)}")
                 print()  # End of headers
-                print(html_content)
+                print(html_content, end='')
     
     except Exception as e:
         # Print error message
@@ -151,7 +151,7 @@ def main():
         print("Content-Type: text/html")
         print(f"Content-Length: {len(error_content)}")
         print()  # End of headers
-        print(error_content)
+        print(error_content, end='')
 
 if __name__ == "__main__":
     main()

@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
 import os
-import cgi
-import cgitb
+import sys
+import signal
 from urllib.parse import quote
 
 
-cgitb.enable()  # Enable detailed error messages
-
 # Get the upload directory from the environment variable
-UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'http/www1/upload')
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
+
+# Handle broken pipes gracefully
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)  
 
 def main():
     try:
+        _ = sys.stdin.read()
         if not os.path.exists(UPLOAD_DIR):
             os.makedirs(UPLOAD_DIR)
             
@@ -107,9 +109,9 @@ def main():
         print("HTTP/1.1 200 OK")
         print("Content-Type: text/html")
         print(f"Content-Length: {len(html_content)}")
-        print()  # End of headers
+        print()
         # Print the HTML content
-        print(html_content)
+        print(html_content, end='')
 
     except Exception as e:
         # Print error message
@@ -134,7 +136,7 @@ def main():
         print("Content-Type: text/html")
         print(f"Content-Length: {len(error_content)}")
         print()  # End of headers
-        print(error_content)
+        print(error_content, end='')
 
 if __name__ == "__main__":
     main()
