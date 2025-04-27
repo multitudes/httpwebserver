@@ -1,5 +1,7 @@
 #include "Utils.hpp"
 #include <cstring>
+#include <cstdlib> 
+#include <sstream>
 
 using std::string;
 
@@ -73,6 +75,22 @@ string removeLeadingSlash(string path) {
     path.erase(0, 1);
   }
   return path;
+}
+
+/**
+ * @brief Generates a filename with a prefix and a random number (C++98 compatible).
+ * @param prefix The prefix for the filename (e.g., "upload_").
+ * @return A string like "prefix_12345".
+ * @note Requires srand() to be called once at program startup for varied results.
+ */
+string generateRandomFilename(const string& prefix) {
+  // Generate a pseudo-random integer
+  int random_number = std::rand();
+  // Convert the integer to a string using stringstream
+  std::stringstream ss;
+  ss << random_number;
+  std::string number_str = ss.str();
+  return prefix + number_str;
 }
 
 } // namespace Utils

@@ -36,5 +36,6 @@ char *binToHex(const unsigned char *input, size_t len);
 string trim(const string &str);
 string ensureTrailinSlash(string path);
 string removeLeadingSlash(string path);
+string generateRandomFilename(const string& prefix);
 
 } // namespace Utils
