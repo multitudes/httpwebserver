@@ -25,7 +25,7 @@ CXXFLAGS		+= -g
 CXXFLAGS 		+= -O0
 
 # CXXFLAGS 			+=  -g3 
-# CXXFLAGS 			+=  -DNDEBUG
+CXXFLAGS 			+=  -DNDEBUG
 
 # directories
 OBJ_DIR			= 	obj/

@@ -1,4 +1,5 @@
 import requests
+import pytest 
 
 # Test for the CGI script
 def test_cgi_script(webserver_normal_config):
@@ -26,15 +27,9 @@ def test_cgi_script(webserver_normal_config):
     assert "<li>GATEWAY_INTERFACE: CGI/1.1</li>" in response.text, "GATEWAY_INTERFACE mismatch"
     assert "<li>AUTH_TYPE: N/A</li>" in response.text, "AUTH_TYPE mismatch"
 
-import requests
-import pytest # Make sure pytest is installed: pip install pytest requests
-
-# Assuming your webserver fixture is defined elsewhere (like in conftest.py)
-# and named 'webserver_normal_config'
-
 # --- Test for POST with multipart/form-data ---
 '''
-example curl
+example curl    
 curl -v -X POST \
              -F "text_field=Simple text value" \
              -F "file_upload=@report.txt;type=text/plain" \

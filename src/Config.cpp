@@ -24,7 +24,10 @@ std::map<uint16_t, ServerData *> Config::port_map_;
 Config::Config(std::string filename) {
   if (filename.empty()) {
     _filename = Constants::default_config_file;
+    debuglog(YELLOW, "Using default configuration file: %s",
+             Constants::default_config_file);
   } else {
+    debuglog(YELLOW, "Using configuration file: %s", filename.c_str());
     _filename = filename;
   }
   Parser::parse(_filename, servers, port_map_);
@@ -33,7 +36,6 @@ Config::Config(std::string filename) {
     debuglog(RED, "Configuration validation failed");
     throw std::runtime_error("Invalid configuration");
   }
-
   debuglog(GREEN, "\n\nConfig initialized with %zu servers\n\n",
            servers.size());
 }
@@ -51,6 +53,8 @@ void Config::cleanup() {
 
 void Config::initialize(std::string &config_file) {
   if (instance_ == NULL) {
+    debuglog(YELLOW, "Initializing config with file: %s",
+             config_file.c_str());
     instance_ = new Config(config_file);
   }
 }
@@ -62,6 +66,8 @@ const std::vector<ServerData> &Config::getServerData() {
   if (instance_ == NULL) {
     instance_ = new Config(Config::_filename);
   }
+  debuglog(YELLOW, "Returning config data");  
+  debuglog(YELLOW, "Config data size: %zu servers", servers.size());
   return Config::servers;
 }
 
@@ -72,6 +78,8 @@ const std::vector<ServerData> &Config::getServerData(char *config_file) {
   if (instance_ == NULL) {
     instance_ = new Config(Config::_filename);
   }
+  debuglog(YELLOW, "Returning config data");
+  debuglog(YELLOW, "Config data size: %zu servers", servers.size());
   return Config::servers;
 }
 
@@ -80,6 +88,12 @@ const ServerData *Config::getConfigByPort(uint16_t port) {
     instance_ = new Config(Config::_filename);
   }
   std::map<uint16_t, ServerData *>::const_iterator it = port_map_.find(port);
+  debuglog(YELLOW, "Searching for port %d", port);
+  if (it != port_map_.end()) {
+    debuglog(YELLOW, "Found server for port %d", port);
+  } else {
+    debuglog(RED, "No server found for port %d", port);
+  }
   return (it != port_map_.end()) ? it->second : NULL;
 }
 
@@ -100,5 +114,6 @@ bool Config::validate() {
       return false;
     }
   }
+  debuglog(GREEN, "Configuration validation passed");
   return true;
 }

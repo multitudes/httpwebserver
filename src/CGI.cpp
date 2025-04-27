@@ -16,27 +16,32 @@ namespace CGI {
 int prepareCGI(HTTPConnxData &conn) {
   // CLEAN UP PREVIOUS PIPES IF THEY EXIST
   if (conn.cgiData.child_stdin_pipe[0] != -1) {
+    debuglog(YELLOW, "Found previous CGI stdin pipe read end - cleaning up");
       ::close(conn.cgiData.child_stdin_pipe[0]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[0]);
       conn.cgiData.child_stdin_pipe[0] = -1;
   }
   if (conn.cgiData.child_stdin_pipe[1] != -1) {
+      debuglog(YELLOW, "Found previous CGI stdin pipe write end - cleaning up");
       ::close(conn.cgiData.child_stdin_pipe[1]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdin_pipe[1]);
       conn.cgiData.child_stdin_pipe[1] = -1;
   }
   if (conn.cgiData.child_stdout_pipe[0] != -1) {
+      debuglog(YELLOW, "Found previous CGI stdout pipe read end - cleaning up");
       ::close(conn.cgiData.child_stdout_pipe[0]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[0]);
       conn.cgiData.child_stdout_pipe[0] = -1;
   }
   if (conn.cgiData.child_stdout_pipe[1] != -1) {
+      debuglog(YELLOW, "Found previous CGI stdout pipe write end - cleaning up");
       ::close(conn.cgiData.child_stdout_pipe[1]);
       SocketUtils::remove_from_poll(conn.cgiData.child_stdout_pipe[1]);
       conn.cgiData.child_stdout_pipe[1] = -1;
   }
   // kill the previous child process if it exists
   if (conn.cgiData.child_pid != -1) {
+    debuglog(YELLOW, "Found previous CGI child process - cleaning up");
     HTTPServer::terminatedPids.insert(conn.cgiData.child_pid);
     conn.cgiData.child_pid = -1;
   }
@@ -157,6 +162,7 @@ int prepareCGI(HTTPConnxData &conn) {
 }
 
 void setCGIEnv(HTTPConnxData &conn) {
+  debuglog(YELLOW, "Setting CGI environment variables");
   // get the config for the connection
   const ServerData *conf = Config::getConfigByPort(conn.data.port);
   if (conf == NULL) {
@@ -170,61 +176,60 @@ void setCGIEnv(HTTPConnxData &conn) {
   // Set environment variables for CGI - some are already init to defaults
   // int he struct constructor - ex REMOTE_USER which we dont use
   conn.cgiData.env["UPLOAD_DIR"] = conf->cgiData.upload_dir;
-  debug("set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
+  debuglog(YELLOW, "set upload dir for cgi to %s", conn.cgiData.env["UPLOAD_DIR"].c_str());
   conn.cgiData.env["REMOTE_HOST"] = conn.data.host;
-  debug("set remote host to %s", conn.cgiData.env["REMOTE_HOST"].c_str());
+  debuglog(YELLOW, "set remote host to %s", conn.cgiData.env["REMOTE_HOST"].c_str());
   // for the body of the request if chunked
-  debug("it is chunked %d", conn.data.chunked);
+  debuglog(YELLOW, "it is chunked %d", conn.data.chunked);
   conn.cgiData.env["HTTP_TRANSFER_ENCODING"] =
       conn.data.headers["Transfer-Encoding"];
-  debug("set transfer encoding to %s",
+  debuglog(YELLOW, "set transfer encoding to %s",
         conn.cgiData.env["HTTP_TRANSFER_ENCODING"].c_str());
   conn.cgiData.env["REQUEST_METHOD"] = conn.data.method;
-  debug("set request method to %s", conn.cgiData.env["REQUEST_METHOD"].c_str());
+  debuglog(YELLOW, "set request method to %s", conn.cgiData.env["REQUEST_METHOD"].c_str());
   conn.cgiData.env["SCRIPT_NAME"] = conn.cgiData.script_name;
-  debug("set script name to %s", conn.cgiData.env["SCRIPT_NAME"].c_str());
+  debuglog(YELLOW, "set script name to %s", conn.cgiData.env["SCRIPT_NAME"].c_str());
   conn.cgiData.env["PATH_INFO"] =
       conn.cgiData.path_info.empty() ? "/" : conn.cgiData.path_info;
-  debug("set path info to %s", conn.cgiData.env["PATH_INFO"].c_str());
+  debuglog(YELLOW, "set path info to %s", conn.cgiData.env["PATH_INFO"].c_str());
   conn.cgiData.env["QUERY_STRING"] = conn.cgiData.query_string;
-  debug("set query string to %s", conn.cgiData.env["QUERY_STRING"].c_str());
+  debuglog(YELLOW, "set query string to %s", conn.cgiData.env["QUERY_STRING"].c_str());
 
   string path_translated =
       Utils::ensureTrailinSlash(conn.config->root) +
       Utils::removeLeadingSlash(conn.cgiData.path_info);
   conn.cgiData.env["PATH_TRANSLATED"] = path_translated;
-  debug("set path translated to %s",
+  debuglog(YELLOW, "set path translated to %s",
         conn.cgiData.env["PATH_TRANSLATED"].c_str());
 
   // Ensure Content-Type is always set
-  debug("content type in urlmatcher %s",
-        conn.urlMatcherData.content_type.c_str());
-  debug("content type in general %s",
+  debuglog(YELLOW, "content type %s",
         conn.data.headers["Content-Type"].c_str());
   conn.cgiData.env["CONTENT_TYPE"] = conn.data.headers["Content-Type"];
   if (conn.data.content_length > 0) {
+    debuglog(YELLOW, "content length %zu",
+          conn.data.content_length);
     conn.cgiData.env["CONTENT_LENGTH"] =
         Utils::to_string(conn.data.content_length);
   }
-  debug("set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
-  debug("content length in data? %zu", conn.data.content_length);
+  debuglog(YELLOW, "set content length to %s", conn.cgiData.env["CONTENT_LENGTH"].c_str());
   conn.cgiData.env["SERVER_NAME"] = conn.data.host;
-  debug("set server name to %s", conn.cgiData.env["SERVER_NAME"].c_str());
+  debuglog(YELLOW, "set server name to %s", conn.cgiData.env["SERVER_NAME"].c_str());
   conn.cgiData.env["SERVER_PORT"] = Utils::to_string(conn.data.port);
-  debug("set server port to %s", conn.cgiData.env["SERVER_PORT"].c_str());
+  debuglog(YELLOW, "set server port to %s", conn.cgiData.env["SERVER_PORT"].c_str());
   conn.cgiData.env["SERVER_PROTOCOL"] = "HTTP/1.1";
-  debug("set server protocol to %s",
+  debuglog(YELLOW, "set server protocol to %s",
         conn.cgiData.env["SERVER_PROTOCOL"].c_str());
   conn.cgiData.env["REMOTE_ADDR"] = conn.client_ip;
-  debug("set remote addr to %s", conn.cgiData.env["REMOTE_ADDR"].c_str());
+  debuglog(YELLOW, "set remote addr to %s", conn.cgiData.env["REMOTE_ADDR"].c_str());
   conn.cgiData.env["SERVER_SOFTWARE"] = "VibeServer/1.0";
-  debug("set server software to %s",
+  debuglog(YELLOW, "set server software to %s",
         conn.cgiData.env["SERVER_SOFTWARE"].c_str());
   conn.cgiData.env["GATEWAY_INTERFACE"] = "CGI/1.1";
   conn.cgiData.env["REMOTE_USER"] = "N/A";
-  debug("set remote user to %s", conn.cgiData.env["REMOTE_USER"].c_str());
+  debuglog(YELLOW, "set remote user to %s", conn.cgiData.env["REMOTE_USER"].c_str());
   conn.cgiData.env["AUTH_TYPE"] = "N/A";
-  debug("set auth type to %s", conn.cgiData.env["AUTH_TYPE"].c_str());
+  debuglog(YELLOW, "set auth type to %s", conn.cgiData.env["AUTH_TYPE"].c_str());
 }
 
 } // namespace CGI
