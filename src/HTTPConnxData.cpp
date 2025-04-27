@@ -762,15 +762,11 @@ bool HTTPConnxData::writingFirstPayloadCompletesUpload() {
 bool HTTPConnxData::readFromClientForUpload() {
   data.buffer.resize(Constants::BUFFER_SIZE);
   ssize_t bytes_read = ::recv(client_fd, data.buffer.data(),
-                              data.buffer.size(), MSG_DONTWAIT);
+                              data.buffer.size(), 0);
   if (bytes_read <= 0) {
     if (bytes_read == 0) {
       debug("Client disconnected during upload");
-    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      debug("No data available yet - keep in reading state");
-      return false;
-    }
-    debug("%s", strerror(errno));
+    } 
     perror("recv failed during upload");
     reset();
     close(client_fd);
@@ -780,7 +776,6 @@ bool HTTPConnxData::readFromClientForUpload() {
   }
   // Resize the buffer to the actual amount of data read
   data.buffer.resize(static_cast<size_t>(bytes_read));
-
   debug("Received %ld bytes from client", bytes_read);
   return true;
 }
@@ -1025,28 +1020,22 @@ bool HTTPConnxData::sendCgiDataToClient(ssize_t bytes_read) {
       state = CONN_CGI_FINISHED; 
       return false;
   }
-
   ssize_t bytes_written =
       ::send(client_fd, cgiData.buffer.c_str(),
              static_cast<size_t>(bytes_read), MSG_NOSIGNAL);
-
   if (bytes_written < 0) {
     // Handle send error (e.g., client disconnected)
     perror("Failed to send data to client");
     debuglog(RED, "Failed to send data to client fd %d", client_fd);
     state = CONN_CGI_FINISHED;
     return false; 
-  }
-
-  if (bytes_written == 0) {
+  } else  if (bytes_written == 0) {
     // Should generally not happen with blocking sockets unless client closed connection cleanly?
     debuglog(YELLOW, "Wrote 0 bytes to client fd %d (client likely closed connection)", client_fd);
     state = CONN_CGI_FINISHED;
     return false;
   }
-
-  debug("Sent %ld bytes to client fd %d", bytes_written, client_fd);
-  
+  debug("Sent %ld bytes to client fd %d", bytes_written, client_fd);  
   // TODO revisit this logic. without it does not work properly at school?
   if (static_cast<size_t>(bytes_written) < Constants::BUFFER_SIZE) {
     debuglog(YELLOW, "Finished sending data chunk to client fd %d", client_fd);

@@ -388,7 +388,7 @@ const char *custom_inet_ntop(int af, const void *src, char *dst,
                bytes[3]);
     return dst;
   }
-  errno = EAFNOSUPPORT;
+  errno = EAFNOSUPPORT; // Address family not supported error
   return NULL;
 }
 
