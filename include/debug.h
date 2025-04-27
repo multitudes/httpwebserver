@@ -33,14 +33,15 @@ including the macro below which is not allowed by norminette.
 
 # ifdef NDEBUG
 # define debug(M, ...)
-# define debugcolor(C, M, ...)
-# define debuglog(C, M, ...)
+// # define debugcolor(C, M, ...)
+// # define debuglog(C, M, ...)
 # else
 # define debug(M, ...) ::fprintf(stderr, "\033[0;92mDEBUG %s:%s:%d: " M "\033[0m\n",\
         __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+# endif
+
 # define debugcolor(C, M, ...) ::fprintf(stderr, "%sDEBUG %s:%s:%d: " M "\033[0m\n",\
         C, __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 # define debuglog(C, M, ...) ::fprintf(stderr, "%s[Server] : " M "\033[0m\n",\
-		C, ##__VA_ARGS__)
-# endif
+                C, ##__VA_ARGS__)
 #endif //DEBUG_H
