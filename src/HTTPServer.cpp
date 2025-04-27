@@ -1,7 +1,6 @@
 
 #include "HTTPServer.hpp"
 #include "Constants.hpp"
-#include "DirectoryListing.hpp"
 #include "Parser.hpp"
 #include "Responses.hpp"
 #include "SocketUtils.hpp"
