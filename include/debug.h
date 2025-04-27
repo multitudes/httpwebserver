@@ -36,8 +36,8 @@ including the macro below which is not allowed by norminette.
 // # define debugcolor(C, M, ...)
 // # define debuglog(C, M, ...)
 # else
-# define debug(M, ...) ::fprintf(stderr, "\033[0;92mDEBUG %s:%s:%d: " M "\033[0m\n",\
-        __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+# define debug(M, ...) ::fprintf(stderr, "\033[0;92mDEBUG: %s:%d: " M "\033[0m\n", \
+        __FILE__, __LINE__, ##__VA_ARGS__)
 # endif
 
 # define debugcolor(C, M, ...) ::fprintf(stderr, "%sDEBUG %s:%s:%d: " M "\033[0m\n",\

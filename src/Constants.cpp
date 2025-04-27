@@ -14,7 +14,7 @@ int responseTimeout = 10;
 int keepalive_timeout = 15;
 bool autoReload = false;
 time_t cgi_child_timeout = 1; // this is in case of an endless loop - all our cgi are faster
-// time_t client_timeout = 3;
+time_t client_timeout = 15;
 
 void initStatusMessageMap() {
   debuglog(YELLOW, "Initializing status code to status text mapping");

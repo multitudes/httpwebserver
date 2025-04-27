@@ -270,8 +270,12 @@ bool receiveAndParseRequest(HTTPConnxData &conn) {
   case HEADERS_PARSE_ERROR:
     debuglog(RED, "Error parsing headers");
     debug("Error parsing headers");
-    Responses::htmlErrorResponse(conn, 500); // Internal Server Error
-    conn.closeConnection = true;
+    conn.reset();
+    conn.state = CONN_INCOMING;
+    HTTPServer::send_critical_error(conn.client_fd, 400);
+    close(conn.client_fd);
+    SocketUtils::remove_from_poll(conn.client_fd);
+    conn.client_fd = -1; // Mark as closed
     return false;
   }
   debuglog(MAGENTA, "Parsed whole connection data: %s",
