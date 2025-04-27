@@ -10,6 +10,7 @@ UPLOAD_DIR = os.getenv('UPLOAD_DIR', './html/www1/upload')
 
 def main():
     try:
+        
         # Parse the form data
         form = cgi.FieldStorage()
 
@@ -34,7 +35,7 @@ def main():
             print("Content-Type: text/html")
             print(f"Content-Length: {len(html_content)}")
             print()  # End of headers
-            print(html_content)
+            print(html_content, end='')
         else:
             files_to_delete = form.getlist("delete_files")
             deleted_files = []
@@ -55,7 +56,7 @@ def main():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Webserv File Deletion</title>
-    <link rel="icon" href="www/favicon/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" type="text/css" href="/css/style.css">
 </head>
 <body>"""
@@ -76,7 +77,7 @@ def main():
             print("Content-Type: text/html")
             print(f"Content-Length: {len(html_content)}")
             print()  # End of headers
-            print(html_content)
+            print(html_content, end='')
 
     except Exception as e:
         # Print error message
@@ -100,7 +101,7 @@ def main():
         print("Content-Type: text/html")
         print(f"Content-Length: {len(error_content)}")
         print()  # End of headers
-        print(error_content)
+        print(error_content, end='')
 
 if __name__ == "__main__":
     main()
