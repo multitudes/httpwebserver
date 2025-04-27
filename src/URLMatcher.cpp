@@ -136,7 +136,7 @@ bool handlePOSTRequest(HTTPConnxData &conn) {
 
     return false;
   }
-  debugcolor(MAGENTA, "opening file for upload: %s",
+  debuglog(MAGENTA, "opening file for upload: %s",
              conn.urlMatcherData.full_path.c_str());
   conn.file_fd = open(conn.urlMatcherData.full_path.c_str(),
                       O_WRONLY | O_CREAT | O_TRUNC, 0644);

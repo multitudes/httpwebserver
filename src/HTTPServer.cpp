@@ -372,7 +372,7 @@ int run(std::string configFile) {
           }
         }
       } // end of the state cgi_sending check
-      // conn.check_for_client_timeout();
+      conn.check_for_client_timeout();
     } // end of the main for loop in pollfds
     cleanupClosedConnections();
   }
