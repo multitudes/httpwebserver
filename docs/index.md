@@ -22,6 +22,26 @@ I personally found the project very interesting; I learned a lot about networkin
 The CGI part was a bit challenging at first, since I did not have much experience with it, and considering that the cgi module is deprecated in the last Python version, it felt a bit esoteric to say the least.  But through reading the RFC and researching a bit on the internet I was able to understand it and implement it. Even the open source ad widely used [nginx](https://github.com/nginx/nginx) server doesnt implement CGI (it does implement fastcgi) so it is not a very common feature in modern web servers at all. And for completeness the nginx server was not easy to configure for a upload file feature from the configuration file. Same for caddy. Caddy would need some plugins to do that. The only server I could take example from, and test the upload feature was Apache. We still used the nginx syntax for our configuration file.  
 We offer CGI and file uploads in our server.
 
+## Table of Contents
+- [Where it all started - The HTTP protocol and UNIX sockets](#where-it-all-started---the-http-protocol-and-unix-sockets)
+- [RFC's](#rfcs)
+- [The Project](#the-project)
+  - [Configuration files](#configuration-files)
+- [Multiplexing](#multiplexing)
+- [The tcp/ip sockets](#the-tcpip-sockets)
+  - [Handling requests](#handling-requests)
+- [CGI](#cgi)
+- [Testing](#testing)
+- [Some Definitions](#some-definitions)
+- [Resources](#resources)
+  - [HTTP Standards and References](#http-standards-and-references)
+  - [Programming Guides](#programming-guides)
+  - [Open Source Projects](#open-source-projects)
+  - [CGI Resources](#cgi-resources)
+  - [Testing Resources](#testing-resources)
+  - [Miscellaneous](#miscellaneous)
+  - [Git Tips](#git-tips)
+
 # Where it all started - The HTTP protocol and UNIX sockets
 HTTP (Hypertext Transfer Protocol) was invented by Tim Berners-Lee at CERN (the European Organization for Nuclear Research) in 1989. The first version of HTTP, HTTP/0.9, was a simple protocol for transferring raw data across the internet. The more widely recognized version, HTTP/1.0, was specified in 1996, followed by HTTP/1.1 in 1997, which introduced persistent connections and other improvements. Today we have HTTP/2 and HTTP/3, but our server will need to handle HTTP/1.1 only.
 
