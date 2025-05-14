@@ -3,25 +3,23 @@
 > "What I cannot create, I do not understand."
 ~ Richard Feynman
 
-WORK IN PROGRESS. Code can be shown upon request.
+# HTTP Web Server
 
-This is a team project for the 42 school. The goal is to create a simple HTTP 1.1 web server that can handle multiple connections using multiplexing. The server will be able to serve static files, handle different HTTP methods, and support CGI scripts. The project is written in C++ and uses the UNIX socket API for network communication.
+A lightweight HTTP 1.1 web server implementation built in C++ for the 42 school curriculum. This server handles multiple connections via multiplexing (poll/select), serves static files, processes various HTTP methods, and supports CGI scripts.
 
-We are a team of 3 students, and we split the work into what we consider the main parts:
-- The parsing of the configuration file and the server setup
-- The handling of the incoming requests and the response generation
-- The handling of the sockets and the CGI support
-- Documentation, testing, and CI/CD pipelines on GitHub Actions
+## Team Project
+Our team of 3 divided the project into key components:
+- Configuration file parsing and server setup
+- Request handling and response generation
+- Socket management and CGI implementation
+- Documentation, testing, and CI/CD pipeline
 
-Usage:  
+## Usage
 ```bash
 ./webserv [configuration file]
 ```
 
-I personally found the project very interesting; I learned a lot about networking, sockets, and the HTTP protocol.  
-The CGI part was a bit challenging at first, since I did not have much experience with it, and considering that the CGI module is deprecated in the latest Python version, it felt a bit esoteric to say the least. But through reading the RFC and researching on the internet, I was able to understand it and implement it. Even the open source and widely used [nginx](https://github.com/nginx/nginx) server doesn't implement CGI (it implements FastCGI instead), so it is not a very common feature in modern web servers. Additionally, the nginx server was not easy to configure for file upload features from the configuration file. The same applies to Caddy, which would need plugins to do that. Apache was the only server I could use as an example and test the upload feature with. We still used the nginx syntax for our configuration file.  
-Our server offers both CGI and file upload capabilities.
-
+Our server implements both CGI support and file upload capabilities, following an nginx-like configuration syntax.
 ## Table of Contents
 - [Where it all started - The HTTP protocol and UNIX sockets](#where-it-all-started---the-http-protocol-and-unix-sockets)
 - [RFC's](#rfcs)
@@ -55,12 +53,12 @@ For this project, we will refer to the following RFCs:
 - [rfc791](../assets/rfc791.pdf): Internet Protocol
 - [rfc3875](../assets/rfc3875.pdf): The Common Gateway Interface (CGI) Version 1.1
 
-Because not everything is still relevant for us in the rfc2616, we summarized the most important parts. You can read a summary of the rfc2616 here [rfc2616-summary.md](rfc2616-summary.md).  
-And a summary of the rfc791 is here [rfc793-summary.md](rfc793-summary.md).
+Because not everything is still relevant for us in the rfc2616, we summarized the most important parts. You can read a summary of the rfc2616 here [rfc2616-summary.md](/docs/rfc2616-summary.md).  
+And a summary of the rfc791 is here [rfc793-summary.md](/docs/rfc793-summary.md).
 The rfc3875 is not very long and we used it as reference for the CGI part of the project.
 
 # The Project
-See the allowed_functions.md file here: [allowed_functions.md](allowed_functions.md)
+See the allowed_functions.md file here: [allowed_functions.md](/docs/allowed_functions.md)
 
 ## Configuration files
 A server configuration file is a file used to define the settings and parameters for a server's operation. These files are essential for customizing the behavior of the server, specifying how it handles requests, manages resources, and interacts with other systems. Configuration files are typically written in a plain text format and can be edited using any text editor.
@@ -78,7 +76,7 @@ a default file to serve when the request is for a directory. Allow the route to 
 ◦ Define a directory or file where the requested file should be located 
 - We can take inspiration from the ’server’ section of the NGINX configuration file  
 
-See [here](config.md) for more about configuration files.
+See [here](/docs/config.md) for more about configuration files.
 
 For our project we decided to implement a syntax similar to the NGINX configuration file.
 
@@ -170,15 +168,15 @@ Interestingly the script above has 3 details that often are overlooked.
 If the shebang path is not correct, the server will return a 500 error.  If the content length is not present the server might try to chunk the response (better) or return Constants::BUFFER_SIZE and truncate it (less ideal but depends of the project requirements).  
 
 # Testing 
-See the testing.md file here: [testing.md](testing.md) and also how we use siege here [siege.md](siege.md)
+See the testing.md file here: [testing.md](/docs/testing.md) and also how we use siege here [siege.md](/docs/siege.md)
 
 # Some Definitions
 - **Socket**: A socket is an endpoint for communication between two machines over a network. It can be used to send and receive data, establish connections, and perform other network-related tasks. Sockets are identified by an IP address and a port number and are in the OSI layer 4 (Transport Layer) of the network stack.
 - **Port**: A port is a communication endpoint in an operating system that allows multiple processes to use the same network interface. Ports are identified by numbers ranging from 0 to 65535 and are used to direct network traffic to specific applications or services running on a machine and are in the OSI layer 4 (Transport Layer) of the network stack.
 - **TCP/IP** TCP/IP (Transmission Control Protocol/Internet Protocol) is a suite of communication protocols used to connect devices over the internet. It provides reliable, end-to-end communication between devices by breaking data into packets and routing them across networks. TCP/IP includes protocols like TCP, IP, UDP, and ICMP.
-more about the TCP handshake here: [tcp-handshake.md](tcp-handshake.md)
+more about the TCP handshake here: [tcp-handshake.md](/docs/tcp-handshake.md)
 
-More definitions are here: [definitions.md](definitions.md)
+More definitions are here: [definitions.md](/docs/definitions.md)
 
 ## Resources
 
