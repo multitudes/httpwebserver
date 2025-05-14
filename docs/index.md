@@ -1,13 +1,9 @@
 [![42](https://img.shields.io/badge/-Berlin-blue.svg?logo=data:image/svg%2bxml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAxOC4xLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiA2LjAwIEJ1aWxkIDApICAtLT4NCjxzdmcgdmVyc2lvbj0iMS4xIg0KCSBpZD0iQ2FscXVlXzEiIHNvZGlwb2RpOmRvY25hbWU9IjQyX2xvZ28uc3ZnIiBpbmtzY2FwZTp2ZXJzaW9uPSIwLjQ4LjIgcjk4MTkiIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyIgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6c29kaXBvZGk9Imh0dHA6Ly9zb2RpcG9kaS5zb3VyY2Vmb3JnZS5uZXQvRFREL3NvZGlwb2RpLTAuZHRkIiB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiIHhtbG5zOmlua3NjYXBlPSJodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy9uYW1lc3BhY2VzL2lua3NjYXBlIg0KCSB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIgdmlld0JveD0iMCAtMjAwIDk2MCA5NjAiDQoJIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAtMjAwIDk2MCA5NjAiIHhtbDpzcGFjZT0icHJlc2VydmUiPg0KPHBvbHlnb24gaWQ9InBvbHlnb241IiBwb2ludHM9IjMyLDQxMi42IDM2Mi4xLDQxMi42IDM2Mi4xLDU3OCA1MjYuOCw1NzggNTI2LjgsMjc5LjEgMTk3LjMsMjc5LjEgNTI2LjgsLTUxLjEgMzYyLjEsLTUxLjEgDQoJMzIsMjc5LjEgIi8+DQo8cG9seWdvbiBpZD0icG9seWdvbjciIHBvaW50cz0iNTk3LjksMTE0LjIgNzYyLjcsLTUxLjEgNTk3LjksLTUxLjEgIi8+DQo8cG9seWdvbiBpZD0icG9seWdvbjkiIHBvaW50cz0iNzYyLjcsMTE0LjIgNTk3LjksMjc5LjEgNTk3LjksNDQzLjkgNzYyLjcsNDQzLjkgNzYyLjcsMjc5LjEgOTI4LDExNC4yIDkyOCwtNTEuMSA3NjIuNywtNTEuMSAiLz4NCjxwb2x5Z29uIGlkPSJwb2x5Z29uMTEiIHBvaW50cz0iOTI4LDI3OS4xIDc2Mi43LDQ0My45IDkyOCw0NDMuOSAiLz4NCjwvc3ZnPg0K)](https://42berlin.de) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) ![Version](https://img.shields.io/badge/version-1.0.0-blue) 
 
-# 42-Webserv
-
 > "What I cannot create, I do not understand".
 ~ Richard Feynmann 
 
 WORK IN PROGRESS. Code can be shown upon request.
-
-<!-- The github repository is here: [webserv](https://github.com/multitudes/42-Webserv?tab=readme-ov-file) -->
 
 This is a team project for the 42 school. The goal is to create a simple HTTP 1.1 web server that can handle multiple connections using multiplexing. The server will be able to serve static files, handle different HTTP methods, and support CGI scripts. The project is written in C++ and uses the UNIX socket API for network communication.
 
@@ -164,77 +160,43 @@ more about the TCP handshake here: [tcp-handshake.md](tcp-handshake.md)
 
 More definitions are here: [definitions.md](definitions.md)
 
-## links
+## Resources
 
-The Hypertext Transfer Protocol (HTTP) is an
-application-level protocol for distributed, collaborative, hypermedia information systems. HTTP has been in use by the World-Wide Web global information initiative since 1990. Here is the HttP1.1 standard:   
-https://datatracker.ietf.org/doc/html/rfc2616  
+### HTTP Standards and References
+- [HTTP/1.1 Standard RFC2616](https://datatracker.ietf.org/doc/html/rfc2616) - The Hypertext Transfer Protocol (HTTP) specification used by the World Wide Web since 1990
+- [TCP Protocol RFC793](https://datatracker.ietf.org/doc/html/rfc793) - Transmission Control Protocol specification
+- [IP Protocol RFC791](https://datatracker.ietf.org/doc/html/rfc791) - Internet Protocol specification
+- [Mozilla Developer Network - HTTP Overview](https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview) - Comprehensive HTTP documentation
 
-A classic, "Beej's Guide to Network Programming" by Brian "Beej" Hall:   
-https://beej.us/guide/bgnet/pdf/bgnet_usl_c_1.pdf
+### Programming Guides
+- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/pdf/bgnet_usl_c_1.pdf) - Classic guide by Brian "Beej" Hall
+- [C++ Standard Library Reference](https://en.cppreference.com/w/) - Comprehensive reference for C++ standard library
+- [Sockets and Network Programming in C](https://www.codequoi.com/en/sockets-and-network-programming-in-c/) - Blog tutorials on socket programming
+- [Files and Sockets Tutorial](https://youtu.be/il4N6KjVQ-s?si=g6yGCTs1_IRZu9jm) - Video guide on handling files and sockets
 
-Sometimes useful, the comprehensive reference for C++ standard library.   
-https://en.cppreference.com/w/  
+### Open Source Projects
+- [NGINX Web Server](https://github.com/nginx/nginx) - Source code of the popular NGINX web server
+- [Caddy Web Server](https://caddyserver.com/) - A modern web server with automatic HTTPS
 
-Open Source Projects for inspiration:  
-The source code of existing open-source web servers like NGINX and Apache HTTP Server.  
-https://github.com/nginx/nginx  
+### CGI Resources
+- [CGI on NGINX](https://stackoverflow.com/questions/11667489/how-to-run-cgi-scripts-on-nginx) - Stack Overflow guide
+- [Server World CGI Setup Guide](https://www.server-world.info/en/note?os=Ubuntu_20.04&p=nginx&f=6) - Tutorial for CGI setup
+- [File Upload with CGI](https://www.grm.cuhk.edu.hk/~htlee/perlcourse/fileupload/fileupload2.html) - Guide for handling file uploads with CGI
 
-Caddy, a modern web server with automatic HTTPS.  
-https://caddyserver.com/  
+### Testing Resources
+- [Intra Tester](https://github.com/t0mm4rx/webserv/tree/main/tests)
+- [WebServ Tester by fredrikalindh](https://github.com/fredrikalindh/webserv_tester)
+- [WebServ Tester by hygoni](https://github.com/hygoni/webserv_tester)
 
-tcp/ip rfc  
-https://datatracker.ietf.org/doc/html/rfc791
+### Miscellaneous
+- [ZeroSSL](https://zerossl.com/) - Free SSL certificate issuance
+- [Don't Reinvent the Wheel](https://blog.codinghorror.com/dont-reinvent-the-wheel-unless-you-plan-on-learning-more-about-wheels/) - Blog post on code reuse
+- [GitHub Pages with Markdown](https://github.com/nicolas-van/easy-markdown-to-github-pages) - Setup guide for GitHub Pages documentation
+- [HTTP Protocol Comparison](https://youtu.be/UMwQjFzTQXw?si=9p1x_e8wvDKlvo4L) - HTTP/1.1 vs HTTP/2 vs HTTP/3
+- [Linus on Git](https://youtube.com/shorts/_lZV76JO3WU?si=GyMXzBFrhj3ws_oX) - "Linus did it in 5 days, see where you can git"
+- [404 Page Example](https://training-lms.redhat.com/st_toolkit/common/pages/error404.html) - Example of a well-designed 404 page
+- [Doxygen Graph Examples](https://gist.github.com/CarloCattano/1f1db247c4eb8477a365e29eaf12aaf1) - Helpful for documentation
 
-zeroSSL,  the easiest way to issue free SSL certificates.    
-https://zerossl.com/   
-
-what are we building?
-"Linus did it in 5 days, see where you can git" 
-https://youtube.com/shorts/_lZV76JO3WU?si=GyMXzBFrhj3ws_oX
-
-mozilla developer network  
-https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview  
-
-blog post :  
-https://blog.codinghorror.com/dont-reinvent-the-wheel-unless-you-plan-on-learning-more-about-wheels/  
-
-RFC 793 about TCP:  
-https://datatracker.ietf.org/doc/html/rfc793  
-
-This readme is also available in the docs folder which is rendered as a GitHub Pages static site.  
-It is failry easy to set up and can be used to document the project.  
-Here is a small walkthrouh on how to set it up:  
-https://github.com/nicolas-van/easy-markdown-to-github-pages  
-
-files and sockets:
-https://youtu.be/il4N6KjVQ-s?si=g6yGCTs1_IRZu9jm  
-
-a nice 404 page  
-https://training-lms.redhat.com/st_toolkit/common/pages/error404.html  
-
-check this for doxigen graphs  
-https://gist.github.com/CarloCattano/1f1db247c4eb8477a365e29eaf12aaf1  
-
-CGI on nginx!
-https://stackoverflow.com/questions/11667489/how-to-run-cgi-scripts-on-nginx
-https://www.server-world.info/en/note?os=Ubuntu_20.04&p=nginx&f=6  
-
-some git tips:  
-https://sethrobertson.github.io/GitFixUm/fixup.html  
-https://dangitgit.com/  
-
-CGI  
-https://www.grm.cuhk.edu.hk/~htlee/perlcourse/fileupload/fileupload2.html  
-
-Webserv Testers
--Intra Tester  
--https://github.com/t0mm4rx/webserv/tree/main/tests  
--https://github.com/fredrikalindh/webserv_tester  
--https://github.com/hygoni/webserv_tester  
-
-HTTP/1.1 vs HTTP/2 vs HTTP/3  
-https://youtu.be/UMwQjFzTQXw?si=9p1x_e8wvDKlvo4L  
-
-Here is a good blog site that explains sockets and network programming in C:  
-https://www.codequoi.com/en/sockets-and-network-programming-in-c/  
+### Git Tips
+- [Git Fixum Guide](https://sethrobertson.github.io/GitFixUm/fixup.html) - How to fix Git mistakes
+- [Dang It, Git!](https://dangitgit.com/) - Solutions for common Git problems
