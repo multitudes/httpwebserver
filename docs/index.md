@@ -53,12 +53,12 @@ For this project, we will refer to the following RFCs:
 - [rfc791](../assets/rfc791.pdf): Internet Protocol
 - [rfc3875](../assets/rfc3875.pdf): The Common Gateway Interface (CGI) Version 1.1
 
-Because not everything is still relevant for us in the rfc2616, we summarized the most important parts. You can read a summary of the rfc2616 here [rfc2616-summary.md](/docs/rfc2616-summary.md).  
-And a summary of the rfc791 is here [rfc793-summary.md](/docs/rfc793-summary.md).
+Because not everything is still relevant for us in the rfc2616, we summarized the most important parts. You can read a summary of the rfc2616 here [rfc2616-summary.md](rfc2616-summary.md).  
+And a summary of the rfc791 is here [rfc791-summary.md](rfc791-summary.md).
 The rfc3875 is not very long and we used it as reference for the CGI part of the project.
 
 # The Project
-See the allowed_functions.md file here: [allowed_functions.md](/docs/allowed_functions.md)
+See the allowed_functions.md file here: [allowed_functions.md](allowed_functions.md)
 
 ## Configuration files
 A server configuration file is a file used to define the settings and parameters for a server's operation. These files are essential for customizing the behavior of the server, specifying how it handles requests, manages resources, and interacts with other systems. Configuration files are typically written in a plain text format and can be edited using any text editor.
@@ -76,7 +76,7 @@ a default file to serve when the request is for a directory. Allow the route to 
 ◦ Define a directory or file where the requested file should be located 
 - We can take inspiration from the ’server’ section of the NGINX configuration file  
 
-See [here](/docs/config.md) for more about configuration files.
+See [here](config.md) for more about configuration files.
 
 For our project we decided to implement a syntax similar to the NGINX configuration file.
 
@@ -168,15 +168,15 @@ Interestingly the script above has 3 details that often are overlooked.
 If the shebang path is not correct, the server will return a 500 error.  If the content length is not present the server might try to chunk the response (better) or return Constants::BUFFER_SIZE and truncate it (less ideal but depends of the project requirements).  
 
 # Testing 
-See the testing.md file here: [testing.md](/docs/testing.md) and also how we use siege here [siege.md](/docs/siege.md)
+See the testing.md file here: [testing.md](testing.md) and also how we use siege here [siege.md](siege.md)
 
 # Some Definitions
 - **Socket**: A socket is an endpoint for communication between two machines over a network. It can be used to send and receive data, establish connections, and perform other network-related tasks. Sockets are identified by an IP address and a port number and are in the OSI layer 4 (Transport Layer) of the network stack.
 - **Port**: A port is a communication endpoint in an operating system that allows multiple processes to use the same network interface. Ports are identified by numbers ranging from 0 to 65535 and are used to direct network traffic to specific applications or services running on a machine and are in the OSI layer 4 (Transport Layer) of the network stack.
 - **TCP/IP** TCP/IP (Transmission Control Protocol/Internet Protocol) is a suite of communication protocols used to connect devices over the internet. It provides reliable, end-to-end communication between devices by breaking data into packets and routing them across networks. TCP/IP includes protocols like TCP, IP, UDP, and ICMP.
-more about the TCP handshake here: [tcp-handshake.md](/docs/tcp-handshake.md)
+more about the TCP handshake here: [tcp-handshake.md](tcp-handshake.md)
 
-More definitions are here: [definitions.md](/docs/definitions.md)
+More definitions are here: [definitions.md](definitions.md)
 
 ## Resources
 
