@@ -48,10 +48,10 @@ RFC stands for "Request for Comments."
 It is a type of publication from the engineering and standards organizations for the internet, such as the Internet Engineering Task Force (IETF) and the Internet Society (ISOC). RFCs are used to describe methods, behaviors, research, or innovations applicable to the working of the internet and internet-connected systems.
 
 For this project, we will refer to the following RFCs:
-- [rfc2616](../assets/rfc2616.pdf): Hypertext Transfer Protocol -- HTTP/1.1 
-- [rfc793](../assets/rfc793.pdf): Transmission Control Protocol
-- [rfc791](../assets/rfc791.pdf): Internet Protocol
-- [rfc3875](../assets/rfc3875.pdf): The Common Gateway Interface (CGI) Version 1.1
+- [rfc2616](rfc2616.pdf): Hypertext Transfer Protocol -- HTTP/1.1 
+- [rfc793](rfc793.pdf): Transmission Control Protocol
+- [rfc791](rfc791.pdf): Internet Protocol
+- [rfc3875](rfc3875.pdf): The Common Gateway Interface (CGI) Version 1.1
 
 Because not everything is still relevant for us in the rfc2616, we summarized the most important parts. You can read a summary of the rfc2616 here [rfc2616-summary.md](rfc2616-summary.md).  
 And a summary of the rfc791 is here [rfc791-summary.md](rfc791-summary.md).
