@@ -1,17 +1,17 @@
 [![42](https://img.shields.io/badge/-Berlin-blue.svg?logo=data:image/svg%2bxml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAxOC4xLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiA2LjAwIEJ1aWxkIDApICAtLT4NCjxzdmcgdmVyc2lvbj0iMS4xIg0KCSBpZD0iQ2FscXVlXzEiIHNvZGlwb2RpOmRvY25hbWU9IjQyX2xvZ28uc3ZnIiBpbmtzY2FwZTp2ZXJzaW9uPSIwLjQ4LjIgcjk4MTkiIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyIgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6c29kaXBvZGk9Imh0dHA6Ly9zb2RpcG9kaS5zb3VyY2Vmb3JnZS5uZXQvRFREL3NvZGlwb2RpLTAuZHRkIiB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiIHhtbG5zOmlua3NjYXBlPSJodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy9uYW1lc3BhY2VzL2lua3NjYXBlIg0KCSB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIgdmlld0JveD0iMCAtMjAwIDk2MCA5NjAiDQoJIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAtMjAwIDk2MCA5NjAiIHhtbDpzcGFjZT0icHJlc2VydmUiPg0KPHBvbHlnb24gaWQ9InBvbHlnb241IiBwb2ludHM9IjMyLDQxMi42IDM2Mi4xLDQxMi42IDM2Mi4xLDU3OCA1MjYuOCw1NzggNTI2LjgsMjc5LjEgMTk3LjMsMjc5LjEgNTI2LjgsLTUxLjEgMzYyLjEsLTUxLjEgDQoJMzIsMjc5LjEgIi8+DQo8cG9seWdvbiBpZD0icG9seWdvbjciIHBvaW50cz0iNTk3LjksMTE0LjIgNzYyLjcsLTUxLjEgNTk3LjksLTUxLjEgIi8+DQo8cG9seWdvbiBpZD0icG9seWdvbjkiIHBvaW50cz0iNzYyLjcsMTE0LjIgNTk3LjksMjc5LjEgNTk3LjksNDQzLjkgNzYyLjcsNDQzLjkgNzYyLjcsMjc5LjEgOTI4LDExNC4yIDkyOCwtNTEuMSA3NjIuNywtNTEuMSAiLz4NCjxwb2x5Z29uIGlkPSJwb2x5Z29uMTEiIHBvaW50cz0iOTI4LDI3OS4xIDc2Mi43LDQ0My45IDkyOCw0NDMuOSAiLz4NCjwvc3ZnPg0K)](https://42berlin.de) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) ![Version](https://img.shields.io/badge/version-1.0.0-blue) 
 
-> "What I cannot create, I do not understand".
-~ Richard Feynmann 
+> "What I cannot create, I do not understand."
+~ Richard Feynman
 
 WORK IN PROGRESS. Code can be shown upon request.
 
 This is a team project for the 42 school. The goal is to create a simple HTTP 1.1 web server that can handle multiple connections using multiplexing. The server will be able to serve static files, handle different HTTP methods, and support CGI scripts. The project is written in C++ and uses the UNIX socket API for network communication.
 
-We are a team of 3 students and we split the work in what we think are the main parts.
-- The parsing of the configuration file and the server setup.
-- The handling of the incoming requests and the response generation.
-- The is handling of the sockets and the CGI support.
-- documentation testing and ci/cd pipelines on GitHub actions.
+We are a team of 3 students, and we split the work into what we consider the main parts:
+- The parsing of the configuration file and the server setup
+- The handling of the incoming requests and the response generation
+- The handling of the sockets and the CGI support
+- Documentation, testing, and CI/CD pipelines on GitHub Actions
 
 Usage:  
 ```bash
@@ -19,8 +19,8 @@ Usage:
 ```
 
 I personally found the project very interesting; I learned a lot about networking, sockets, and the HTTP protocol.  
-The CGI part was a bit challenging at first, since I did not have much experience with it, and considering that the cgi module is deprecated in the last Python version, it felt a bit esoteric to say the least.  But through reading the RFC and researching a bit on the internet I was able to understand it and implement it. Even the open source ad widely used [nginx](https://github.com/nginx/nginx) server doesnt implement CGI (it does implement fastcgi) so it is not a very common feature in modern web servers at all. And for completeness the nginx server was not easy to configure for a upload file feature from the configuration file. Same for caddy. Caddy would need some plugins to do that. The only server I could take example from, and test the upload feature was Apache. We still used the nginx syntax for our configuration file.  
-We offer CGI and file uploads in our server.
+The CGI part was a bit challenging at first, since I did not have much experience with it, and considering that the CGI module is deprecated in the latest Python version, it felt a bit esoteric to say the least. But through reading the RFC and researching on the internet, I was able to understand it and implement it. Even the open source and widely used [nginx](https://github.com/nginx/nginx) server doesn't implement CGI (it implements FastCGI instead), so it is not a very common feature in modern web servers. Additionally, the nginx server was not easy to configure for file upload features from the configuration file. The same applies to Caddy, which would need plugins to do that. Apache was the only server I could use as an example and test the upload feature with. We still used the nginx syntax for our configuration file.  
+Our server offers both CGI and file upload capabilities.
 
 ## Table of Contents
 - [Where it all started - The HTTP protocol and UNIX sockets](#where-it-all-started---the-http-protocol-and-unix-sockets)
