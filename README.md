@@ -52,6 +52,9 @@ For this project, we will refer to the following RFCs:
 - [rfc791](../assets/rfc791.pdf): Internet Protocol
 - [rfc3875](../assets/rfc3875.pdf): The Common Gateway Interface (CGI) Version 1.1
 
+HTTP/1.1 was updated again in 2022: 
+- [rfc9112](docs/rfc9112.pdf): Hypertext Transfer Protocol -- HTTP/1.1
+
 Because not everything is still relevant for us in the rfc2616, we summarized the most important parts. You can read a summary of the rfc2616 here [rfc2616-summary.md](/docs/rfc2616-summary.md).  
 And a summary of the rfc791 is here [rfc793-summary.md](/docs/rfc793-summary.md).
 The rfc3875 is not very long and we used it as reference for the CGI part of the project.
