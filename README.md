@@ -1,10 +1,5 @@
 ![httpwebserver.jpg](httpwebserver.jpg)
 
-
-# HTTP Web Server
-
-
-
 A lightweight HTTP 1.1 web server implementation built in C++ for the 42 school curriculum. This server handles multiple connections via multiplexing (poll/select), serves static files, processes various HTTP methods, and supports CGI scripts.
 
 ## Team Project
