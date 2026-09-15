@@ -1,14 +1,3 @@
-# The @ symbol at the beginning of the line suppresses the echoing of the command to the terminal when it is executed.
-# Without it, the command and its output would be printed to the terminal, which can make the output cleaner.
-# -o $@:
-# This specifies the output file to be produced. $@ is a special variable in Makefiles, representing
-# the target of the rule. In this context, it specifies the output file name.
-# -c $<:
-# The -c flag indicates that the compiler should only produce an object file without linking.
-# $< is another special variable, representing the first prerequisite (dependency) of the rule. It is the source file.
-
-# Detect OS (Linux vs Mac)
-UNAME_S := $(shell uname -s)
 
 NAME 			= 	webserv
 CXX				= 	c++
@@ -27,15 +16,12 @@ CXXFLAGS 		+= -O0
 # CXXFLAGS 			+=  -g3 
 # CXXFLAGS 			+=  -DNDEBUG
 
-# directories
 OBJ_DIR			= 	obj/
 SRC_DIR			= 	src/
 INCLUDE_DIR		= 	include/
 
-
 CPPFLAGS        += -I$(INCLUDE_DIR)
 CPPFLAGS        += -I$(SRC_DIR) # Add src include path here
-
 
 SRCS 			= $(addprefix $(SRC_DIR), main.cpp)
 SRCS 			+= $(addprefix $(SRC_DIR), SocketUtils.cpp)
@@ -56,19 +42,9 @@ HDRS 			+= $(addprefix $(SRC_DIR), )
 
 all: $(NAME) test
 
-# # Add PIE flags only for Linux
-# ifeq ($(shell uname -s), Linux)
-# 	CXXFLAGS	+= -fPIE
-# 	LDFLAGS 	+= -pie
-# else ifeq ($(shell uname -s), Darwin)
-# 	@echo "Building on macOS (Darwin)"
-# 	# No additional flags needed for macOS
-# endif
-
 $(NAME): $(OBJS) $(HDRS)
 	$(CXX) $(CXXFLAGS)  $(CPPFLAGS) $(OBJS) $(LDFLAGS) -o $(NAME) 
 
-# Static pattern rule for compilation - adding the .o files in the obj folder
 $(OBJ_DIR)%.o: $(SRC_DIR)%.cpp
 	mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $< -o $@
@@ -77,7 +53,6 @@ clean:
 	rm -f $(OBJS)
 	rm -rf $(OBJ_DIR)
 
-# Clean everything (including venv)
 fclean: clean
 	@rm -f $(NAME)
 	@rm -rf $(VENV_DIR)
