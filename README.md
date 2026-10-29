@@ -44,17 +44,22 @@ RFC stands for "Request for Comments."
 It is a type of publication from the engineering and standards organizations for the internet, such as the Internet Engineering Task Force (IETF) and the Internet Society (ISOC). RFCs are used to describe methods, behaviors, research, or innovations applicable to the working of the internet and internet-connected systems.
 
 For this project, we will refer to the following RFCs:
-- [rfc2616](../assets/rfc2616.pdf): Hypertext Transfer Protocol -- HTTP/1.1 
-- [rfc793](../assets/rfc793.pdf): Transmission Control Protocol
-- [rfc791](../assets/rfc791.pdf): Internet Protocol
-- [rfc3875](../assets/rfc3875.pdf): The Common Gateway Interface (CGI) Version 1.1
-
+- [RFC 7230](https://datatracker.ietf.org/doc/html/rfc7230): Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
+- [RFC 9110](https://datatracker.ietf.org/doc/html/rfc9110): HTTP Semantics (modern update)
+- [RFC 9112](https://datatracker.ietf.org/doc/html/rfc9112): HTTP/1.1 (modern wire-level syntax update)
+- [RFC 793](https://datatracker.ietf.org/doc/html/rfc793): Transmission Control Protocol (TCP)
+- [RFC 791](https://datatracker.ietf.org/doc/html/rfc791): Internet Protocol (IP)
+- [RFC 3875](https://datatracker.ietf.org/doc/html/rfc3875): The Common Gateway Interface (CGI) Version 1.1
 HTTP/1.1 was updated again in 2022: 
 - [rfc9112](docs/rfc9112.pdf): Hypertext Transfer Protocol -- HTTP/1.1
 
-Because not everything is still relevant for us in the rfc2616, we summarized the most important parts. You can read a summary of the rfc2616 here [rfc2616-summary.md](/docs/rfc2616-summary.md).  
-And a summary of the rfc791 is here [rfc793-summary.md](/docs/rfc793-summary.md).
-The rfc3875 is not very long and we used it as reference for the CGI part of the project.
+Because not everything in the HTTP/1.1 specifications is relevant to us, we summarized the most important parts based on the core protocol guidelines. You can read our HTTP summary here [rfc2616-summary.md](/docs/rfc2616-summary.md).  
+
+For the network and transport layers, we summarized the key points here:
+- TCP (RFC 793): [rfc793-summary.md](/docs/rfc793-summary.md)
+- IP (RFC 791): [rfc791-summary.md](/docs/rfc791-summary.md)
+
+The CGI specification (RFC 3875) is not very long, so we used it directly as a reference for the CGI part of the project without a separate summary.
 
 # The Project
 See the allowed_functions.md file here: [allowed_functions.md](/docs/allowed_functions.md)
